@@ -1,0 +1,180 @@
+/* Тема: data-theme на <html>. "system" и отсутствие атрибута идут за ОС,
+   явные "light"/"dark" перебивают её в обе стороны. */
+
+:root {
+	--bg: #f6f7f9;
+	--surface: #ffffff;
+	--surface-alt: #eef0f4;
+	--border: #dfe3ea;
+	--text: #14181f;
+	--text-muted: #626c7d;
+	--accent: #2f6df6;
+	--accent-soft: #e5edff;
+	--good: #1a9c62;
+	--fair: #b8811a;
+	--poor: #c9453b;
+	--radius: 10px;
+	--mono: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
+	--cm-key: #1f5fbf;
+	--cm-string: #1a7f4b;
+	--cm-number: #a14b12;
+	--cm-atom: #8b3fbf;
+	--cm-comment: #7b8494;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		--bg: #14161a;
+		--surface: #1b1e24;
+		--surface-alt: #23272f;
+		--border: #2e333c;
+		--text: #e6e9ef;
+		--text-muted: #9aa3b2;
+		--accent: #6f9cff;
+		--accent-soft: #22304f;
+		--good: #4bcf92;
+		--fair: #e0b25a;
+		--poor: #f0746a;
+		--cm-key: #8ab4ff;
+		--cm-string: #7fd6a2;
+		--cm-number: #e0a06a;
+		--cm-atom: #c79bf0;
+		--cm-comment: #79839a;
+	}
+}
+
+:root[data-theme='dark'] {
+	--bg: #14161a;
+	--surface: #1b1e24;
+	--surface-alt: #23272f;
+	--border: #2e333c;
+	--text: #e6e9ef;
+	--text-muted: #9aa3b2;
+	--accent: #6f9cff;
+	--accent-soft: #22304f;
+	--good: #4bcf92;
+	--fair: #e0b25a;
+	--poor: #f0746a;
+	--cm-key: #8ab4ff;
+	--cm-string: #7fd6a2;
+	--cm-number: #e0a06a;
+	--cm-atom: #c79bf0;
+	--cm-comment: #79839a;
+}
+
+* {
+	box-sizing: border-box;
+	/* Окно приложения — не веб-страница: «оттягивание» за край (rubber band,
+	   pull-to-refresh) выключено везде по умолчанию. Вложенный список, где
+	   этот эффект уместен, включает его себе классом .bounce. */
+	overscroll-behavior: none;
+}
+
+.bounce {
+	overscroll-behavior: auto;
+}
+
+html,
+body {
+	height: 100%;
+	margin: 0;
+	/* Прокручиваются только внутренние области — сам документ не двигается,
+	   поэтому и оттягивать нечего. */
+	overflow: hidden;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+	font-size: 14px;
+	/* Десктопное приложение: выделение текста только там, где оно осмысленно. */
+	user-select: none;
+}
+
+h1,
+h2,
+h3 {
+	margin: 0;
+	font-weight: 600;
+}
+
+button {
+	font: inherit;
+	color: inherit;
+	background: var(--surface-alt);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 6px 12px;
+	cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+	border-color: var(--accent);
+}
+
+button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+button.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: #fff;
+}
+
+input,
+select {
+	font: inherit;
+	color: inherit;
+	background: var(--surface-alt);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 6px 10px;
+	width: 100%;
+	user-select: text;
+}
+
+input:focus,
+select:focus,
+button:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+input[type='checkbox'] {
+	width: auto;
+}
+
+.card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+.muted {
+	color: var(--text-muted);
+}
+
+.selectable {
+	user-select: text;
+}
+
+.banner {
+	padding: 10px 14px;
+	border-radius: var(--radius);
+	border: 1px solid var(--poor);
+	background: color-mix(in srgb, var(--poor) 12%, transparent);
+	user-select: text;
+}
+
+.banner.warn {
+	border-color: var(--fair);
+	background: color-mix(in srgb, var(--fair) 12%, transparent);
+}
+
+.banner.ok {
+	border-color: var(--good);
+	background: color-mix(in srgb, var(--good) 12%, transparent);
+}

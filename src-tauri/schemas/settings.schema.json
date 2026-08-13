@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vantage-box.dev/schema/settings.schema.json",
+  "title": "Vantage Box settings",
+  "description": "Настройки Vantage Box. Файл читается как JSONC — комментарии и висячие запятые допустимы.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Ссылка на эту схему — включает автокомплит в редакторе."
+    },
+    "singBox": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Всё, что относится к самому sing-box.",
+      "properties": {
+        "configPath": {
+          "type": "string",
+          "description": "Путь к config.json sing-box. Vantage Box его не переписывает: для запуска создаётся рантайм-копия."
+        },
+        "binaryPath": {
+          "type": "string",
+          "description": "Путь к файлу sing-box. Пусто — используется файл под управлением Vantage Box."
+        },
+        "updatePolicy": {
+          "type": "string",
+          "enum": ["off", "notify", "auto"],
+          "default": "notify",
+          "description": "Автообновление sing-box. Для своего binaryPath обновления никогда не ставятся, только уведомления."
+        }
+      }
+    },
+    "clashApi": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Подключение к Clash API sing-box (experimental.clash_api).",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "default": "http://127.0.0.1:9797",
+          "description": "Базовый адрес Clash API. Должен быть loopback."
+        },
+        "secret": {
+          "type": "string",
+          "description": "Secret из конфига sing-box. Пусто, если API открыт без авторизации."
+        },
+        "logLevel": {
+          "type": "string",
+          "enum": ["trace", "debug", "info", "warn", "error"],
+          "default": "info",
+          "description": "Уровень, на котором Vantage Box подписывается на поток /logs."
+        }
+      }
+    },
+    "ui": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "theme": {
+          "type": "string",
+          "enum": ["system", "light", "dark"],
+          "default": "system"
+        },
+        "latencyTestUrl": {
+          "type": "string",
+          "format": "uri",
+          "default": "http://www.gstatic.com/generate_204",
+          "description": "URL для замера задержки outbound'ов."
+        },
+        "latencyTestTimeout": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 60000,
+          "default": 5000,
+          "description": "Таймаут latency-теста в миллисекундах."
+        }
+      }
+    },
+    "tray": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "closeToTray": {
+          "type": "boolean",
+          "default": true,
+          "description": "Закрытие окна сворачивает в трей вместо выхода из приложения."
+        },
+        "startMinimized": { "type": "boolean", "default": false }
+      }
+    },
+    "hotkeys": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Глобальные хоткеи в формате tauri-plugin-global-shortcut, например \"Ctrl+Alt+P\".",
+      "properties": {
+        "proxyPopup": { "type": "string", "default": "Ctrl+Alt+P" },
+        "toggle": { "type": "string", "default": "Ctrl+Alt+O" }
+      }
+    },
+    "autostart": {
+      "type": "boolean",
+      "default": false,
+      "description": "Запускать Vantage Box при входе в систему."
+    }
+  }
+}

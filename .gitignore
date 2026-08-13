@@ -1,0 +1,15 @@
+.DS_Store
+node_modules
+/build
+/.svelte-kit
+/package
+.env
+.env.*
+!.env.example
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Машинно-локальный override target-dir (у каждого свой диск)
+/src-tauri/.cargo/config.toml
+# Результаты интеграционных прогонов
+/test-results
