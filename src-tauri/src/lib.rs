@@ -3,11 +3,13 @@ pub mod binary;
 pub mod clash;
 pub mod compat;
 pub mod error;
+pub mod fallback;
 pub mod jsonc;
 pub mod process;
 pub mod runtime;
 pub mod service;
 pub mod settings;
+pub mod subscription;
 
 mod actions;
 mod commands;
@@ -27,6 +29,19 @@ use state::{AppState, EVENT_CONFIG_CHANGED, EVENT_SETTINGS_ERROR};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // SCM мог стартовать этот же бинарник как сервис (`--scm`). В этом режиме
+    // Tauri не нужен: мы лишь докладываем SCM о состоянии и держим sing-box
+    // дочерним процессом. Ветку проверяем до `tauri::Builder` — иначе под
+    // LocalSystem окно всё равно не появится, а обёртка не успеет ответить SCM.
+    #[cfg(windows)]
+    if service::scm::is_invocation() {
+        // Подключаемся к SCM и блокируемся, пока сервис не остановится. На
+        // отдельном потоке SCM запустит service_main — оттуда регистрируем
+        // обработчик и поднимаем sing-box. Tauri в этом режиме не нужен.
+        service::scm::dispatch();
+        return;
+    }
+
     let mut builder = tauri::Builder::default();
 
     // Плагин single-instance должен идти первым: он решает, жить второму
@@ -46,6 +61,8 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -158,6 +175,12 @@ pub fn run() {
                 });
             }
 
+            // Подписки: вливаем узлы при старте и периодически освежаем.
+            subscription::spawn_refresher(handle.clone());
+
+            // Fallback-монитор: автопереключение selector-групп на резерв.
+            fallback::spawn(handle.clone());
+
             if selftest::requested() {
                 selftest::spawn(handle.clone());
             }
@@ -173,9 +196,15 @@ pub fn run() {
             commands::select_proxy,
             commands::test_group_delay,
             commands::test_proxy_delay,
+            commands::get_connections,
+            commands::close_connection,
+            commands::close_all_connections,
+            commands::refresh_subscriptions,
+            commands::get_subscription_state,
             commands::read_singbox_config,
             commands::check_singbox_config,
             commands::write_singbox_config,
+            commands::create_minimal_config,
             commands::get_run_status,
             commands::install_service,
             commands::uninstall_service,

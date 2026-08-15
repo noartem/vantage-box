@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Отменяем прошлые запуски того же пуша — сборка тяжёлая, гонять их впустую ни к чему.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install JS deps
+        run: npm ci
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: svelte-check
+        run: npm run check
+
+      - name: cargo test
+        # live_singbox — env-gated: без VANTAGE_BOX_TEST_SINGBOX тест ранним return'ом проходит впустую.
+        run: cargo test --manifest-path src-tauri/Cargo.toml --no-fail-fast
+
+      - name: tauri build
+        # Без подписи: цель шага — поймать регрессии сборки, а не выпустить релиз.
+        # Апдейтер при отсутствии TAURI_SIGNING_PRIVATE_KEY собирается без .sig.
+        run: npm run tauri build

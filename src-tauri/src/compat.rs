@@ -91,6 +91,8 @@ const CHECK_PROXIES: &str = "proxies";
 const CHECK_SELECT: &str = "select";
 const CHECK_WS_TRAFFIC: &str = "ws-traffic";
 const CHECK_WS_LOGS: &str = "ws-logs";
+const CHECK_CONNECTIONS: &str = "connections";
+const CHECK_CLOSE_CONNECTION: &str = "close-connection";
 
 /// Все пробы в порядке выполнения — нужен для заголовков таблицы.
 pub const CHECK_ORDER: &[&str] = &[
@@ -104,6 +106,8 @@ pub const CHECK_ORDER: &[&str] = &[
     CHECK_SELECT,
     CHECK_WS_TRAFFIC,
     CHECK_WS_LOGS,
+    CHECK_CONNECTIONS,
+    CHECK_CLOSE_CONNECTION,
 ];
 
 /// Прогоняет все пробы. Никогда не паникует: отказ — это тоже результат.
@@ -283,6 +287,22 @@ pub async fn probe(options: &ProbeOptions) -> ProbeReport {
         Err(e) => checks.push(fail(CHECK_WS_LOGS, e)),
     }
 
+    // 11. /connections: список активных соединений отдаётся и парсится.
+    match client.connections().await {
+        Ok(snap) => checks.push(pass(
+            CHECK_CONNECTIONS,
+            format!("{} соединений, ↓{} ↑{}", snap.connections.len(), snap.download_total, snap.upload_total),
+        )),
+        Err(e) => checks.push(fail(CHECK_CONNECTIONS, e.to_string())),
+    }
+
+    // 12. Закрытие одного соединения по id: держим живой туннель к API-порту
+    // (он заведомо доступен) и гасим именно его.
+    match close_one_connection(&client, options.mixed_port, options.api_port).await {
+        Ok(detail) => checks.push(pass(CHECK_CLOSE_CONNECTION, detail)),
+        Err(detail) => checks.push(fail(CHECK_CLOSE_CONNECTION, detail)),
+    }
+
     finish(version, checks)
 }
 
@@ -419,6 +439,132 @@ async fn poke_inbound(port: u16) {
         )
         .await;
     let _ = socket.flush().await;
+}
+
+/// Держит живое соединение через mixed-инбаунд: CONNECT к локальной «мишени»
+/// (свой `TcpListener`), которую sing-box дозванивает и через которую туннелирует.
+/// Оба конца держим открытыми, пока не найдём соединение в `/connections` и не
+/// погасим его по id — тогда проверяем, что оно исчезло из списка.
+///
+/// Раньше мишенью был сам API-порт, но sing-box не показывает в `/connections`
+/// соединения к собственному `external_controller`, поэтому нужна отдельная
+/// мишень.
+async fn close_one_connection(
+    client: &ClashClient,
+    mixed_port: u16,
+    _api_port: u16,
+) -> Result<String, String> {
+    use std::collections::HashSet;
+    use tokio::io::AsyncWriteExt;
+    use tokio::net::TcpListener;
+
+    // Снимаем базовые id до того, как откроем своё соединение: так мы найдём
+    // именно его, не привязываясь к схеме полей sing-box ( destinationPort и
+    // прочее бывает то плоско, то вложенно в `metadata`).
+    let baseline: HashSet<String> = client
+        .connections()
+        .await
+        .map(|s| s.connections.into_iter().map(|c| c.id).collect())
+        .unwrap_or_default();
+
+    let listener = TcpListener::bind(("127.0.0.1", 0))
+        .await
+        .map_err(|e| format!("не открыть мишень: {e}"))?;
+    let target_port = listener
+        .local_addr()
+        .map_err(|e| e.to_string())?
+        .port();
+
+    // 1. Открываем туннель через mixed-инбаунд к нашей мишени.
+    let mut sock = tokio::net::TcpStream::connect(("127.0.0.1", mixed_port))
+        .await
+        .map_err(|e| format!("не подключиться к mixed: {e}"))?;
+    let req = format!(
+        "CONNECT 127.0.0.1:{target_port} HTTP/1.1\r\nHost: 127.0.0.1:{target_port}\r\n\r\n"
+    );
+    sock.write_all(req.as_bytes())
+        .await
+        .map_err(|e| e.to_string())?;
+    sock.flush().await.map_err(|e| e.to_string())?;
+
+    // 2. Принимаем обратную сторону туннеля и держим её до конца проверки.
+    let target = tokio::time::timeout(Duration::from_secs(3), listener.accept())
+        .await
+        .map_err(|_| "мишень не дождалась соединения от sing-box".to_string())?
+        .map_err(|e| e.to_string())?
+        .0;
+
+    // 3. Ищем свежее соединение (id которого не было в базовом списке) и
+    //    заодно проверяем, что вложенный `metadata` действительно разбирается:
+    //    порт мишени должен совпасть — иначе модель расходится со схемой sing-box.
+    let want = target_port.to_string();
+    let mut last: Option<String> = None;
+    let (id, meta_ok) = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Ok(snap) = client.connections().await {
+                last = Some(format!(
+                    "{} соединений: {:?}",
+                    snap.connections.len(),
+                    snap.connections
+                        .iter()
+                        .map(|c| {
+                            (
+                                c.id.clone(),
+                                c.metadata.host.clone(),
+                                c.metadata.destination_port.clone(),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                ));
+                if let Some(c) = snap.connections.iter().find(|c| !baseline.contains(&c.id)) {
+                    return (c.id.clone(), c.metadata.destination_port == want);
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .ok()
+    .ok_or_else(|| {
+        format!(
+            "свежее соединение не появилось в списке; последний снимок: {}",
+            last.unwrap_or_else(|| "<нет>".into())
+        )
+    })?;
+
+    if !meta_ok {
+        return Err(format!(
+            "metadata.destinationPort не совпал с {want} — модель расходится со схемой sing-box"
+        ));
+    }
+
+    // 4. Гасим и проверяем, что оно исчезло.
+    client.close_connection(&id).await.map_err(|e| e.to_string())?;
+
+    let gone = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match client.connections().await {
+                Ok(snap) if !snap.connections.iter().any(|c| c.id == id) => {
+                    return Ok::<_, String>(())
+                }
+                Ok(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+    })
+    .await
+    .ok()
+    .and_then(|r| r.ok())
+    .is_some();
+
+    drop(sock);
+    drop(target);
+
+    if gone {
+        Ok(format!("id {} закрыт", truncate(&id, 12)))
+    } else {
+        Err("соединение не исчезло после DELETE".into())
+    }
 }
 
 /// Убивает только наш дочерний процесс — и при обычном выходе, и при панике.

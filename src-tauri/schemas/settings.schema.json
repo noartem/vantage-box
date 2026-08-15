@@ -104,6 +104,56 @@
       "type": "boolean",
       "default": false,
       "description": "Запускать Vantage Box при входе в систему."
+    },
+    "guiUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Автообновление GUI Vantage Box (не sing-box).",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": ["off", "notify", "auto"],
+          "default": "notify",
+          "description": "off — не проверять; notify — уведомлять о наличии; auto — ставить автоматически."
+        }
+      }
+    },
+    "subscriptions": {
+      "type": "array",
+      "default": [],
+      "description": "Подписки на списки прокси. Узлы вливаются в config.json sing-box и применяются мягким перезапуском.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "description": "Стабильный идентификатор подписки." },
+          "name": { "type": "string", "description": "Человекочитаемое имя." },
+          "url": { "type": "string", "format": "uri", "description": "URL подписки." },
+          "enabled": { "type": "boolean", "default": true },
+          "targetGroup": {
+            "type": ["string", "null"],
+            "description": "Тег selector-группы, куда влить узлы. null — во все selector/urltest-группы."
+          },
+          "updateInterval": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 24,
+            "description": "Как часто перетягивать подписку, часы."
+          }
+        }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Автопереключение selector-групп на резервный узел при падении активного.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "intervalSec": { "type": "integer", "minimum": 5, "default": 60, "description": "Как часто пингуем активный узел, секунды." },
+        "timeoutMs": { "type": "integer", "minimum": 100, "default": 5000, "description": "Таймаут пинга, мс." },
+        "maxDelayMs": { "type": "integer", "minimum": 0, "default": 0, "description": "Задержка выше этой считается плохой. 0 — только полная недоступность." },
+        "groups": { "type": "array", "default": [], "items": { "type": "string" }, "description": "Теги групп для слежения. Пусто — все selector-группы." }
+      }
     }
   }
 }

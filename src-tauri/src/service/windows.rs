@@ -24,6 +24,18 @@ const ERROR_SERVICE_DOES_NOT_EXIST: i32 = 1060;
 /// `ERROR_CANCELLED` — пользователь закрыл окно UAC.
 const ERROR_CANCELLED: i32 = 1223;
 
+/// Достаёт из ошибки `windows_service` код ОС. Её `Display` печатает безликое
+/// «IO error in winapi call» и съедает внутреннюю `io::Error` — без кодa
+/// («не удалось запустить сервис: IO error in winapi call») причину не найти.
+fn winerr(e: &windows_service::Error) -> String {
+    match e {
+        windows_service::Error::Winapi(io) => {
+            format!("ошибка winapi (код {}): {io}", io.raw_os_error().unwrap_or(-1))
+        }
+        other => other.to_string(),
+    }
+}
+
 /// Сколько ждём перехода сервиса в целевое состояние.
 const TRANSITION_TIMEOUT: Duration = Duration::from_secs(20);
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
@@ -45,7 +57,7 @@ pub fn status() -> Result<ServiceInfo> {
 
     let status = service
         .query_status()
-        .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {e}")))?;
+        .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {}", winerr(&e))))?;
 
     // Права проверяем отдельным открытием: если sdset не отработал, старт
     // упрётся в отказ доступа, и об этом лучше сказать заранее.
@@ -77,7 +89,7 @@ fn map_state(state: WinState) -> ServiceState {
 /// `Ok(None)` — сервис не зарегистрирован. Всё остальное — настоящая ошибка.
 fn open(access: ServiceAccess) -> Result<Option<windows_service::service::Service>> {
     let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
-        .map_err(|e| Error::Other(format!("нет доступа к диспетчеру сервисов: {e}")))?;
+        .map_err(|e| Error::Other(format!("нет доступа к диспетчеру сервисов: {}", winerr(&e))))?;
 
     match manager.open_service(SERVICE_NAME, access) {
         Ok(service) => Ok(Some(service)),
@@ -86,7 +98,7 @@ fn open(access: ServiceAccess) -> Result<Option<windows_service::service::Servic
         {
             Ok(None)
         }
-        Err(e) => Err(Error::Other(format!("не удалось открыть сервис: {e}"))),
+        Err(e) => Err(Error::Other(format!("не удалось открыть сервис: {}", winerr(&e)))),
     }
 }
 
@@ -100,14 +112,14 @@ pub fn start() -> Result<()> {
 
     let current = service
         .query_status()
-        .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {e}")))?;
+        .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {}", winerr(&e))))?;
     if current.current_state == WinState::Running {
         return Ok(());
     }
 
     service
         .start(&[] as &[&OsStr])
-        .map_err(|e| Error::Other(format!("не удалось запустить сервис: {e}")))?;
+        .map_err(|e| Error::Other(format!("не удалось запустить сервис: {}", winerr(&e))))?;
 
     wait_for(&service, WinState::Running)
 }
@@ -118,14 +130,14 @@ pub fn stop() -> Result<()> {
 
     let current = service
         .query_status()
-        .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {e}")))?;
+        .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {}", winerr(&e))))?;
     if current.current_state == WinState::Stopped {
         return Ok(());
     }
 
     service
         .stop()
-        .map_err(|e| Error::Other(format!("не удалось остановить сервис: {e}")))?;
+        .map_err(|e| Error::Other(format!("не удалось остановить сервис: {}", winerr(&e))))?;
 
     wait_for(&service, WinState::Stopped)
 }
@@ -136,7 +148,7 @@ fn wait_for(service: &windows_service::service::Service, target: WinState) -> Re
     loop {
         let status = service
             .query_status()
-            .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {e}")))?;
+            .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {}", winerr(&e))))?;
 
         if status.current_state == target {
             return Ok(());
@@ -172,9 +184,24 @@ pub fn install(settings: &Settings) -> Result<()> {
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| Error::io(data_dir.display().to_string(), e))?;
 
+    // Сервисом регистрируем не sing-box (он не умеет отвечать SCM — это даёт
+    // ошибку 1053), а нас самих с флагом `--scm`: обёртка докладывает SCM о
+    // состоянии и уже внутри поднимает sing-box ребёнком. Пути к sing-box,
+    // рантайм-конфигу и data-dir передаём аргументами.
+    let wrapper = std::env::current_exe()
+        .map_err(|e| Error::Other(format!("не определить путь к исполняемому файлу: {e}")))?;
+    if !wrapper.is_file() {
+        return Err(Error::Other(format!(
+            "исполняемый файл Vantage Box не найден: {}",
+            wrapper.display()
+        )));
+    }
+
     let sid = current_user_sid()?;
     let bin_path_name = format!(
-        "\"{}\" run -c \"{}\" -D \"{}\"",
+        "\"{}\" {} \"{}\" \"{}\" \"{}\"",
+        wrapper.display(),
+        super::scm::FLAG,
         choice.path.display(),
         prepared.config_path,
         data_dir.display()

@@ -8,7 +8,7 @@ use tauri::{AppHandle, State};
 
 use crate::actions::{self, blocking, RestartOutcome, RunStatus};
 use crate::binary::{self, BinaryInfo, CheckResult, ReleaseCatalog};
-use crate::clash::models::{ConnectionStatus, Proxy};
+use crate::clash::models::{ConnectionStatus, ConnectionsSnapshot, Proxy};
 use crate::error::{Error, Result};
 use crate::jsonc::strip_jsonc;
 use crate::process;
@@ -16,6 +16,7 @@ use crate::runtime;
 use crate::service;
 use crate::settings::{config_dir, Settings};
 use crate::state::{self, AppState};
+use crate::subscription::{self, ApplyOutcome, SubscriptionsState};
 
 // ---------------------------------------------------------------------------
 // Настройки
@@ -130,6 +131,28 @@ pub async fn test_proxy_delay(state: State<'_, AppState>, name: String) -> Resul
 }
 
 // ---------------------------------------------------------------------------
+// Соединения
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn get_connections(state: State<'_, AppState>) -> Result<ConnectionsSnapshot> {
+    let client = state.client();
+    client.connections().await
+}
+
+#[tauri::command]
+pub async fn close_connection(state: State<'_, AppState>, id: String) -> Result<()> {
+    let client = state.client();
+    client.close_connection(&id).await
+}
+
+#[tauri::command]
+pub async fn close_all_connections(state: State<'_, AppState>) -> Result<()> {
+    let client = state.client();
+    client.close_all_connections().await
+}
+
+// ---------------------------------------------------------------------------
 // Конфиг sing-box
 // ---------------------------------------------------------------------------
 
@@ -209,6 +232,42 @@ pub async fn write_singbox_config(state: State<'_, AppState>, content: String) -
 
     state.remember_config(&content);
     Ok(())
+}
+
+/// Создаёт минимальный рабочий `config.json` в каталоге приложения и возвращает
+/// путь к нему — для онбординга первого запуска. Конфиг без TUN (не нужны права
+/// администратора): локальный mixed-инбаунд, `direct`/`block` и selector `proxy`.
+/// `experimental.clash_api` сюда не пишем — его дописывает рантайм-копия.
+///
+/// Если файл уже существует по пути по умолчанию, не затираем его — отдаём путь.
+#[tauri::command]
+pub fn create_minimal_config() -> Result<String> {
+    let dir = config_dir()?;
+    std::fs::create_dir_all(&dir).map_err(|e| Error::io(dir.display().to_string(), e))?;
+    let path = dir.join("config.json");
+    if path.is_file() {
+        return Ok(path.display().to_string());
+    }
+
+    let minimal = r#"{
+  "log": { "level": "info", "timestamp": true },
+  "inbounds": [
+    { "type": "mixed", "tag": "mixed-in", "listen": "127.0.0.1", "listen_port": 2080 }
+  ],
+  "outbounds": [
+    { "type": "direct", "tag": "direct" },
+    { "type": "block", "tag": "block" },
+    { "type": "selector", "tag": "proxy", "outbounds": ["direct"], "default": "direct" }
+  ],
+  "route": { "final": "proxy" }
+}
+"#;
+
+    let tmp = dir.join("config.json.vbtmp");
+    std::fs::write(&tmp, minimal.as_bytes())
+        .map_err(|e| Error::io(tmp.display().to_string(), e))?;
+    std::fs::rename(&tmp, &path).map_err(|e| Error::io(path.display().to_string(), e))?;
+    Ok(path.display().to_string())
 }
 
 fn config_path(state: &State<'_, AppState>) -> Result<String> {
@@ -607,4 +666,22 @@ fn build_overview(proxies: HashMap<String, Proxy>) -> ProxyOverview {
     });
 
     ProxyOverview { groups }
+}
+
+// ---------------------------------------------------------------------------
+// Подписки
+// ---------------------------------------------------------------------------
+
+/// Перетягивает все включённые подписки и вливает узлы в config.json. `force`
+/// игнорирует подпись набора — например, когда пользователь нажал «обновить».
+#[tauri::command]
+pub async fn refresh_subscriptions(app: AppHandle, force: bool) -> Result<ApplyOutcome> {
+    subscription::apply(&app, force).await
+}
+
+/// Состояние подписок из sidecar-файла: время последнего обновления, число
+/// узлов, ошибки — для отображения в UI.
+#[tauri::command]
+pub fn get_subscription_state() -> Result<SubscriptionsState> {
+    subscription::load_state()
 }

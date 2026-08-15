@@ -4,9 +4,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
+	ApplyOutcome,
 	BinaryInfo,
 	CheckResult,
 	ConnectionStatus,
+	ConnectionsSnapshot,
 	InstallOutcome,
 	LogEntry,
 	Memory,
@@ -15,6 +17,7 @@ import type {
 	RestartOutcome,
 	RunStatus,
 	Settings,
+	SubscriptionsState,
 	Traffic
 } from './types';
 
@@ -30,9 +33,14 @@ export const api = {
 	testGroupDelay: (group: string) => invoke<Record<string, number>>('test_group_delay', { group }),
 	testProxyDelay: (name: string) => invoke<number>('test_proxy_delay', { name }),
 
+	getConnections: () => invoke<ConnectionsSnapshot>('get_connections'),
+	closeConnection: (id: string) => invoke<void>('close_connection', { id }),
+	closeAllConnections: () => invoke<void>('close_all_connections'),
+
 	readSingboxConfig: () => invoke<string>('read_singbox_config'),
 	checkSingboxConfig: (content: string) => invoke<CheckResult>('check_singbox_config', { content }),
 	writeSingboxConfig: (content: string) => invoke<void>('write_singbox_config', { content }),
+	createMinimalConfig: () => invoke<string>('create_minimal_config'),
 
 	getRunStatus: () => invoke<RunStatus>('get_run_status'),
 	installService: () => invoke<RunStatus>('install_service'),
@@ -57,13 +65,18 @@ export const api = {
 	deleteSingboxRelease: (version: string) =>
 		invoke<ReleaseCatalog>('delete_singbox_release', { version }),
 	useSingboxRelease: (version: string) =>
-		invoke<InstallOutcome>('use_singbox_release', { version })
+		invoke<InstallOutcome>('use_singbox_release', { version }),
+
+	refreshSubscriptions: (force = false) =>
+		invoke<ApplyOutcome>('refresh_subscriptions', { force }),
+	getSubscriptionState: () => invoke<SubscriptionsState>('get_subscription_state')
 };
 
 export const events = {
 	status: (fn: (value: ConnectionStatus) => void) => on('clash://status', fn),
 	traffic: (fn: (value: Traffic) => void) => on('clash://traffic', fn),
 	memory: (fn: (value: Memory) => void) => on('clash://memory', fn),
+	connections: (fn: (value: ConnectionsSnapshot) => void) => on('clash://connections', fn),
 	log: (fn: (value: LogEntry) => void) => on('clash://log', fn),
 	settingsChanged: (fn: (value: Settings) => void) => on('settings://changed', fn),
 	settingsError: (fn: (value: string) => void) => on('settings://error', fn),

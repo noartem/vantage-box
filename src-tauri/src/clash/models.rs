@@ -75,6 +75,68 @@ pub struct Memory {
     pub oslimit: u64,
 }
 
+/// Снимок активных соединений из `/connections`. sing-box шлёт полный снимок
+/// на каждое изменение, поэтому накапливать ничего не нужно.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionsSnapshot {
+    #[serde(default)]
+    pub download_total: u64,
+    #[serde(default)]
+    pub upload_total: u64,
+    #[serde(default)]
+    pub connections: Vec<Connection>,
+}
+
+/// Одно соединение. Полей у sing-box много и они меняются между версиями,
+/// поэтому всё кроме идентификатора и объёмов — `default`.
+///
+/// sing-box вкладывает сетевые адреса в подобъект `metadata` (см.
+/// `experimental/clashapi/connections.go`), а не плоско — поэтому модель
+/// повторяет именно эту схему.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Connection {
+    #[serde(default)]
+    pub id: String,
+    /// Цепочка outbound'ов: `[узел, группа]` снаружи внутрь.
+    #[serde(default)]
+    pub chains: Vec<String>,
+    #[serde(default)]
+    pub rule: String,
+    #[serde(default, rename = "rulePayload")]
+    pub rule_payload: String,
+    #[serde(default)]
+    pub metadata: ConnectionMetadata,
+    #[serde(default)]
+    pub upload: u64,
+    #[serde(default)]
+    pub download: u64,
+    /// ISO-время старта.
+    #[serde(default)]
+    pub start: String,
+}
+
+/// Сетевые атрибуты соединения — подобъект `metadata` в ответе sing-box.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ConnectionMetadata {
+    #[serde(default)]
+    pub network: String,
+    /// Тип инбаунда: `Mixed`, `Tun`, …
+    #[serde(rename = "type", default)]
+    pub kind: String,
+    #[serde(default, rename = "sourceIP")]
+    pub source_ip: String,
+    #[serde(default, rename = "sourcePort")]
+    pub source_port: String,
+    #[serde(default, rename = "destinationIP")]
+    pub destination_ip: String,
+    #[serde(default, rename = "destinationPort")]
+    pub destination_port: String,
+    #[serde(default)]
+    pub host: String,
+    #[serde(default, rename = "processPath")]
+    pub process_path: String,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct RawLogEntry {
     #[serde(rename = "type", default)]

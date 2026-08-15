@@ -2,7 +2,11 @@
 // не живёт: источник правды — sing-box и settings.json.
 
 import { api, errorText, events } from './api';
+import { check as checkForTauriUpdate, type Update } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 import type {
+	BinaryInfo,
+	Connection,
 	ConnectionStatus,
 	LogEntry,
 	Memory,
@@ -18,6 +22,8 @@ const TRAFFIC_POINTS = 60;
 const LOG_LIMIT = 2000;
 /** Как часто перечитываем состояние sing-box, если событий не приходило. */
 const RUN_STATUS_MS = 5000;
+/** Как часто перепроверяем обновления приложения, если окно долго открыто. */
+const UPDATE_RECHECK_MS = 6 * 60 * 60 * 1000;
 
 class AppState {
 	status = $state<ConnectionStatus>({
@@ -38,8 +44,30 @@ class AppState {
 	totals = $state<Traffic>({ up: 0, down: 0 });
 	memory = $state<Memory>({ inuse: 0, oslimit: 0 });
 
+	/** Активные соединения sing-box. Источник — WS `/connections`. */
+	connections = $state<Connection[]>([]);
+	connectionTotals = $state<{ down: number; up: number }>({ down: 0, up: 0 });
+
+	/** Доступное обновление приложения (режим `notify`) — показываем баннером. */
+	updateAvailable = $state<{ version: string; body?: string } | null>(null);
+	/** Установка обновления в процессе — кнопка становится неактивной. */
+	updateInstalling = $state(false);
+	/** Текущее скачиваемое обновление — нужно, чтобы доустановить по клику. */
+	private pendingUpdate: Update | null = null;
+
 	/** Состояние sing-box: сервис или процесс, работает или нет. */
 	run = $state<RunStatus | null>(null);
+
+	/** Сведения о файле sing-box — нужен онбордингу, чтобы понять, есть ли бинарник. */
+	binaryInfo = $state<BinaryInfo | null>(null);
+
+	/** Показывать онбординг первого запуска: нет конфига или нет бинарника.
+	 *  Пока настройки/бинарник не загружены — false, чтобы не мигать оверлеем. */
+	needsOnboarding = $derived(
+		this.settings !== null &&
+			(this.settings.singBox.configPath.trim() === '' ||
+				(this.binaryInfo !== null && !this.binaryInfo.present))
+	);
 
 	/** Путь к config.json, если его изменили в обход приложения. */
 	configChangedExternally = $state<string | null>(null);
@@ -61,11 +89,19 @@ class AppState {
 		events.status((value) => (this.status = value));
 		events.traffic((value) => this.pushTraffic(value));
 		events.memory((value) => (this.memory = value));
+		events.connections((value) => {
+			this.connections = value.connections;
+			this.connectionTotals = { down: value.downloadTotal, up: value.uploadTotal };
+		});
 		events.log((value) => this.pushLog(value));
 		events.settingsChanged((value) => {
 			this.settings = value;
 			this.settingsProblem = null;
 			applyTheme(value.ui.theme);
+			// Политика обновлений могла измениться — перепроверим.
+			this.checkForAppUpdate();
+			// Путь к бинарнику мог измениться — перечитаем сведения о нём.
+			this.refreshBinaryInfo();
 		});
 		events.settingsError((value) => (this.settingsProblem = value));
 		events.configChanged((path) => (this.configChangedExternally = path));
@@ -80,10 +116,61 @@ class AppState {
 			this.settingsProblem = errorText(e);
 		}
 
+		// Обновления приложения: проверяем по политике из настроек. Ошибки сети
+		// или подписи сюда не поднимаем — пользователь не виноват, что эндпоинт
+		// недоступен, и баннер с ошибкой только напугает.
+		this.checkForAppUpdate();
+		setInterval(() => this.checkForAppUpdate(), UPDATE_RECHECK_MS);
+
 		// Сервисом можно управлять и снаружи приложения, поэтому одних событий
 		// мало: состояние надо перечитывать.
 		this.refreshRun();
 		setInterval(() => this.refreshRun(), RUN_STATUS_MS);
+
+		// Бинарник sing-box нужен онбордингу — подтянем сразу.
+		this.refreshBinaryInfo();
+	}
+
+	/** Проверяет обновление приложения согласно `settings.guiUpdate.policy`. */
+	async checkForAppUpdate() {
+		const policy = this.settings?.guiUpdate.policy;
+		if (!policy || policy === 'off') {
+			this.updateAvailable = null;
+			this.pendingUpdate = null;
+			return;
+		}
+		try {
+			const update = await checkForTauriUpdate();
+			if (!update) {
+				this.updateAvailable = null;
+				this.pendingUpdate = null;
+				return;
+			}
+			if (policy === 'auto') {
+				await update.downloadAndInstall();
+				await relaunch();
+				return;
+			}
+			// notify — запоминаем и показываем баннер с кнопкой «установить».
+			this.pendingUpdate = update;
+			this.updateAvailable = { version: update.version, body: update.body };
+		} catch {
+			// См. комментарий выше — молча.
+		}
+	}
+
+	/** Установить отложенное обновление (режим `notify`): скачать и перезапустить. */
+	async installAppUpdate() {
+		if (!this.pendingUpdate || this.updateInstalling) return;
+		this.updateInstalling = true;
+		try {
+			await this.pendingUpdate.downloadAndInstall();
+			await relaunch();
+		} catch (e) {
+			this.settingsProblem = errorText(e);
+		} finally {
+			this.updateInstalling = false;
+		}
 	}
 
 	async refreshRun() {
@@ -92,6 +179,14 @@ class AppState {
 		} catch {
 			// Единственный источник — локальный диспетчер сервисов. Если он не
 			// отвечает, следующий опрос через несколько секунд всё исправит.
+		}
+	}
+
+	async refreshBinaryInfo() {
+		try {
+			this.binaryInfo = await api.getBinaryInfo();
+		} catch {
+			// Не критично: онбординг просто не покажет шаг про бинарник.
 		}
 	}
 

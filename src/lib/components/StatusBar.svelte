@@ -102,6 +102,26 @@
 			{app.settingsProblem}
 		</div>
 	{/if}
+
+	{#if app.updateAvailable}
+		<div class="banner ok update">
+			<span>
+				<strong>Доступно обновление {app.updateAvailable.version}.</strong>
+				<a
+					href="https://github.com/noartem/vantage-box/releases"
+					target="_blank"
+					rel="noopener">Что нового</a
+				>
+			</span>
+			<button
+				class="primary"
+				disabled={app.updateInstalling}
+				onclick={() => app.installAppUpdate()}
+			>
+				{app.updateInstalling ? 'Устанавливаю…' : 'Установить и перезапустить'}
+			</button>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -152,6 +172,14 @@
 	.actions {
 		display: flex;
 		gap: 8px;
+	}
+
+	.update {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
 	}
 
 	.dot {

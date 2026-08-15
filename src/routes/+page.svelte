@@ -4,11 +4,14 @@
 	import StatusBar from '$lib/components/StatusBar.svelte';
 	import { app } from '$lib/state.svelte';
 	import ConfigView from '$lib/views/ConfigView.svelte';
+	import ConnectionsView from '$lib/views/ConnectionsView.svelte';
 	import Dashboard from '$lib/views/Dashboard.svelte';
 	import LogsView from '$lib/views/LogsView.svelte';
+	import Onboarding from '$lib/views/Onboarding.svelte';
 	import ProxyPopup from '$lib/views/ProxyPopup.svelte';
 	import ServiceView from '$lib/views/ServiceView.svelte';
 	import SettingsView from '$lib/views/SettingsView.svelte';
+	import SubscriptionsView from '$lib/views/SubscriptionsView.svelte';
 
 	// Попап открывается тем же бандлом во втором окне. Различаем окна по метке,
 	// а не по адресу: любой путь или query увёл бы SvelteKit на несуществующий
@@ -27,6 +30,8 @@
 	// Окно приложения — не браузер: вкладки держим в состоянии, без роутинга и URL.
 	const TABS = [
 		{ id: 'dashboard', label: 'Дашборд' },
+		{ id: 'connections', label: 'Соединения' },
+		{ id: 'subscriptions', label: 'Подписки' },
 		{ id: 'config', label: 'Конфиг' },
 		{ id: 'logs', label: 'Логи' },
 		{ id: 'service', label: 'Сервис' },
@@ -60,6 +65,10 @@
 		<main>
 			{#if tab === 'dashboard'}
 				<Dashboard />
+			{:else if tab === 'connections'}
+				<ConnectionsView />
+			{:else if tab === 'subscriptions'}
+				<SubscriptionsView />
 			{:else if tab === 'config'}
 				<ConfigView />
 			{:else if tab === 'logs'}
@@ -72,6 +81,9 @@
 		</main>
 	</div>
 </div>
+
+<!-- Онбординг первого запуска: поверх всего, пока не выбраны бинарник и конфиг. -->
+{#if app.needsOnboarding}<Onboarding />{/if}
 {/if}
 
 <style>

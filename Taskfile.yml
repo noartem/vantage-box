@@ -1,0 +1,134 @@
+# https://taskfile.dev — единый вход для типовых команд проекта.
+# Установить:  winget install Task.Task  (или scoop install task).
+# Список задач: task --list
+
+version: '3'
+
+# Проект на Windows, скрипты тестов — PowerShell 7. task сам выбирает оболочку
+# под платформу, но .ps1 запускаем явно через pwsh, чтобы не зависеть от того,
+# что в PATH первым — powershell (5.1) или pwsh (7).
+vars:
+  PS: pwsh -NoProfile -ExecutionPolicy Bypass
+
+tasks:
+  default:
+    desc: Показать список задач
+    cmds:
+      - task --list
+
+  install:
+    desc: Поставить зависимости фронтенда (npm ci)
+    cmds:
+      - npm ci
+
+  deps:
+    desc: То же, что install — привычное имя
+    aliases: [install-deps]
+    cmds:
+      - task install
+
+  dev:
+    desc: Запустить приложение в dev-режиме (Tauri + Vite с HMR)
+    aliases: [run]
+    cmds:
+      - npm run tauri dev
+
+  build:
+    desc: Собрать production-инсталлер NSIS + portable exe
+    cmds:
+      - npm run tauri build
+
+  build:frontend:
+    desc: Собрать только фронтенд (vite build, без Tauri)
+    cmds:
+      - npm run build
+
+  build:debug:
+    desc: Собрать debug-бинарь Tauri (нужен smoke-тесту)
+    cmds:
+      - npm run tauri build -- --debug
+
+  check:
+    desc: Проверка типов фронтенда (svelte-check)
+    cmds:
+      - npm run check
+
+  check:rust:
+    desc: cargo check (бэкенд компилируется)
+    # `dir: src-tauri` обязателен: иначе cargo не найдёт src-tauri/.cargo/config.toml
+    # и сложит артефакты в src-tauri/target (диск C:), а не на D:. Сервис и
+    # `npm run tauri` всегда ходят по D:-пути — рассинхрон чреват stale-бинарем.
+    dir: src-tauri
+    cmds:
+      - cargo check
+
+  test:
+    desc: Юнит-тесты Rust (без сети, без sing-box)
+    dir: src-tauri
+    cmds:
+      - cargo test --no-fail-fast
+
+  test:live:
+    desc: Интеграционный тест против изолированного sing-box (порт 19090/19080, без TUN)
+    cmds:
+      - '{{.PS}} -File scripts/integration-test.ps1 {{.CLI_ARGS}}'
+
+  smoke:
+    desc: 'Smoke-тест старта: трей, хоткеи, окно, попап (нужен собранный бинарь)'
+    cmds:
+      - '{{.PS}} -File scripts/smoke-test.ps1 {{.CLI_ARGS}}'
+
+  smoke:release:
+    desc: Smoke-тест release-сборки
+    cmds:
+      - '{{.PS}} -File scripts/smoke-test.ps1 -Release {{.CLI_ARGS}}'
+
+  compat:
+    desc: Матрица совместимости с версиями sing-box
+    cmds:
+      - '{{.PS}} -File scripts/compat-matrix.ps1 {{.CLI_ARGS}}'
+
+  verify:
+    desc: Полная локальная проверка перед коммитом (типы + cargo check + тесты)
+    cmds:
+      - task: check
+      - task: check:rust
+      - task: test
+
+  fmt:
+    desc: cargo fmt (бэкенд)
+    dir: src-tauri
+    cmds:
+      - cargo fmt
+
+  fmt:check:
+    desc: Проверить, что cargo fmt уже применён
+    dir: src-tauri
+    cmds:
+      - cargo fmt -- --check
+
+  clippy:
+    desc: cargo clippy (бэкенд, с тестами)
+    dir: src-tauri
+    cmds:
+      - cargo clippy --all-targets -- -D warnings
+
+  clean:frontend:
+    desc: Удалить артефакты фронтенда (node_modules, .svelte-kit)
+    cmds:
+      - cmd: rm -rf node_modules .svelte-kit build
+        platforms: [linux, darwin]
+      - cmd: if exist node_modules rmdir /s /q node_modules & if exist .svelte-kit rmdir /s /q .svelte-kit & if exist build rmdir /s /q build
+        platforms: [windows]
+
+  clean:rust:
+    desc: 'Удалить артефакты сборки Rust (target на D: — см. src-tauri/.cargo/config.toml)'
+    dir: src-tauri
+    cmds:
+      - cargo clean
+
+  clean:
+    desc: Удалить артефакты и фронтенда, и бэкенда
+    cmds:
+      - task: clean:frontend
+      - task: clean:rust

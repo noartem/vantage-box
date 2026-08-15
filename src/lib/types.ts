@@ -32,6 +32,59 @@ export interface Settings {
 		toggle: string;
 	};
 	autostart: boolean;
+	guiUpdate: {
+		policy: UpdatePolicy;
+	};
+	subscriptions: SubscriptionSettings[];
+	fallback: FallbackSettings;
+}
+
+export interface SubscriptionSettings {
+	id: string;
+	name: string;
+	url: string;
+	enabled: boolean;
+	/** Тег selector-группы, куда влить узлы. null — во все selector/urltest-группы. */
+	targetGroup: string | null;
+	/** Как часто перетягивать подписку, часы. */
+	updateInterval: number;
+}
+
+export interface FallbackSettings {
+	enabled: boolean;
+	intervalSec: number;
+	timeoutMs: number;
+	maxDelayMs: number;
+	/** Теги групп для слежения. Пусто — все selector-группы. */
+	groups: string[];
+}
+
+/** Сводка по одной подписке после обновления. */
+export interface SubUpdate {
+	id: string;
+	name: string;
+	/** Сколько узлов влито. */
+	nodeCount: number;
+	/** Unix-мс последнего обновления. */
+	lastUpdated: number;
+	lastError: string | null;
+}
+
+export interface ApplyOutcome {
+	updates: SubUpdate[];
+	changed: boolean;
+	restarted: boolean;
+}
+
+/** Состояние одной подписки из sidecar-файла (для UI). */
+export interface SubStateEntry {
+	lastUpdated: number;
+	nodeCount: number;
+	lastError: string | null;
+}
+
+export interface SubscriptionsState {
+	entries: Record<string, SubStateEntry>;
 }
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
@@ -52,6 +105,39 @@ export interface Traffic {
 export interface Memory {
 	inuse: number;
 	oslimit: number;
+}
+
+export interface ConnectionMetadata {
+	network: string;
+	/** Тип инбаунда: `Mixed`, `Tun`, … */
+	type: string;
+	sourceIP: string;
+	sourcePort: string;
+	destinationIP: string;
+	destinationPort: string;
+	/** Целевой хост соединения. */
+	host: string;
+	processPath: string;
+}
+
+export interface Connection {
+	id: string;
+	/** Цепочка outbound'ов: `[узел, группа]` снаружи внутрь. */
+	chains: string[];
+	rule: string;
+	rulePayload: string;
+	/** Сетевые атрибуты — подобъект `metadata` в ответе sing-box. */
+	metadata: ConnectionMetadata;
+	upload: number;
+	download: number;
+	/** ISO-время старта соединения. */
+	start: string;
+}
+
+export interface ConnectionsSnapshot {
+	downloadTotal: number;
+	uploadTotal: number;
+	connections: Connection[];
 }
 
 export interface LogEntry {

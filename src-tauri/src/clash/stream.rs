@@ -1,6 +1,6 @@
-//! Фоновые подписки на Clash API: health-poller по HTTP и три WebSocket-потока
-//! (`/traffic`, `/logs`, `/memory`). Всё, что приходит, уезжает во фронтенд
-//! через Tauri-события — состояние в Rust не копим.
+//! Фоновые подписки на Clash API: health-poller по HTTP и четыре WebSocket-потока
+//! (`/traffic`, `/logs`, `/memory`, `/connections`). Всё, что приходит, уезжает
+//! во фронтенд через Tauri-события — состояние в Rust не копим.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -19,6 +19,7 @@ pub const EVENT_STATUS: &str = "clash://status";
 pub const EVENT_TRAFFIC: &str = "clash://traffic";
 pub const EVENT_LOG: &str = "clash://log";
 pub const EVENT_MEMORY: &str = "clash://memory";
+pub const EVENT_CONNECTIONS: &str = "clash://connections";
 
 /// Как часто опрашиваем `/version`, чтобы знать, жив ли sing-box.
 const HEALTH_INTERVAL: Duration = Duration::from_secs(3);
@@ -99,6 +100,19 @@ impl StreamManager {
             |app, _seq, text| {
                 if let Ok(memory) = serde_json::from_str::<Memory>(text) {
                     let _ = app.emit(EVENT_MEMORY, memory);
+                }
+            },
+        ));
+
+        // sing-box шлёт полный снимок соединений на каждое изменение —
+        // последовательность не нужна, просто переизлучаем его в UI.
+        tasks.push(spawn_ws(
+            Arc::clone(self),
+            client.ws_url("/connections"),
+            client.secret().to_string(),
+            |app, _seq, text| {
+                if let Ok(snapshot) = serde_json::from_str::<ConnectionsSnapshot>(text) {
+                    let _ = app.emit(EVENT_CONNECTIONS, snapshot);
                 }
             },
         ));

@@ -255,6 +255,68 @@
 		</section>
 
 		<section class="card">
+			<h3>Автопереключение (fallback)</h3>
+			<label class="row">
+				<input type="checkbox" bind:checked={draft.fallback.enabled} />
+				<span>Переключать selector-группу на резерв при отказе активного узла</span>
+			</label>
+			<label>
+				<span>Интервал проверки, с</span>
+				<input type="number" min="5" max="3600" bind:value={draft.fallback.intervalSec} />
+			</label>
+			<label>
+				<span>Таймаут пинга, мс</span>
+				<input type="number" min="100" max="60000" bind:value={draft.fallback.timeoutMs} />
+			</label>
+			<label>
+				<span>Предел задержки, мс</span>
+				<input
+					type="number"
+					min="0"
+					max="60000"
+					bind:value={draft.fallback.maxDelayMs}
+					placeholder="0 — только полная недоступность"
+				/>
+			</label>
+			<label>
+				<span>Группы</span>
+				<input
+					value={draft.fallback.groups.join(', ')}
+					placeholder="пусто — все selector-группы"
+					oninput={(e) => {
+						if (!draft) return;
+						draft.fallback.groups = e.currentTarget.value
+							.split(',')
+							.map((g) => g.trim())
+							.filter((g) => g !== '');
+					}}
+				/>
+			</label>
+			<p class="muted hint">
+				Каждые <em>интервал</em> секунд активный узел группы пингуется по URL latency-теста. При
+				отказе или задержке выше предела группа переключается на узел с наименьшей задержкой.
+				<code>urltest</code>-группы не затрагиваются — они рулят выбором сами. Предел 0 означает
+				«переключать только когда узел совсем не ответил».
+			</p>
+		</section>
+
+		<section class="card">
+			<h3>Обновление приложения</h3>
+			<label>
+				<span>Проверка обновлений</span>
+				<select bind:value={draft.guiUpdate.policy}>
+					<option value="off">не проверять</option>
+					<option value="notify">уведомлять</option>
+					<option value="auto">ставить автоматически</option>
+				</select>
+			</label>
+			<p class="muted hint">
+				Обновления скачиваются с GitHub и проверяются подписью. «Уведомлять» показывает баннер с
+				кнопкой установки, «автоматически» ставит и перезапускает приложение без вопросов.
+			</p>
+		</section>
+
+		<section class="card">
 			<h3>Трей и запуск</h3>
 			<label class="row">
 				<input type="checkbox" bind:checked={draft.tray.enabled} />

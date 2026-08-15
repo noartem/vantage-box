@@ -15,6 +15,11 @@ mod windows;
 #[cfg(windows)]
 use windows as platform;
 
+/// Обёртка-сервис для SCM: `sing-box run` сам по себе не сервис-aware, поэтому
+/// сервисом регистрируем себя и проксируем lifecycle ребёнку.
+#[cfg(windows)]
+pub mod scm;
+
 #[cfg(not(windows))]
 mod unsupported;
 #[cfg(not(windows))]

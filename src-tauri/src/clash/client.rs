@@ -121,6 +121,26 @@ impl ClashClient {
         self.send(self.request(reqwest::Method::GET, "/configs")).await
     }
 
+    /// Снимок активных соединений. Дублирует WebSocket `/connections`, но
+    /// нужен для разового запроса (например, при открытии вкладки).
+    pub async fn connections(&self) -> Result<ConnectionsSnapshot> {
+        self.send(self.request(reqwest::Method::GET, "/connections")).await
+    }
+
+    /// Закрывает одно соединение. Идентификаторы sing-box бывают с символами,
+    /// требующими percent-encoding.
+    pub async fn close_connection(&self, id: &str) -> Result<()> {
+        let path = format!("/connections/{}", urlencode(id));
+        self.send_no_content(self.request(reqwest::Method::DELETE, &path))
+            .await
+    }
+
+    /// Закрывает все соединения.
+    pub async fn close_all_connections(&self) -> Result<()> {
+        self.send_no_content(self.request(reqwest::Method::DELETE, "/connections"))
+            .await
+    }
+
     // -- транспорт ---------------------------------------------------------
 
     async fn send<T: serde::de::DeserializeOwned>(&self, req: reqwest::RequestBuilder) -> Result<T> {
@@ -195,7 +215,7 @@ pub fn normalize_base_url(input: &str) -> String {
 }
 
 /// Percent-encoding для имён групп: теги в sing-box бывают с пробелами и юникодом.
-fn urlencode(value: &str) -> String {
+pub(crate) fn urlencode(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.as_bytes() {
         match byte {

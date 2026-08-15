@@ -38,6 +38,57 @@ pub struct Settings {
     pub hotkeys: HotkeySettings,
     /// Запускать Vantage Box при входе в систему.
     pub autostart: bool,
+    /// Автообновление самого GUI (не sing-box). Отдельно от `sing_box.update_policy`.
+    pub gui_update: GuiUpdateSettings,
+    /// Подписки на списки прокси.
+    pub subscriptions: Vec<SubscriptionSettings>,
+    /// Автопереключение selector-групп на резерв при падении активного узла.
+    pub fallback: FallbackSettings,
+}
+
+/// Политика автообновления GUI-приложения. Переиспользует те же значения,
+/// что и `sing_box.update_policy`, но живёт отдельно: бинарник и оболочку
+/// обновляют независимо.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct GuiUpdateSettings {
+    pub policy: UpdatePolicy,
+}
+
+/// Одна подписка: URL, отдающий список прокси, и куда их вливать.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct SubscriptionSettings {
+    /// Уникальный идентификатор в пределах списка. Не отдаётся провайдером —
+    /// генерируем сами, чтобы UI и бэкенд могли ссылаться на подписку стабильно.
+    pub id: String,
+    /// Человекочитаемое имя.
+    pub name: String,
+    /// URL подписки.
+    pub url: String,
+    /// Включена ли подписка (выключенная не обновляется и не вливается).
+    pub enabled: bool,
+    /// Тег selector-группы, в чей `outbounds` дописать узлы. `None` — во все
+    /// selector/urltest-группы.
+    pub target_group: Option<String>,
+    /// Как часто перетягивать подписку, часы.
+    pub update_interval: u64,
+}
+
+/// Автопереключение selector-групп: если активный узел падает, выбираем резерв.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct FallbackSettings {
+    pub enabled: bool,
+    /// Как часто пингуем активный узел, секунды.
+    pub interval_sec: u32,
+    /// Таймаут пинга, мс.
+    pub timeout_ms: u32,
+    /// Задержка выше этой считается «плохой» — переключаем. 0 — только по
+    /// полной недоступности.
+    pub max_delay_ms: u32,
+    /// Теги групп, за которыми следим. Пусто — за всеми selector-группами.
+    pub groups: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -138,6 +189,42 @@ impl Default for Settings {
             tray: TraySettings::default(),
             hotkeys: HotkeySettings::default(),
             autostart: false,
+            gui_update: GuiUpdateSettings::default(),
+            subscriptions: Vec::new(),
+            fallback: FallbackSettings::default(),
+        }
+    }
+}
+
+impl Default for GuiUpdateSettings {
+    fn default() -> Self {
+        Self {
+            policy: UpdatePolicy::Notify,
+        }
+    }
+}
+
+impl Default for SubscriptionSettings {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            url: String::new(),
+            enabled: true,
+            target_group: None,
+            update_interval: 24,
+        }
+    }
+}
+
+impl Default for FallbackSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            interval_sec: 60,
+            timeout_ms: 5000,
+            max_delay_ms: 0,
+            groups: Vec::new(),
         }
     }
 }
