@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { api, errorText } from '$lib/api';
 	import BinaryPanel from '$lib/components/BinaryPanel.svelte';
+	import VersionsPanel from '$lib/components/VersionsPanel.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { app } from '$lib/state.svelte';
 	import type { Settings } from '$lib/types';
@@ -97,6 +98,7 @@
 				</div>
 
 				<BinaryPanel />
+				<VersionsPanel />
 
 				<div class="toolbar">
 					<button onclick={pickBinary} disabled={busy}>Указать свой файл…</button>

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { api, errorText } from '$lib/api';
-	import { pushAlert } from '$lib/alerts.svelte';
+	import { api } from '$lib/api';
+	import { runServiceAction } from '$lib/service-actions';
 	import { app } from '$lib/state.svelte';
 	import { formatBytes, formatSpeed } from '$lib/format';
 	import Icon from './Icon.svelte';
@@ -24,14 +24,9 @@
 	async function act(name: string, call: () => Promise<unknown>) {
 		busy = name;
 		try {
-			await call();
-		} catch (e) {
-			// Ошибка действия — не состояние, а разовое событие: она уходит в общую
-			// строку алертов, а не растит эту полосу второй строкой.
-			pushAlert('error', errorText(e));
+			await runServiceAction(name, call);
 		} finally {
 			busy = null;
-			await app.refreshRun();
 		}
 	}
 </script>

@@ -1,9 +1,17 @@
 <script lang="ts">
 	import { api, errorText, events } from '$lib/api';
 	import GroupCard from '$lib/components/GroupCard.svelte';
+	import MiniConnections from '$lib/components/MiniConnections.svelte';
+	import MiniLogs from '$lib/components/MiniLogs.svelte';
+	import MiniService from '$lib/components/MiniService.svelte';
 	import TrafficChart from '$lib/components/TrafficChart.svelte';
 	import { app } from '$lib/state.svelte';
+	import type { TabId } from '$lib/tabs';
 	import type { GroupView } from '$lib/types';
+
+	/** Дашборд показывает выжимки чужих вкладок, поэтому умеет на них уводить —
+	 *  переключением владеет +page.svelte, как и в строке алертов. */
+	let { ongoto }: { ongoto: (tab: TabId) => void } = $props();
 
 	/** Список групп меняется редко, но выбор могут поменять снаружи — держим свежим. */
 	const REFRESH_MS = 5000;
@@ -68,6 +76,14 @@
 	{:else if loaded}
 		<p class="hint">В конфиге sing-box нет групп outbound'ов — переключать нечего.</p>
 	{/if}
+
+	<!-- Выжимки соседних вкладок: данные для них и так текут в общее состояние
+		 независимо от того, что открыто, — отдельного опроса не нужно. -->
+	<div class="minis">
+		<MiniConnections onopen={() => ongoto('connections')} />
+		<MiniLogs onopen={() => ongoto('logs')} />
+		<MiniService onopen={() => ongoto('service')} />
+	</div>
 </div>
 
 <style>
@@ -80,6 +96,15 @@
 	.groups {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+		align-items: start;
+		gap: var(--sp-4);
+	}
+
+	/* 380px, а не 300: в колонку уже строка соединения с хостом, процессом и
+	   outbound'ом не помещается. */
+	.minis {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
 		align-items: start;
 		gap: var(--sp-4);
 	}

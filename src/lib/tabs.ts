@@ -5,10 +5,10 @@ import type { IconName } from './icons';
  *  (её кнопки уводят на нужную вкладку). */
 export const TABS = [
 	{ id: 'dashboard', label: 'Дашборд', icon: 'dashboard' },
-	{ id: 'connections', label: 'Соединения', icon: 'connections' },
-	{ id: 'subscriptions', label: 'Подписки', icon: 'subscriptions' },
-	{ id: 'config', label: 'Конфиг', icon: 'config' },
 	{ id: 'logs', label: 'Логи', icon: 'logs' },
+	{ id: 'connections', label: 'Соединения', icon: 'connections' },
+	{ id: 'config', label: 'Конфиг', icon: 'config' },
+	{ id: 'subscriptions', label: 'Подписки', icon: 'subscriptions' },
 	{ id: 'service', label: 'Сервис', icon: 'service' },
 	{ id: 'settings', label: 'Настройки', icon: 'settings' }
 ] as const satisfies readonly { id: string; label: string; icon: IconName }[];
