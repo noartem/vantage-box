@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { api, errorText } from '$lib/api';
+	import { pushAlert } from '$lib/alerts.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import { app } from '$lib/state.svelte';
 	import type { Settings, SubStateEntry, SubscriptionSettings } from '$lib/types';
 
 	let draft = $state<Settings | null>(null);
-	let error = $state<string | null>(null);
-	let info = $state<string | null>(null);
 	let saving = $state(false);
 	let refreshing = $state(false);
 	/** Состояние подписок из sidecar-файла: время/число узлов/ошибки. */
@@ -21,37 +21,41 @@
 	const dirty = $derived(
 		draft !== null &&
 			app.settings !== null &&
-			JSON.stringify($state.snapshot(draft)) !==
-				JSON.stringify($state.snapshot(app.settings))
+			JSON.stringify($state.snapshot(draft)) !== JSON.stringify($state.snapshot(app.settings))
 	);
 
 	async function save() {
 		if (!draft) return;
 		saving = true;
-		error = null;
 		try {
-			await app.saveSettings($state.snapshot(draft) as Settings);
+			const next = $state.snapshot(draft) as Settings;
+			// Пустая строка в поле группы означает «во все selector/urltest», а
+			// бэкенд ждёт в этом случае null.
+			next.subscriptions = next.subscriptions.map((s) => ({
+				...s,
+				targetGroup: s.targetGroup?.trim() ? s.targetGroup.trim() : null
+			}));
+			await app.saveSettings(next);
 		} catch (e) {
-			error = errorText(e);
+			pushAlert('error', errorText(e));
 		} finally {
 			saving = false;
 		}
 	}
 
-	function newSubscription(): SubscriptionSettings {
-		return {
-			id: crypto.randomUUID(),
-			name: '',
-			url: '',
-			enabled: true,
-			targetGroup: null,
-			updateInterval: 24
-		};
-	}
-
 	function add() {
 		if (!draft) return;
-		draft.subscriptions = [...draft.subscriptions, newSubscription()];
+		draft.subscriptions = [
+			...draft.subscriptions,
+			{
+				id: crypto.randomUUID(),
+				name: '',
+				url: '',
+				enabled: true,
+				targetGroup: null,
+				updateInterval: 24
+			} satisfies SubscriptionSettings
+		];
 	}
 
 	function remove(id: string) {
@@ -61,8 +65,8 @@
 
 	async function loadState() {
 		try {
-			const s = await api.getSubscriptionState();
-			subState = s.entries ?? {};
+			const state = await api.getSubscriptionState();
+			subState = state.entries ?? {};
 		} catch {
 			// Sidecar-файла может ещё не быть — молча.
 		}
@@ -71,38 +75,49 @@
 	async function refreshNow() {
 		if (!draft) return;
 		if (dirty) {
-			error = 'Сначала сохраните изменения — обновление читает уже сохранённые подписки.';
+			pushAlert('warn', 'Сначала сохраните изменения — обновление читает уже сохранённые подписки.');
 			return;
 		}
 		refreshing = true;
-		error = null;
-		info = null;
 		try {
 			const outcome = await api.refreshSubscriptions(true);
 			const total = outcome.updates.reduce((n, u) => n + u.nodeCount, 0);
 			const failed = outcome.updates.filter((u) => u.lastError);
 			if (failed.length > 0) {
-				error = `Не удалось обновить: ${failed.map((u) => u.name || u.id).join(', ')}`;
+				pushAlert('error', `Не удалось обновить: ${failed.map((u) => u.name || u.id).join(', ')}`);
 			} else {
-				info = `Влито узлов: ${total}.${
-					outcome.restarted ? ' sing-box перезапущен.' : ' Конфиг обновлён без перезапуска.'
-				}`;
+				pushAlert(
+					'ok',
+					`Влито узлов: ${total}.${outcome.restarted ? ' sing-box перезапущен.' : ' Конфиг обновлён без перезапуска.'}`
+				);
 			}
 			await loadState();
 		} catch (e) {
-			error = errorText(e);
+			pushAlert('error', errorText(e));
 		} finally {
 			refreshing = false;
 		}
 	}
 
+	/** Колонка узкая: год и секунды в ней всё равно не нужны. */
 	function fmtTime(ms: number): string {
 		if (!ms) return '—';
 		try {
-			return new Date(ms).toLocaleString();
+			return new Date(ms).toLocaleString(undefined, {
+				day: '2-digit',
+				month: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit'
+			});
 		} catch {
 			return '—';
 		}
+	}
+
+	function tone(entry: SubStateEntry | undefined): 'good' | 'poor' | 'none' {
+		if (!entry) return 'none';
+		if (entry.lastError) return 'poor';
+		return entry.nodeCount > 0 ? 'good' : 'none';
 	}
 
 	// Состояние подтягиваем при открытии вкладки и после каждого обновления.
@@ -113,177 +128,171 @@
 
 <div class="page">
 	{#if draft}
-		<section class="card toolbar">
-			<div class="head">
-				<h3>Подписки</h3>
-				<span class="muted">URL отдаёт sing-box JSON или base64-список URI</span>
-			</div>
-			<div class="actions">
-				<button onclick={add}>Добавить</button>
-				<button class="primary" onclick={refreshNow} disabled={refreshing}>
-					{refreshing ? 'Обновляю…' : 'Обновить сейчас'}
-				</button>
-			</div>
-		</section>
-
-		{#if error}
-			<div class="banner warn">{error}</div>
-		{/if}
-		{#if info}
-			<div class="banner ok">{info}</div>
-		{/if}
+		<div class="toolbar">
+			<span class="count">{draft.subscriptions.length} подписок</span>
+			<span
+				class="hint ell"
+				title="URL может отдавать конфиг sing-box с outbounds, голый массив outbound'ов или base64-список ss:// vmess:// vless:// trojan:// hysteria2:// tuic://"
+			>
+				URL отдаёт sing-box JSON или base64-список URI
+			</span>
+			<span class="spacer"></span>
+			<button onclick={add}>
+				<Icon name="plus" size={12} />
+				Добавить
+			</button>
+			<button class="primary" onclick={refreshNow} disabled={refreshing}>
+				{refreshing ? 'Обновляю…' : 'Обновить сейчас'}
+			</button>
+		</div>
 
 		{#if draft.subscriptions.length === 0}
-			<section class="card">
-				<p class="muted">Подписок нет. «Добавить» создаёт новую — впишите URL, имя и группу.</p>
-			</section>
+			<p class="hint">Подписок нет. «Добавить» создаёт новую — впишите URL, имя и группу.</p>
 		{:else}
-			{#each draft.subscriptions as sub (sub.id)}
-				{@const st = subState[sub.id]}
-				<section class="card sub">
-					<div class="sub-head">
-						<label class="row">
-							<input type="checkbox" bind:checked={sub.enabled} />
-							<span>включена</span>
-						</label>
-						<button onclick={() => remove(sub.id)}>Удалить</button>
-					</div>
-					<label>
-						<span>Имя</span>
-						<input bind:value={sub.name} placeholder="моя подписка" />
-					</label>
-					<label>
-						<span>URL</span>
-						<input bind:value={sub.url} placeholder="https://…/sub" />
-					</label>
-					<label>
-						<span>Группа</span>
+			<!-- Строки редактируются прямо в таблице: раньше каждая подписка была
+				 карточкой на пять строк-лейблов, то есть ~230px под четыре поля. -->
+			<div class="table card">
+				<div class="row head">
+					<span title="Подписка учитывается при обновлении"></span>
+					<span>Имя</span>
+					<span>URL</span>
+					<span title="Пусто — узлы уйдут во все selector/urltest-группы">Группа</span>
+					<span class="right" title="Интервал автообновления в часах">Ч</span>
+					<span class="right">Узлов</span>
+					<span>Обновлено</span>
+					<span></span>
+					<span></span>
+				</div>
+
+				{#each draft.subscriptions as sub (sub.id)}
+					{@const st = subState[sub.id]}
+					<div class="row">
+						<input type="checkbox" bind:checked={sub.enabled} aria-label="Включена" />
+						<input bind:value={sub.name} placeholder="имя" aria-label="Имя" />
+						<input bind:value={sub.url} placeholder="https://…/sub" aria-label="URL" />
 						<input
 							bind:value={sub.targetGroup}
-							placeholder="пусто — во все selector/urltest"
+							placeholder="все группы"
+							aria-label="Целевая группа"
 						/>
-					</label>
-					<label>
-						<span>Интервал, ч</span>
-						<input type="number" min="1" max="168" bind:value={sub.updateInterval} />
-					</label>
-					{#if st}
-						<div class="state">
-							<span class="muted">узлов: {st.nodeCount}</span>
-							<span class="muted">обновлено: {fmtTime(st.lastUpdated)}</span>
-							{#if st.lastError}
-								<span class="err">{st.lastError}</span>
-							{/if}
-						</div>
-					{/if}
-				</section>
-			{/each}
+						<input
+							class="num"
+							type="number"
+							min="1"
+							max="168"
+							bind:value={sub.updateInterval}
+							aria-label="Интервал обновления, часов"
+						/>
+						<span class="mono right muted">{st ? st.nodeCount : '—'}</span>
+						<span class="mono muted ell">{st ? fmtTime(st.lastUpdated) : '—'}</span>
+						<span
+							class="dot"
+							data-tone={tone(st)}
+							title={st?.lastError ?? (st ? `узлов: ${st.nodeCount}` : 'ещё не обновлялась')}
+						></span>
+						<button
+							class="icon-btn"
+							title="Удалить подписку"
+							aria-label="Удалить подписку"
+							onclick={() => remove(sub.id)}
+						>
+							<Icon name="trash" size={12} />
+						</button>
+					</div>
+				{/each}
+			</div>
 		{/if}
 
-		<p class="muted hint">
-			Узлы вливаются в config.json под тегами с префиксом <code>sub:</code> и дописываются в
-			целевые selector/urltest-группы. При обновлении старые узлы подписки снимаются и
-			накатываются заново, поэтому дубликатов не возникает. Комментарии в config.json при этом
-			не сохраняются — как и в редакторе конфига.
+		<p class="hint">
+			Узлы вливаются в config.json под тегами <code class="inline">sub:</code> и дописываются в
+			целевые группы; при обновлении старые снимаются, поэтому дубликатов не возникает.
+			Комментарии в config.json не сохраняются — как и в редакторе конфига.
 		</p>
 
-		<div class="footer">
+		<div class="sticky-footer">
 			<button class="primary" onclick={save} disabled={!dirty || saving}>
 				{saving ? 'Сохраняю…' : 'Сохранить'}
 			</button>
 			<button onclick={() => app.refreshSettings()} disabled={!dirty || saving}>Отменить</button>
-			{#if dirty}<span class="muted">есть несохранённые изменения</span>{/if}
+			{#if dirty}<span class="hint">есть несохранённые изменения</span>{/if}
 		</div>
 	{:else}
-		<p class="muted">Загружаю настройки…</p>
+		<p class="hint">Загружаю настройки…</p>
 	{/if}
 </div>
 
 <style>
 	.page {
-		display: grid;
-		gap: 12px;
-		align-content: start;
-		max-width: 720px;
-	}
-
-	section {
-		padding: 14px;
-		display: grid;
-		gap: 10px;
-	}
-
-	.toolbar {
 		display: flex;
+		flex-direction: column;
+		gap: var(--sp-3);
+		min-height: 100%;
+	}
+
+	.count {
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.toolbar button {
+		display: inline-flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		flex-wrap: wrap;
+		gap: var(--sp-2);
+	}
+
+	.table {
+		display: grid;
+		align-content: start;
+		overflow-x: auto;
+	}
+
+	.row {
+		display: grid;
+		grid-template-columns:
+			16px minmax(80px, 1fr) minmax(140px, 2.4fr) minmax(80px, 1fr)
+			calc(var(--w-num) + var(--sp-4)) 44px 96px 10px var(--h-ctl);
+		align-items: center;
+		gap: var(--sp-4);
+		padding: var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-3);
+		font-size: var(--fs-sm);
+		min-width: 620px;
+	}
+
+	.row:not(.head):hover {
+		background: var(--surface-alt);
 	}
 
 	.head {
-		display: flex;
-		align-items: baseline;
-		gap: 12px;
-	}
-
-	.actions {
-		display: flex;
-		gap: 8px;
-	}
-
-	h3 {
-		font-size: 14px;
-		margin: 0;
-	}
-
-	label {
-		display: grid;
-		grid-template-columns: 120px 1fr;
-		align-items: center;
-		gap: 10px;
-	}
-
-	label.row {
-		grid-template-columns: auto 1fr;
-		justify-items: start;
-	}
-
-	.sub-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-
-	.state {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 14px;
-		font-size: 12px;
-	}
-
-	.err {
-		color: var(--danger, #d33);
-	}
-
-	.hint {
-		font-size: 12px;
-	}
-
-	.hint code {
-		font-family: var(--mono);
-		background: var(--surface-alt);
-		padding: 1px 4px;
-		border-radius: 4px;
-	}
-
-	.footer {
-		display: flex;
-		align-items: center;
-		gap: 10px;
 		position: sticky;
-		bottom: 0;
-		padding: 10px 0;
-		background: var(--bg);
+		top: 0;
+		z-index: 1;
+		height: var(--h-row);
+		padding-top: 0;
+		padding-bottom: 0;
+		background: var(--surface);
+		border-bottom: 1px solid var(--border);
+		color: var(--text-muted);
+		font-size: var(--fs-xs);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.row input:not([type='checkbox']) {
+		width: 100%;
+		font-size: var(--fs-sm);
+		background: transparent;
+		border-color: transparent;
+	}
+
+	/* Поле выглядит текстом, пока в него не целятся: таблица должна читаться
+	   как таблица, а не как форма из девяти рамок в каждой строке. */
+	.row input:not([type='checkbox']):hover,
+	.row input:not([type='checkbox']):focus {
+		background: var(--surface-alt);
+		border-color: var(--border);
+	}
+
+	.right {
+		text-align: right;
 	}
 </style>

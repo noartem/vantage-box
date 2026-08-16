@@ -24,6 +24,18 @@ export function formatTime(millis: number): string {
 	return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
 }
 
+/** Возраст соединения. Колонка узкая, поэтому единица всегда одна. */
+export function formatDuration(millis: number): string {
+	if (!Number.isFinite(millis) || millis < 0) return '—';
+	const seconds = Math.floor(millis / 1000);
+	if (seconds < 60) return `${seconds}с`;
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}м`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours}ч`;
+	return `${Math.floor(hours / 24)}д`;
+}
+
 /** Задержка узла: null — не измеряли, 0 и меньше — узел не ответил. */
 export function formatDelay(delay: number | null): string {
 	if (delay === null || delay <= 0) return '—';

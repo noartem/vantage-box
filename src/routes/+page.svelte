@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
+	import AlertStrip from '$lib/components/AlertStrip.svelte';
 	import StatusBar from '$lib/components/StatusBar.svelte';
+	import TitleBar from '$lib/components/TitleBar.svelte';
 	import { app } from '$lib/state.svelte';
+	import { TABS, loadTab, saveTab, type TabId } from '$lib/tabs';
 	import ConfigView from '$lib/views/ConfigView.svelte';
 	import ConnectionsView from '$lib/views/ConnectionsView.svelte';
 	import Dashboard from '$lib/views/Dashboard.svelte';
@@ -27,18 +30,23 @@
 		}
 	}
 
-	// Окно приложения — не браузер: вкладки держим в состоянии, без роутинга и URL.
-	const TABS = [
-		{ id: 'dashboard', label: 'Дашборд' },
-		{ id: 'connections', label: 'Соединения' },
-		{ id: 'subscriptions', label: 'Подписки' },
-		{ id: 'config', label: 'Конфиг' },
-		{ id: 'logs', label: 'Логи' },
-		{ id: 'service', label: 'Сервис' },
-		{ id: 'settings', label: 'Настройки' }
-	] as const;
+	let tab = $state<TabId>(loadTab());
 
-	let tab = $state<(typeof TABS)[number]['id']>('dashboard');
+	function goto(next: TabId) {
+		tab = next;
+		saveTab(next);
+	}
+
+	/** Ctrl+1…7 — вкладки по порядку, как в браузере. Запись хоткея в настройках
+	 *  перехватывает нажатие раньше нас и гасит его — уважаем это. */
+	function onKeydown(event: KeyboardEvent) {
+		if (isPopup || event.defaultPrevented) return;
+		if (!event.ctrlKey || event.altKey || event.shiftKey) return;
+		const index = Number(event.key) - 1;
+		if (!Number.isInteger(index) || index < 0 || index >= TABS.length) return;
+		event.preventDefault();
+		goto(TABS[index].id);
+	}
 
 	onMount(() => {
 		// Попапу общее состояние не нужно: он сам ходит за списком групп.
@@ -46,21 +54,23 @@
 	});
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 {#if isPopup}
 	<ProxyPopup />
 {:else}
-<div class="shell">
-	<nav>
-		<div class="brand">Vantage Box</div>
-		{#each TABS as item (item.id)}
-			<button class="tab" class:active={tab === item.id} onclick={() => (tab = item.id)}>
-				{item.label}
-			</button>
-		{/each}
-	</nav>
+	<!-- Окно без нативной рамки: заголовок, вкладки и кнопки управления — одна
+		 полоса в 32px. Строка алертов между ней и контентом либо занимает ровно
+		 24px, либо не существует, поэтому контент никогда не съезжает. -->
+	<div class="shell">
+		<TitleBar {tab} ontab={goto} />
 
-	<div class="content">
-		<StatusBar />
+		<!-- Обёртка обязательна: без алертов AlertStrip не рисует ни одного узла, и
+			 тогда строки сетки съезжают — статус-строка попадает в растягивающийся
+			 ряд вместо нижнего. Пустой div честно занимает свои 0px. -->
+		<div class="alerts">
+			<AlertStrip ongoto={goto} />
+		</div>
 
 		<main>
 			{#if tab === 'dashboard'}
@@ -79,56 +89,28 @@
 				<SettingsView />
 			{/if}
 		</main>
-	</div>
-</div>
 
-<!-- Онбординг первого запуска: поверх всего, пока не выбраны бинарник и конфиг. -->
-{#if app.needsOnboarding}<Onboarding />{/if}
+		<StatusBar />
+	</div>
+
+	<!-- Онбординг первого запуска: поверх всего, пока не выбраны бинарник и конфиг. -->
+	{#if app.needsOnboarding}<Onboarding />{/if}
 {/if}
 
 <style>
 	.shell {
 		display: grid;
-		grid-template-columns: 180px 1fr;
+		grid-template-rows: var(--h-title) auto 1fr var(--h-status);
 		height: 100vh;
 	}
 
-	nav {
-		background: var(--surface);
-		border-right: 1px solid var(--border);
-		padding: 16px 12px;
-		display: grid;
-		gap: 4px;
-		align-content: start;
-	}
-
-	.brand {
-		font-weight: 600;
-		padding: 0 8px 12px;
-	}
-
-	.tab {
-		background: transparent;
-		border-color: transparent;
-		text-align: left;
-	}
-
-	.tab.active {
-		background: var(--accent-soft);
-		border-color: transparent;
-		color: var(--accent);
-	}
-
-	.content {
-		display: grid;
-		grid-template-rows: auto 1fr;
-		gap: 12px;
-		padding: 16px 20px;
-		min-height: 0;
+	.alerts {
+		min-width: 0;
 	}
 
 	main {
 		overflow-y: auto;
 		min-height: 0;
+		padding: var(--sp-4);
 	}
 </style>

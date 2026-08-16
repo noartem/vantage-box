@@ -52,9 +52,10 @@ pub fn is_quitting() -> bool {
     QUITTING.load(Ordering::SeqCst)
 }
 
-/// Размер попапа в логических пикселях.
-const POPUP_WIDTH: f64 = 300.0;
-const POPUP_HEIGHT: f64 = 380.0;
+/// Размер попапа в логических пикселях. Строка узла — 20px, так что по высоте
+/// это примерно два десятка узлов без прокрутки.
+const POPUP_WIDTH: f64 = 320.0;
+const POPUP_HEIGHT: f64 = 420.0;
 /// Отступ попапа от края экрана и от курсора.
 const POPUP_MARGIN: f64 = 12.0;
 

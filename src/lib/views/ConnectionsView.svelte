@@ -1,12 +1,28 @@
 <script lang="ts">
 	import { api, errorText } from '$lib/api';
-	import { formatBytes } from '$lib/format';
+	import { pushAlert } from '$lib/alerts.svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import { formatBytes, formatDuration } from '$lib/format';
 	import { app } from '$lib/state.svelte';
 	import type { Connection } from '$lib/types';
 
-	let error = $state<string | null>(null);
+	/** Высота строки. Должна совпадать с --h-row: на ней стоит вся арифметика
+	 *  виртуализации, поэтому значение продублировано осознанно. */
+	const ROW = 22;
+	/** Сколько строк дорисовываем сверху и снизу окна, чтобы прокрутка не мигала. */
+	const OVERSCAN = 8;
+
+	type SortKey = 'host' | 'process' | 'outbound' | 'rule' | 'down' | 'up' | 'age';
+
 	let busy = $state<string | null>(null);
 	let filter = $state('');
+	let sortKey = $state<SortKey>('down');
+	let sortDesc = $state(true);
+
+	let scrollTop = $state(0);
+	let viewportHeight = $state(0);
+	/** Возраст соединения тикает сам: снимок /connections не меняет `start`. */
+	let now = $state(Date.now());
 
 	/** Какой outbound несёт соединение — последний элемент цепочки. */
 	function outbound(c: Connection): string {
@@ -25,29 +41,81 @@
 		return `${c.metadata.sourceIP}:${c.metadata.sourcePort}`;
 	}
 
-	const filtered = $derived(
-		filter.trim() === ''
-			? app.connections
-			: app.connections.filter((c) => {
-					const q = filter.trim().toLowerCase();
-					return (
-						c.metadata.host.toLowerCase().includes(q) ||
-						outbound(c).toLowerCase().includes(q) ||
-						c.rule.toLowerCase().includes(q) ||
-						source(c).includes(q) ||
-						destination(c).toLowerCase().includes(q)
-					);
-				})
-	);
+	/** Полный путь в колонку не влезает, а имя файла отвечает на вопрос
+	 *  «какое приложение это открыло» целиком. */
+	function processName(c: Connection): string {
+		const path = c.metadata.processPath;
+		if (!path) return '—';
+		return path.split(/[\\/]/).pop() || path;
+	}
+
+	function rule(c: Connection): string {
+		return c.rulePayload ? `${c.rule}(${c.rulePayload})` : c.rule;
+	}
+
+	function age(c: Connection): number {
+		const started = Date.parse(c.start);
+		return Number.isNaN(started) ? 0 : now - started;
+	}
+
+	const filtered = $derived.by(() => {
+		const q = filter.trim().toLowerCase();
+		if (q === '') return app.connections;
+		return app.connections.filter(
+			(c) =>
+				destination(c).toLowerCase().includes(q) ||
+				outbound(c).toLowerCase().includes(q) ||
+				rule(c).toLowerCase().includes(q) ||
+				processName(c).toLowerCase().includes(q) ||
+				source(c).includes(q)
+		);
+	});
+
+	const sorted = $derived.by(() => {
+		const sign = sortDesc ? -1 : 1;
+		const by = {
+			host: (c: Connection) => destination(c).toLowerCase(),
+			process: (c: Connection) => processName(c).toLowerCase(),
+			outbound: (c: Connection) => outbound(c).toLowerCase(),
+			rule: (c: Connection) => rule(c).toLowerCase(),
+			down: (c: Connection) => c.download,
+			up: (c: Connection) => c.upload,
+			age: (c: Connection) => age(c)
+		}[sortKey];
+		// Копия, а не sort() на месте: исходный массив принадлежит состоянию приложения.
+		return [...filtered].sort((a, b) => {
+			const left = by(a);
+			const right = by(b);
+			if (left === right) return 0;
+			return (left < right ? -1 : 1) * sign;
+		});
+	});
+
+	// Виртуализация: в DOM живёт только видимое окно строк. Без неё тысяча
+	// соединений превращалась в тысячу узлов, которые перерисовываются раз в секунду.
+	const first = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
+	const visible = $derived(Math.ceil(viewportHeight / ROW) + OVERSCAN * 2);
+	const slice = $derived(sorted.slice(first, first + visible));
+	const padTop = $derived(first * ROW);
+	const padBottom = $derived(Math.max(0, (sorted.length - first - slice.length) * ROW));
+
+	function sortBy(key: SortKey) {
+		if (sortKey === key) {
+			sortDesc = !sortDesc;
+			return;
+		}
+		sortKey = key;
+		// Числовые колонки интереснее по убыванию, текстовые — по алфавиту.
+		sortDesc = key === 'down' || key === 'up' || key === 'age';
+	}
 
 	async function closeOne(id: string) {
 		busy = id;
-		error = null;
 		try {
 			await api.closeConnection(id);
 			// Следующий кадр /connections сам приедет — обновлять вручную не нужно.
 		} catch (e) {
-			error = errorText(e);
+			pushAlert('error', errorText(e));
 		} finally {
 			busy = null;
 		}
@@ -55,15 +123,19 @@
 
 	async function closeAll() {
 		busy = 'all';
-		error = null;
 		try {
 			await api.closeAllConnections();
 		} catch (e) {
-			error = errorText(e);
+			pushAlert('error', errorText(e));
 		} finally {
 			busy = null;
 		}
 	}
+
+	$effect(() => {
+		const timer = setInterval(() => (now = Date.now()), 1000);
+		return () => clearInterval(timer);
+	});
 
 	// WS `/connections` может ещё не прислать первый кадр — подтянем разово.
 	$effect(() => {
@@ -80,166 +152,216 @@
 	});
 </script>
 
-<div class="page">
-	<section class="card toolbar">
-		<div class="info">
-			<h3>Соединения</h3>
-			<span class="muted">{app.connections.length} активных</span>
-			<span class="muted totals">
-				↓ {formatBytes(app.connectionTotals.down)} · ↑ {formatBytes(app.connectionTotals.up)}
-			</span>
-		</div>
-		<div class="actions">
-			<input bind:value={filter} placeholder="фильтр: хост, outbound, правило…" />
-			<button
-				disabled={busy !== null || app.connections.length === 0}
-				onclick={closeAll}
-			>
-				{busy === 'all' ? 'Закрываю…' : 'Закрыть все'}
-			</button>
-		</div>
-	</section>
+{#snippet th(key: SortKey, label: string, cls = '')}
+	<button class="th {cls}" class:sorted={sortKey === key} onclick={() => sortBy(key)}>
+		<span class="ell">{label}</span>
+		{#if sortKey === key}
+			<Icon name={sortDesc ? 'sortDesc' : 'sortAsc'} size={10} />
+		{/if}
+	</button>
+{/snippet}
 
-	{#if error}
-		<div class="banner">{error}</div>
-	{/if}
+<div class="page">
+	<div class="toolbar">
+		<span class="count">{app.connections.length} активных</span>
+		<span class="muted mono totals">
+			↓ {formatBytes(app.connectionTotals.down)} · ↑ {formatBytes(app.connectionTotals.up)}
+		</span>
+		<span class="spacer"></span>
+		<input
+			class="filter"
+			type="search"
+			bind:value={filter}
+			placeholder="хост, процесс, outbound, правило…"
+			aria-label="Фильтр соединений"
+		/>
+		<button
+			class="danger"
+			disabled={busy !== null || app.connections.length === 0}
+			onclick={closeAll}
+		>
+			{busy === 'all' ? 'Закрываю…' : 'Закрыть все'}
+		</button>
+	</div>
 
 	{#if app.status.state !== 'connected'}
-		<p class="muted">Нет связи с Clash API — sing-box не запущен.</p>
+		<p class="hint">Нет связи с Clash API — sing-box не запущен.</p>
 	{:else if app.connections.length === 0}
-		<p class="muted">Активных соединений нет.</p>
-	{:else if filtered.length === 0}
-		<p class="muted">Ничего не подходит под фильтр.</p>
+		<p class="hint">Активных соединений нет.</p>
+	{:else if sorted.length === 0}
+		<p class="hint">Ничего не подходит под фильтр.</p>
 	{:else}
-		<section class="card">
-			<div class="table">
-				<div class="head row">
-					<span>Хост</span>
-					<span>Сеть</span>
-					<span>Outbound</span>
-					<span>Правило</span>
-					<span class="num">↓</span>
-					<span class="num">↑</span>
-					<span></span>
-				</div>
-				{#each filtered as c (c.id)}
+		<div class="table card">
+			<div class="row head">
+				{@render th('host', 'Хост')}
+				{@render th('process', 'Процесс', 'c-process')}
+				<span class="th static c-net">Сеть</span>
+				{@render th('outbound', 'Outbound')}
+				{@render th('rule', 'Правило', 'c-rule')}
+				{@render th('down', '↓', 'right')}
+				{@render th('up', '↑', 'right')}
+				{@render th('age', 'Время', 'right')}
+				<span></span>
+			</div>
+
+			<div
+				class="viewport bounce"
+				bind:clientHeight={viewportHeight}
+				onscroll={(event) => (scrollTop = event.currentTarget.scrollTop)}
+			>
+				<div style:height="{padTop}px"></div>
+
+				{#each slice as c (c.id)}
 					<div class="row">
-						<span class="host" title={destination(c)}>
-							<span class="dest">{destination(c)}</span>
-							<span class="muted src">{source(c)}</span>
+						<span class="ell" title="{destination(c)}&#10;источник {source(c)}">
+							{destination(c)}
 						</span>
-						<span class="muted">{c.metadata.network}/{c.metadata.type || 'tcp'}</span>
-						<span class="outbound">{outbound(c)}</span>
-						<span class="muted rule">{c.rule}{c.rulePayload ? `(${c.rulePayload})` : ''}</span>
-						<span class="num">{formatBytes(c.download)}</span>
-						<span class="num">{formatBytes(c.upload)}</span>
-						<span class="row-actions">
-							<button
-								disabled={busy !== null}
-								onclick={() => closeOne(c.id)}
-							>
-								{busy === c.id ? '…' : 'Закрыть'}
-							</button>
+						<span class="ell muted c-process" title={c.metadata.processPath || 'процесс неизвестен'}>
+							{processName(c)}
 						</span>
+						<span class="muted c-net">{c.metadata.network}</span>
+						<span class="ell mono" title={c.chains.join(' ← ')}>{outbound(c)}</span>
+						<span class="ell muted c-rule" title={rule(c)}>{rule(c)}</span>
+						<span class="mono right">{formatBytes(c.download)}</span>
+						<span class="mono right">{formatBytes(c.upload)}</span>
+						<span class="mono right muted">{formatDuration(age(c))}</span>
+						<button
+							class="icon-btn"
+							title="Закрыть соединение"
+							aria-label="Закрыть соединение"
+							disabled={busy !== null}
+							onclick={() => closeOne(c.id)}
+						>
+							<Icon name="close" size={11} />
+						</button>
 					</div>
 				{/each}
+
+				<div style:height="{padBottom}px"></div>
 			</div>
-		</section>
+		</div>
 	{/if}
 </div>
 
 <style>
 	.page {
 		display: grid;
-		gap: 12px;
-		align-content: start;
+		grid-template-rows: auto 1fr;
+		gap: var(--sp-3);
+		height: 100%;
+		min-height: 0;
 	}
 
-	.toolbar {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		flex-wrap: wrap;
-	}
-
-	.info {
-		display: flex;
-		align-items: baseline;
-		gap: 12px;
+	.count {
+		font-weight: 600;
 	}
 
 	.totals {
-		font-family: var(--mono);
-		font-size: 12px;
+		font-size: var(--fs-sm);
 	}
 
-	.actions {
-		display: flex;
-		gap: 8px;
+	.filter {
+		width: 240px;
 	}
 
 	.table {
 		display: grid;
-		font-size: 12px;
-		overflow-x: auto;
+		grid-template-rows: auto 1fr;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.viewport {
+		overflow-y: auto;
+		overflow-x: hidden;
+		min-height: 0;
 	}
 
 	.row {
 		display: grid;
-		grid-template-columns: 1.6fr 0.7fr 1fr 1.2fr 0.7fr 0.7fr auto;
-		gap: 10px;
+		grid-template-columns:
+			minmax(120px, 2fr) minmax(80px, 1fr) 46px minmax(80px, 1fr)
+			minmax(80px, 1.2fr) 62px 62px 46px var(--h-ctl);
 		align-items: center;
-		padding: 5px 6px;
-		border-bottom: 1px solid var(--border);
-		min-width: 720px;
+		gap: var(--sp-3);
+		height: var(--h-row);
+		padding: 0 var(--sp-2) 0 var(--sp-3);
+		font-size: var(--fs-sm);
+	}
+
+	.row:not(.head):hover {
+		background: var(--surface-alt);
 	}
 
 	.head {
-		color: var(--text-muted);
-		font-weight: 600;
-		position: sticky;
-		top: 0;
+		border-bottom: 1px solid var(--border);
 		background: var(--surface);
 	}
 
-	.host {
-		display: grid;
-		gap: 1px;
+	/* Заголовок колонки — кнопка сортировки, но выглядеть должен подписью. */
+	.th {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-1);
+		height: 100%;
+		padding: 0;
+		background: transparent;
+		border: none;
+		color: var(--text-muted);
+		font-size: var(--fs-xs);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
 		min-width: 0;
 	}
 
-	.dest {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+	.th:hover:not(:disabled) {
+		color: var(--text);
+		border: none;
 	}
 
-	.src {
-		font-size: 11px;
+	.th.sorted {
+		color: var(--text);
 	}
 
-	.num {
-		font-family: var(--mono);
+	.th.static {
+		cursor: default;
+	}
+
+	.right {
 		text-align: right;
-		font-variant-numeric: tabular-nums;
-	}
-
-	.outbound {
-		font-family: var(--mono);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.rule {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.row-actions {
-		display: flex;
 		justify-content: flex-end;
+	}
+
+	/* Узкое окно: колонки уходят по одной, начиная с наименее срочных. */
+	@media (max-width: 1000px) {
+		.row {
+			grid-template-columns:
+				minmax(120px, 2fr) minmax(80px, 1fr) 46px minmax(80px, 1fr)
+				62px 62px 46px var(--h-ctl);
+		}
+
+		.c-rule {
+			display: none;
+		}
+	}
+
+	@media (max-width: 820px) {
+		.row {
+			grid-template-columns: minmax(120px, 2fr) 46px minmax(80px, 1fr) 62px 62px 46px var(--h-ctl);
+		}
+
+		.c-process {
+			display: none;
+		}
+	}
+
+	@media (max-width: 700px) {
+		.row {
+			grid-template-columns: minmax(120px, 2fr) minmax(80px, 1fr) 62px 62px 46px var(--h-ctl);
+		}
+
+		.c-net {
+			display: none;
+		}
 	}
 </style>

@@ -54,7 +54,7 @@
 			backgroundColor: 'var(--surface)',
 			color: 'var(--text)',
 			height: '100%',
-			fontSize: '13px'
+			fontSize: '12px'
 		},
 		'.cm-content': { fontFamily: 'var(--mono)' },
 		'.cm-gutters': {

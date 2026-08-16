@@ -1,13 +1,20 @@
 <script lang="ts">
 	import { api, errorText } from '$lib/api';
+	import { pushAlert } from '$lib/alerts.svelte';
 	import { formatBytes } from '$lib/format';
 	import { app } from '$lib/state.svelte';
 	import type { BinaryInfo, InstallOutcome, ReleaseCatalog, ReleaseInfo } from '$lib/types';
+	import Icon from './Icon.svelte';
+
+	const COMPAT_LABELS: Record<string, string> = {
+		supported: 'в диапазоне',
+		tooNew: 'новее',
+		tooOld: 'старее',
+		unknown: '—'
+	};
 
 	let info = $state<BinaryInfo | null>(null);
 	let catalog = $state<ReleaseCatalog | null>(null);
-	let outcome = $state<InstallOutcome | null>(null);
-	let error = $state<string | null>(null);
 	let loading = $state(false);
 	let refreshing = $state(false);
 	/** Версия, с которой сейчас идёт работа, и что именно с ней делают. */
@@ -17,9 +24,8 @@
 		loading = true;
 		try {
 			info = await api.getBinaryInfo();
-			error = null;
 		} catch (e) {
-			error = errorText(e);
+			pushAlert('error', errorText(e));
 		} finally {
 			loading = false;
 		}
@@ -28,11 +34,10 @@
 	/** Каталог всегда приезжает из кэша: поход на GitHub — только по кнопке. */
 	async function loadCatalog(refresh = false) {
 		if (refresh) refreshing = true;
-		error = null;
 		try {
 			catalog = await api.listSingboxReleases(refresh);
 		} catch (e) {
-			error = errorText(e);
+			pushAlert('error', errorText(e));
 		} finally {
 			refreshing = false;
 		}
@@ -40,20 +45,22 @@
 
 	async function run(version: string, kind: string, call: () => Promise<unknown>) {
 		job = { version, kind };
-		error = null;
-		outcome = null;
 		try {
 			const result = await call();
 			if (kind === 'use') {
-				outcome = result as InstallOutcome;
+				const outcome = result as InstallOutcome;
 				info = outcome.binary;
+				pushAlert(
+					'ok',
+					`Версия ${outcome.binary.version ?? '—'} теперь используется.${outcome.restarted ? ' sing-box был перезапущен.' : ''}`
+				);
 				await loadCatalog();
 				await app.refreshRun();
 			} else {
 				catalog = result as ReleaseCatalog;
 			}
 		} catch (e) {
-			error = errorText(e);
+			pushAlert('error', errorText(e));
 			await refreshInfo();
 			await loadCatalog();
 		} finally {
@@ -76,7 +83,7 @@
 			try {
 				catalog = await api.downloadSingboxRelease(release.version, release.assetUrl);
 			} catch (e) {
-				error = errorText(e);
+				pushAlert('error', errorText(e));
 				job = null;
 				return;
 			}
@@ -99,34 +106,45 @@
 	const managed = $derived(info?.managed === true);
 	const fetchedAt = $derived(
 		catalog && catalog.fetchedAt > 0
-			? new Date(catalog.fetchedAt * 1000).toLocaleString()
+			? new Date(catalog.fetchedAt * 1000).toLocaleString(undefined, {
+					day: '2-digit',
+					month: '2-digit',
+					hour: '2-digit',
+					minute: '2-digit'
+				})
 			: 'ни разу'
 	);
 </script>
 
-<section class="card">
-	<header>
-		<h3>Файл sing-box</h3>
-		<button onclick={refreshInfo} disabled={loading}>
-			{loading ? 'Проверяю…' : 'Обновить данные'}
+<section class="section">
+	<div class="head">
+		<h3 class="section-title">Файл sing-box</h3>
+		<span class="spacer"></span>
+		<button
+			class="icon-btn"
+			title="Перечитать сведения о файле"
+			aria-label="Перечитать"
+			disabled={loading}
+			onclick={refreshInfo}
+		>
+			<Icon name="refresh" size={13} />
 		</button>
-	</header>
-
-	{#if error}
-		<div class="banner">{error}</div>
-	{/if}
+	</div>
 
 	{#if info}
-		<dl>
-			<dt>путь</dt>
-			<dd class="selectable">{info.path}</dd>
-			<dt>режим</dt>
-			<dd>{info.managed ? 'под управлением Vantage Box' : 'задан вручную'}</dd>
-			<dt>версия</dt>
-			<dd>{info.version ?? (info.present ? 'не определена' : 'нет файла')}</dd>
-			<dt>поддерживается</dt>
-			<dd>{info.supportedRange}</dd>
-		</dl>
+		<div class="form">
+			<span class="lbl">Путь</span>
+			<code class="path ell selectable" title={info.path}>{info.path}</code>
+
+			<span class="lbl">Режим</span>
+			<span>{info.managed ? 'под управлением Vantage Box' : 'задан вручную'}</span>
+
+			<span class="lbl">Версия</span>
+			<span class="mono">{info.version ?? (info.present ? 'не определена' : 'нет файла')}</span>
+
+			<span class="lbl">Поддерживается</span>
+			<span class="mono muted">{info.supportedRange}</span>
+		</div>
 
 		{#if info.problem}
 			<div class="banner">{info.problem}</div>
@@ -141,51 +159,45 @@
 		{/if}
 
 		{#if !managed}
-			<p class="muted hint">
+			<p class="hint">
 				Путь задан вручную, поэтому Vantage Box этот файл не трогает — только сообщает о
 				несовместимой версии. Очистите поле «Файл sing-box» в настройках, чтобы отдать версии
 				приложению.
 			</p>
 		{/if}
 	{/if}
-
-	{#if outcome}
-		<div class="banner ok">
-			<strong>Версия {outcome.binary.version ?? '—'} теперь используется.</strong>
-			{#if outcome.restarted}sing-box был перезапущен.{/if}
-		</div>
-	{/if}
 </section>
 
 {#if managed}
-	<section class="card">
-		<header>
-			<div class="title">
-				<h3>Версии</h3>
-				<span class="muted stamp">список обновлён: {fetchedAt}</span>
-			</div>
-			<button onclick={() => loadCatalog(true)} disabled={refreshing || job !== null}>
-				{refreshing ? 'Запрашиваю…' : 'Обновить список'}
+	<section class="section versions">
+		<div class="head">
+			<h3 class="section-title">Версии</h3>
+			<span class="hint">список обновлён: {fetchedAt}</span>
+			<span class="spacer"></span>
+			<button
+				class="icon-btn"
+				title="Запросить список с GitHub"
+				aria-label="Обновить список"
+				disabled={refreshing || job !== null}
+				onclick={() => loadCatalog(true)}
+			>
+				<Icon name="refresh" size={13} />
 			</button>
-		</header>
+		</div>
 
 		{#if catalog && catalog.releases.length > 0}
-			<ul>
+			<div class="tbl">
 				{#each catalog.releases as release (release.version)}
-					<li class:active={release.active}>
-						<span class="version">{release.version}</span>
-						<span class="tag" data-compat={release.compatibility}>
-							{release.compatibility === 'supported'
-								? 'в диапазоне'
-								: release.compatibility === 'tooNew'
-									? 'новее диапазона'
-									: release.compatibility === 'tooOld'
-										? 'старее диапазона'
-										: '—'}
+					<div class="tbl-row" class:active={release.active}>
+						<span class="mono">{release.version}</span>
+
+						<span class="chip" data-tone={release.compatibility === 'supported' ? 'good' : undefined}>
+							{COMPAT_LABELS[release.compatibility] ?? '—'}
 						</span>
-						<span class="muted size">
+
+						<span class="muted ell">
 							{#if release.downloaded}
-								скачана
+								на диске
 							{:else if release.asset}
 								{formatBytes(release.size)}
 							{:else}
@@ -193,166 +205,100 @@
 							{/if}
 						</span>
 
-						<span class="row-actions">
-							{#if release.active}
-								<span class="badge">используется</span>
-							{:else}
-								<button
-									disabled={job !== null ||
-										(!release.downloaded && !release.assetUrl) ||
-										release.compatibility !== 'supported'}
-									onclick={() => use(release)}
-									title={release.compatibility !== 'supported'
-										? 'Автоматически ставим только версии из протестированного диапазона'
-										: undefined}
-								>
-									{#if job?.version === release.version && job.kind === 'download'}
-										Качаю…
-									{:else if job?.version === release.version && job.kind === 'use'}
-										Переключаю…
-									{:else}
-										Выбрать
-									{/if}
-								</button>
-							{/if}
+						{#if release.active}
+							<span class="badge">используется</span>
+						{:else}
+							<button
+								disabled={job !== null ||
+									(!release.downloaded && !release.assetUrl) ||
+									release.compatibility !== 'supported'}
+								onclick={() => use(release)}
+								title={release.compatibility !== 'supported'
+									? 'Автоматически ставим только версии из протестированного диапазона'
+									: 'Сделать этой версией рабочего файла'}
+							>
+								{#if job?.version === release.version && job.kind === 'download'}
+									Качаю…
+								{:else if job?.version === release.version && job.kind === 'use'}
+									Ставлю…
+								{:else}
+									Выбрать
+								{/if}
+							</button>
+						{/if}
 
-							{#if release.downloaded}
-								<button
-									disabled={job !== null || release.active}
-									onclick={() => remove(release)}
-									title="Удалить скачанный файл этой версии"
-								>
-									{job?.version === release.version && job.kind === 'delete' ? 'Удаляю…' : 'Удалить'}
-								</button>
-							{:else}
-								<button
-									disabled={job !== null || !release.assetUrl}
-									onclick={() => download(release)}
-								>
-									{job?.version === release.version && job.kind === 'download'
-										? 'Качаю…'
-										: 'Скачать'}
-								</button>
-							{/if}
-						</span>
-					</li>
+						{#if release.downloaded}
+							<button
+								class="icon-btn"
+								disabled={job !== null || release.active}
+								onclick={() => remove(release)}
+								title="Удалить скачанный файл этой версии"
+								aria-label="Удалить"
+							>
+								<Icon name="trash" size={12} />
+							</button>
+						{:else}
+							<button
+								class="icon-btn"
+								disabled={job !== null || !release.assetUrl}
+								onclick={() => download(release)}
+								title="Скачать, не переключаясь"
+								aria-label="Скачать"
+							>
+								<Icon name="download" size={12} />
+							</button>
+						{/if}
+					</div>
 				{/each}
-			</ul>
+			</div>
 
-			<p class="muted hint">
-				Каждая версия хранится отдельным файлом и остаётся на диске, пока её не удалить: откат на
-				предыдущую не требует повторной загрузки. Выбранная версия копируется в рабочий файл, на
-				который ссылается сервис, — переустанавливать его не нужно.
+			<p class="hint">
+				Каждая версия хранится отдельным файлом и остаётся на диске, пока её не удалить: откат не
+				требует повторной загрузки. Выбранная версия копируется в рабочий файл, на который
+				ссылается служба, — переустанавливать её не нужно.
 			</p>
 		{:else if catalog}
-			<p class="muted">
-				Список пуст. Нажмите «Обновить список» — он загрузится с GitHub и дальше будет показываться
-				из кэша.
+			<p class="hint">
+				Список пуст. Кнопка обновления загрузит его с GitHub, дальше он показывается из кэша.
 			</p>
 		{:else}
-			<p class="muted">Читаю каталог…</p>
+			<p class="hint">Читаю каталог…</p>
 		{/if}
 	</section>
 {/if}
 
 <style>
-	section {
-		padding: 14px;
-		display: grid;
-		gap: 10px;
-	}
-
-	header {
+	.head {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
+		gap: var(--sp-3);
 	}
 
-	.title {
-		display: flex;
-		align-items: baseline;
-		gap: 10px;
-	}
-
-	.stamp {
-		font-size: 12px;
-	}
-
-	h3 {
-		font-size: 14px;
-	}
-
-	dl {
-		margin: 0;
-		display: grid;
-		grid-template-columns: 170px 1fr;
-		gap: 4px 10px;
-		font-size: 12px;
-	}
-
-	dt {
-		color: var(--text-muted);
-	}
-
-	dd {
-		margin: 0;
+	.path {
 		font-family: var(--mono);
-		word-break: break-all;
+		font-size: var(--fs-sm);
+		max-width: 100%;
 	}
 
-	ul {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: grid;
-		gap: 4px;
+	.tbl-row {
+		grid-template-columns: 68px 76px 1fr max-content var(--h-ctl);
+		border-radius: var(--radius-ctl);
+		border-bottom: none;
 	}
 
-	li {
-		display: grid;
-		grid-template-columns: 90px 130px 1fr auto;
-		align-items: center;
-		gap: 10px;
-		font-size: 12px;
-		padding: 4px 6px;
-		border-radius: 8px;
-	}
-
-	li.active {
-		background: var(--accent-soft);
-	}
-
-	.row-actions {
-		display: flex;
-		gap: 6px;
-		justify-content: flex-end;
+	.tbl-row button:not(.icon-btn) {
+		height: 18px;
+		padding: 0 var(--sp-3);
+		font-size: var(--fs-xs);
 	}
 
 	.badge {
 		color: var(--accent);
-		font-weight: 600;
-	}
-
-	.version {
-		font-family: var(--mono);
-	}
-
-	.tag {
-		color: var(--text-muted);
-	}
-
-	.tag[data-compat='supported'] {
-		color: var(--good);
-	}
-
-	.tag[data-compat='tooNew'],
-	.tag[data-compat='tooOld'] {
-		color: var(--fair);
+		font-size: var(--fs-xs);
+		white-space: nowrap;
 	}
 
 	.hint {
-		margin: 0;
-		font-size: 12px;
+		max-width: 62ch;
 	}
 </style>

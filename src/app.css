@@ -1,5 +1,9 @@
 /* Тема: data-theme на <html>. "system" и отсутствие атрибута идут за ОС,
-   явные "light"/"dark" перебивают её в обе стороны. */
+   явные "light"/"dark" перебивают её в обе стороны.
+
+   Размеры живут только в :root — темы переопределяют исключительно цвета.
+   Всякий отступ, шрифт и высота в компонентах берутся отсюда: поменять
+   плотность всего приложения должно быть можно правкой одного блока. */
 
 :root {
 	--bg: #f6f7f9;
@@ -13,13 +17,47 @@
 	--good: #1a9c62;
 	--fair: #b8811a;
 	--poor: #c9453b;
-	--radius: 10px;
 	--mono: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Consolas, monospace;
 	--cm-key: #1f5fbf;
 	--cm-string: #1a7f4b;
 	--cm-number: #a14b12;
 	--cm-atom: #8b3fbf;
 	--cm-comment: #7b8494;
+
+	/* Шаг сетки. Промежуточных значений нет намеренно: любой отступ в проекте
+	   обязан быть одним из этих шести. */
+	--sp-1: 2px;
+	--sp-2: 4px;
+	--sp-3: 6px;
+	--sp-4: 8px;
+	--sp-5: 12px;
+	--sp-6: 16px;
+
+	/* Шрифт. База 12px — плотность десктопной утилиты, а не веб-страницы. */
+	--fs-xs: 10px;
+	--fs-sm: 11px;
+	--fs-md: 12px;
+	--fs-lg: 14px;
+
+	/* Высоты — единственный источник вертикального ритма. Строка списка и
+	   контрол одинаковы, поэтому таблицы и формы стоят на одной сетке. */
+	--h-ctl: 22px;
+	--h-row: 22px;
+	--h-title: 32px;
+	--h-status: 26px;
+	--h-toolbar: 26px;
+	--h-alert: 24px;
+	--w-titlebar-btn: 46px;
+
+	/* Скругления: у 22px контрола 10px выглядели бы капсулой. */
+	--radius-ctl: 5px;
+	--radius-card: 8px;
+	--radius: var(--radius-card);
+
+	/* Ширины полей. Числовому полю не нужны 500px — отсюда берётся `.num`. */
+	--w-num: 7ch;
+	--w-field: 320px;
+	--w-nav: 150px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -87,9 +125,33 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-	font-size: 14px;
+	font-size: var(--fs-md);
 	/* Десктопное приложение: выделение текста только там, где оно осмысленно. */
 	user-select: none;
+}
+
+/* Полосы прокрутки тонкие: при строках в 22px системные 17px съедали бы
+   заметную долю ширины таблицы. */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--border);
+	border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--text-muted);
+}
+
+::-webkit-scrollbar-corner {
+	background: transparent;
 }
 
 h1,
@@ -97,6 +159,11 @@ h2,
 h3 {
 	margin: 0;
 	font-weight: 600;
+	font-size: inherit;
+}
+
+p {
+	margin: 0;
 }
 
 button {
@@ -104,8 +171,11 @@ button {
 	color: inherit;
 	background: var(--surface-alt);
 	border: 1px solid var(--border);
-	border-radius: 8px;
-	padding: 6px 12px;
+	border-radius: var(--radius-ctl);
+	height: var(--h-ctl);
+	padding: 0 var(--sp-4);
+	line-height: 1;
+	white-space: nowrap;
 	cursor: pointer;
 }
 
@@ -124,16 +194,57 @@ button.primary {
 	color: #fff;
 }
 
+/* Необратимое действие (удалить службу, стереть подписку) не должно выглядеть
+   как соседняя безобидная кнопка. */
+button.danger {
+	color: var(--poor);
+	border-color: color-mix(in srgb, var(--poor) 45%, var(--border));
+}
+
+button.danger:hover:not(:disabled) {
+	border-color: var(--poor);
+	background: color-mix(in srgb, var(--poor) 12%, transparent);
+}
+
+/* Кнопка-иконка ровно в размер строки: 22×22 — минимальная цель, ниже которой
+   при этой плотности опускаться нельзя. */
+.icon-btn {
+	width: var(--h-ctl);
+	height: var(--h-ctl);
+	padding: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: transparent;
+	border-color: transparent;
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.icon-btn:hover:not(:disabled) {
+	background: var(--surface-alt);
+	border-color: var(--border);
+	color: var(--text);
+}
+
+.icon-btn.on {
+	color: var(--accent);
+	background: var(--accent-soft);
+}
+
 input,
 select {
 	font: inherit;
 	color: inherit;
 	background: var(--surface-alt);
 	border: 1px solid var(--border);
-	border-radius: 8px;
-	padding: 6px 10px;
-	width: 100%;
+	border-radius: var(--radius-ctl);
+	height: var(--h-ctl);
+	padding: 0 var(--sp-3);
 	user-select: text;
+	/* width: 100% намеренно НЕ задаётся: иначе поле под четыре цифры растягивается
+	   на всю колонку. Ширину назначают классы .num / .field / .grow. */
+	min-width: 0;
 }
 
 input:focus,
@@ -144,28 +255,286 @@ button:focus-visible {
 }
 
 input[type='checkbox'] {
-	width: auto;
+	width: 13px;
+	height: 13px;
+	padding: 0;
+	margin: 0;
+	justify-self: start;
+	accent-color: var(--accent);
+}
+
+/* Стрелки счётчика съедают ~14px поля и не нужны там, где вводят таймаут в
+   миллисекундах: без них «5000» перестаёт обрезаться. */
+input[type='number'] {
+	appearance: textfield;
+}
+
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+	appearance: none;
+	margin: 0;
+}
+
+/* Три калибра полей — больше в приложении не нужно. */
+.num {
+	width: var(--w-num);
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.field {
+	width: 100%;
+	max-width: var(--w-field);
+}
+
+.grow {
+	width: 100%;
+	flex: 1;
 }
 
 .card {
 	background: var(--surface);
 	border: 1px solid var(--border);
-	border-radius: var(--radius);
+	border-radius: var(--radius-card);
+}
+
+/* Карточка-секция: единственный блок группировки в приложении. Заменяет
+   `section { padding: 14px; gap: 10px }`, который был скопирован в четыре файла. */
+.section {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-card);
+	padding: var(--sp-4);
+	display: grid;
+	gap: var(--sp-3);
+	align-content: start;
+}
+
+/* Заголовок секции — надпись, а не заголовок статьи. Стиль взят из ProxyPopup:
+   единственной поверхности, которая уже была плотной. */
+.section > h2,
+.section > h3,
+.section-title {
+	font-size: var(--fs-sm);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-muted);
+}
+
+/* Форма: колонка подписей по контенту, а не фиксированные 180px. Обёртка
+   <label> с display:contents оставляет связь подписи с полем, но выкладывает
+   их прямо в сетку — только так строки выравниваются между собой. */
+.form {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: var(--sp-2) var(--sp-4);
+	align-items: center;
+}
+
+/* Две пары «подпись + поле» в строку: короткие поля перестают тянуть колонку. */
+.form.pairs {
+	grid-template-columns: max-content auto max-content auto;
+	justify-content: start;
+	column-gap: var(--sp-5);
+}
+
+.form > label {
+	display: contents;
+}
+
+/* Контрол занимает столько, сколько ему нужно, а не всю колонку: без этого
+   <select> под слово «info» растягивался на всю ширину окна. Ширину, где она
+   осмысленна, назначают .field / .num / .grow. */
+.form > *,
+.form > label > * {
+	justify-self: start;
+	min-width: 0;
+	max-width: 100%;
+}
+
+.form > label > :first-child,
+.form > .lbl {
+	color: var(--text-muted);
+	font-size: var(--fs-sm);
+	white-space: nowrap;
+}
+
+/* Строка, занимающая обе колонки формы (подсказка, ряд кнопок). */
+.form > .wide {
+	grid-column: 1 / -1;
+}
+
+/* Панель действий над содержимым: полоса, а не карточка. */
+.toolbar {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	min-height: var(--h-toolbar);
+	flex-shrink: 0;
+}
+
+.spacer {
+	flex: 1;
+	min-width: 0;
+}
+
+/* Таблица. grid-template-columns задаёт каждая вьюха у себя — здесь только
+   общий ритм строк, зебра и липкая шапка. */
+.tbl {
+	display: grid;
+	align-content: start;
+	font-size: var(--fs-sm);
+}
+
+.tbl-head,
+.tbl-row {
+	display: grid;
+	align-items: center;
+	gap: var(--sp-3);
+	height: var(--h-row);
+	padding: 0 var(--sp-3);
+}
+
+.tbl-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: var(--surface);
+	border-bottom: 1px solid var(--border);
+	color: var(--text-muted);
+	font-size: var(--fs-xs);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.tbl-row {
+	border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+.tbl-row:hover {
+	background: var(--surface-alt);
+}
+
+.tbl-row.active {
+	background: var(--accent-soft);
+}
+
+/* Ячейка, которую нельзя разрывать: длинный хост или путь обрезается
+   многоточием, полное значение уходит в title. */
+.ell {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+
+.mono {
+	font-family: var(--mono);
+	font-variant-numeric: tabular-nums;
 }
 
 .muted {
 	color: var(--text-muted);
 }
 
+.hint {
+	font-size: var(--fs-sm);
+	color: var(--text-muted);
+}
+
+.hint code,
+code.inline {
+	font-family: var(--mono);
+	font-size: var(--fs-sm);
+	background: var(--surface-alt);
+	padding: 0 var(--sp-2);
+	border-radius: 3px;
+}
+
 .selectable {
 	user-select: text;
 }
 
+/* Метка типа/режима рядом с именем. */
+.chip {
+	display: inline-flex;
+	align-items: center;
+	height: 15px;
+	padding: 0 var(--sp-2);
+	border-radius: 3px;
+	background: var(--surface-alt);
+	color: var(--text-muted);
+	font-size: var(--fs-xs);
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+.chip[data-tone='good'] {
+	color: var(--good);
+	background: color-mix(in srgb, var(--good) 15%, transparent);
+}
+
+.chip[data-tone='fair'] {
+	color: var(--fair);
+	background: color-mix(in srgb, var(--fair) 15%, transparent);
+}
+
+.chip[data-tone='poor'] {
+	color: var(--poor);
+	background: color-mix(in srgb, var(--poor) 15%, transparent);
+}
+
+/* Индикатор состояния. Был продублирован в StatusBar и ProxyPopup. */
+.dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.dot[data-state='connected'],
+.dot[data-tone='good'] {
+	background: var(--good);
+}
+
+.dot[data-state='connecting'],
+.dot[data-tone='fair'] {
+	background: var(--fair);
+}
+
+.dot[data-state='disconnected'],
+.dot[data-tone='poor'] {
+	background: var(--poor);
+}
+
+/* Задержка узла. Тон считает delayTone() из lib/format.ts. */
+.delay {
+	font-variant-numeric: tabular-nums;
+	font-size: var(--fs-sm);
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.delay[data-tone='good'] {
+	color: var(--good);
+}
+
+.delay[data-tone='fair'] {
+	color: var(--fair);
+}
+
+.delay[data-tone='poor'] {
+	color: var(--poor);
+}
+
 .banner {
-	padding: 10px 14px;
-	border-radius: var(--radius);
+	padding: var(--sp-2) var(--sp-3);
+	border-radius: var(--radius-ctl);
 	border: 1px solid var(--poor);
 	background: color-mix(in srgb, var(--poor) 12%, transparent);
+	font-size: var(--fs-sm);
 	user-select: text;
 }
 
@@ -177,4 +546,19 @@ input[type='checkbox'] {
 .banner.ok {
 	border-color: var(--good);
 	background: color-mix(in srgb, var(--good) 12%, transparent);
+}
+
+/* Полоса сохранения внизу формы. Была скопирована в SettingsView и
+   SubscriptionsView байт в байт. */
+.sticky-footer {
+	position: sticky;
+	bottom: 0;
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	padding: var(--sp-3) 0;
+	margin-top: auto;
+	background: var(--bg);
+	border-top: 1px solid var(--border);
 }

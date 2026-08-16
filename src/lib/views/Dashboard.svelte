@@ -24,6 +24,12 @@
 		}
 	}
 
+	/** Вложенная группа — соседняя карточка на этой же странице: не открываем
+	 *  ничего нового, а подкручиваем к ней. */
+	function jump(name: string) {
+		document.getElementById(`group-${name}`)?.scrollIntoView({ block: 'nearest' });
+	}
+
 	$effect(() => {
 		// Пока связи нет, дёргать API бессмысленно: только копили бы ошибки.
 		if (app.status.state !== 'connected') return;
@@ -47,38 +53,34 @@
 	{/if}
 
 	{#if groups.length > 0}
+		<!-- Группы идут колонками, а не столбиком: в одну колонку карточка на три
+			 узла оставляла бы справа три четверти пустого окна. -->
 		<div class="groups">
 			{#each groups as group (group.name)}
-				<GroupCard {group} onchanged={refresh} />
+				<GroupCard {group} onchanged={refresh} onjump={jump} />
 			{/each}
 		</div>
 	{:else if app.status.state !== 'connected'}
-		<p class="muted">
+		<p class="hint">
 			Нет связи с Clash API. Проверьте, что sing-box запущен и в его конфиге включён
-			<code>experimental.clash_api</code>.
+			<code class="inline">experimental.clash_api</code>.
 		</p>
 	{:else if loaded}
-		<p class="muted">В конфиге sing-box нет групп outbound'ов — переключать нечего.</p>
+		<p class="hint">В конфиге sing-box нет групп outbound'ов — переключать нечего.</p>
 	{/if}
 </div>
 
 <style>
 	.page {
 		display: grid;
-		gap: 16px;
+		gap: var(--sp-4);
 		align-content: start;
 	}
 
 	.groups {
 		display: grid;
-		gap: 12px;
-	}
-
-	code {
-		font-family: var(--mono);
-		font-size: 12px;
-		background: var(--surface-alt);
-		padding: 1px 5px;
-		border-radius: 5px;
+		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+		align-items: start;
+		gap: var(--sp-4);
 	}
 </style>

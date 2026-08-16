@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { api, errorText } from '$lib/api';
+	import BinaryPanel from '$lib/components/BinaryPanel.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import { app } from '$lib/state.svelte';
 	import type { Settings } from '$lib/types';
-	import BinaryPanel from '$lib/components/BinaryPanel.svelte';
 
 	let dismissed = $state(false);
 	let busy = $state(false);
+	// Ошибки онбординга остаются в диалоге: общая строка алертов лежит под
+	// оверлеем и оттуда её было бы не видно.
 	let error = $state<string | null>(null);
 
 	const binaryOk = $derived(app.binaryInfo?.present === true);
@@ -27,31 +30,34 @@
 		}
 	}
 
-	async function pickConfig() {
+	async function guard(action: () => Promise<unknown>) {
+		error = null;
 		try {
+			await action();
+		} catch (e) {
+			error = errorText(e);
+		}
+	}
+
+	function pickConfig() {
+		return guard(async () => {
 			const path = await api.pickFile('config');
 			if (path) await applySettings((s) => (s.singBox.configPath = path));
-		} catch (e) {
-			error = errorText(e);
-		}
+		});
 	}
 
-	async function createMinimal() {
-		try {
+	function createMinimal() {
+		return guard(async () => {
 			const path = await api.createMinimalConfig();
 			await applySettings((s) => (s.singBox.configPath = path));
-		} catch (e) {
-			error = errorText(e);
-		}
+		});
 	}
 
-	async function pickBinary() {
-		try {
+	function pickBinary() {
+		return guard(async () => {
 			const path = await api.pickFile('binary');
 			if (path) await applySettings((s) => (s.singBox.binaryPath = path));
-		} catch (e) {
-			error = errorText(e);
-		}
+		});
 	}
 </script>
 
@@ -62,52 +68,66 @@
 	</button>
 {:else}
 	<div class="overlay">
-		<div class="dialog">
+		<div class="dialog bounce">
 			<header>
 				<h2>Добро пожаловать в Vantage Box</h2>
+				<span class="spacer"></span>
 				<button class="ghost" onclick={() => (dismissed = true)}>Пропустить</button>
 			</header>
 
-			<p class="muted">
-				Для работы нужен бинарник sing-box и config.json. Можно выбрать свои или скачать
-				sing-box прямо здесь — инсталлер его не включает.
+			<p class="hint">
+				Нужны бинарник sing-box и config.json. Можно выбрать свои или скачать sing-box прямо
+				здесь — инсталлер его не включает.
 			</p>
 
 			{#if error}
 				<div class="banner warn">{error}</div>
 			{/if}
 
-			<section class="card step" data-done={binaryOk}>
+			<section class="section step" data-done={binaryOk}>
 				<div class="step-head">
-					<h3>1. Бинарник sing-box</h3>
-					{#if binaryOk}<span class="badge ok">готово</span>{/if}
+					<h3 class="section-title">1. Бинарник sing-box</h3>
+					<span class="spacer"></span>
+					{#if binaryOk}
+						<span class="chip" data-tone="good">
+							<Icon name="check" size={10} />
+							готово
+						</span>
+					{/if}
 				</div>
-				<p class="muted small">
-					Скачайте версию из протестированного диапазона или укажите свой файл sing-box.
-				</p>
+
 				<BinaryPanel />
-				<div class="actions">
+
+				<div class="toolbar">
 					<button onclick={pickBinary} disabled={busy}>Указать свой файл…</button>
 				</div>
 			</section>
 
-			<section class="card step" data-done={configOk}>
+			<section class="section step" data-done={configOk}>
 				<div class="step-head">
-					<h3>2. Конфиг sing-box</h3>
-					{#if configOk}<span class="badge ok">готово</span>{/if}
+					<h3 class="section-title">2. Конфиг sing-box</h3>
+					<span class="spacer"></span>
+					{#if configOk}
+						<span class="chip" data-tone="good">
+							<Icon name="check" size={10} />
+							готово
+						</span>
+					{/if}
 				</div>
-				<p class="muted small">
-					Укажите готовый config.json или создайте минимальный — в нём локальный mixed-инбаунд
-					и selector «proxy», куда потом вльются узлы подписок.
+
+				<p class="hint">
+					Готовый config.json или минимальный: локальный mixed-инбаунд и selector «proxy», куда
+					потом вльются узлы подписок.
 				</p>
-				<div class="actions">
+
+				<div class="toolbar">
 					<button onclick={pickConfig} disabled={busy}>Указать config.json…</button>
 					<button onclick={createMinimal} disabled={busy}>Создать минимальный</button>
 				</div>
 			</section>
 
 			{#if binaryOk && configOk}
-				<div class="banner ok">Готово — можно запускать sing-box на вкладке «Сервис».</div>
+				<div class="banner ok">Готово — можно запускать sing-box кнопкой в статус-строке.</div>
 			{/if}
 		</div>
 	</div>
@@ -121,37 +141,34 @@
 		display: flex;
 		align-items: flex-start;
 		justify-content: center;
-		padding: 40px 20px;
-		overflow-y: auto;
+		padding: var(--sp-6);
 		z-index: 100;
 	}
 
+	/* Диалог прокручивается сам: вместе с вложенным каталогом версий он легко
+	   перерастал высоту окна. */
 	.dialog {
 		background: var(--bg);
 		border: 1px solid var(--border);
-		border-radius: 12px;
-		max-width: 640px;
+		border-radius: var(--radius-card);
+		max-width: 620px;
 		width: 100%;
-		padding: 20px;
+		max-height: 100%;
+		overflow-y: auto;
+		padding: var(--sp-5);
 		display: grid;
-		gap: 14px;
+		gap: var(--sp-4);
+		align-content: start;
 	}
 
 	header {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
+		gap: var(--sp-3);
 	}
 
 	h2 {
-		font-size: 18px;
-		margin: 0;
-	}
-
-	h3 {
-		font-size: 14px;
-		margin: 0;
+		font-size: var(--fs-lg);
 	}
 
 	.ghost {
@@ -160,44 +177,24 @@
 		color: var(--text-muted);
 	}
 
-	.step {
-		display: grid;
-		gap: 10px;
-	}
-
 	.step-head {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 10px;
+		gap: var(--sp-3);
 	}
 
 	.step[data-done='true'] {
-		border-color: var(--good, #2c8);
+		border-color: var(--good);
 	}
 
-	.badge.ok {
-		color: var(--good, #2c8);
-		font-weight: 600;
-		font-size: 12px;
-	}
-
-	.small {
-		font-size: 12px;
-		margin: 0;
-	}
-
-	.actions {
-		display: flex;
-		gap: 8px;
-		flex-wrap: wrap;
+	.chip {
+		gap: var(--sp-1);
 	}
 
 	.resume {
 		position: fixed;
-		right: 16px;
-		bottom: 16px;
+		right: var(--sp-5);
+		bottom: calc(var(--h-status) + var(--sp-3));
 		z-index: 100;
-		font-size: 12px;
 	}
 </style>

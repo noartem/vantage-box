@@ -17,9 +17,11 @@
         "title": "Vantage Box",
         "width": 1040,
         "height": 720,
-        "minWidth": 720,
-        "minHeight": 520,
-        "visible": false
+        "minWidth": 640,
+        "minHeight": 440,
+        "visible": false,
+        "decorations": false,
+        "shadow": true
       }
     ],
     "security": {

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { api, errorText } from '$lib/api';
+	import { pushAlert } from '$lib/alerts.svelte';
 	import BinaryPanel from '$lib/components/BinaryPanel.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import { app } from '$lib/state.svelte';
 	import type { RestartOutcome, ServiceState } from '$lib/types';
 
@@ -14,82 +16,94 @@
 	};
 
 	let busy = $state<string | null>(null);
-	let error = $state<string | null>(null);
-	/** Итог последнего мягкого перезапуска. */
-	let restart_ = $state<RestartOutcome | null>(null);
+	let help = $state(false);
 
 	const run = $derived(app.run);
 	const installed = $derived(run !== null && run.mode === 'service');
 	const running = $derived(run?.running === true);
 	/** Конфигу нужен TUN, а сервиса нет: запускать нечем, установка обязательна. */
 	const serviceRequired = $derived(run !== null && !installed && run.tun);
-	const configMissing = $derived((app.settings?.singBox.configPath ?? '').trim() === '');
+	const configPath = $derived(app.settings?.singBox.configPath ?? '');
+	const configMissing = $derived(configPath.trim() === '');
 
 	async function act(name: string, call: () => Promise<unknown>) {
 		busy = name;
-		error = null;
-		if (name !== 'restart') restart_ = null;
 		try {
 			const result = await call();
-			if (name === 'restart') restart_ = result as RestartOutcome;
+			if (name === 'restart') report(result as RestartOutcome);
 		} catch (e) {
-			error = errorText(e);
+			pushAlert('error', errorText(e));
 		} finally {
 			busy = null;
 			await app.refreshRun();
 		}
 	}
+
+	/** Итог перезапуска — событие, а не состояние: ему место в строке алертов,
+	 *  а не в баннере, который потом некому убрать. */
+	function report(outcome: RestartOutcome) {
+		const skipped = outcome.skipped.length > 0 ? ` Пропущено: ${outcome.skipped.join('; ')}.` : '';
+		if (!outcome.apiBack) {
+			pushAlert('warn', `sing-box перезапущен, но Clash API не отозвался. Проверьте логи.${skipped}`);
+			return;
+		}
+		const restored =
+			outcome.restored.length > 0
+				? `Восстановлен выбор: ${outcome.restored.join(', ')}.`
+				: 'Выбор selector’ов менять не пришлось.';
+		pushAlert('ok', `Перезапуск завершён. ${restored}${skipped}`);
+	}
 </script>
 
 <div class="page">
-	{#if error}
-		<div class="banner">{error}</div>
-	{/if}
-
-	<section class="card">
-		<header>
-			<div class="title">
-				<h3>sing-box</h3>
-				<span class="state" data-running={running}>
+	{#if !run}
+		<p class="hint">Читаю состояние…</p>
+	{:else}
+		<section class="section">
+			<div class="head">
+				<h3 class="section-title">Состояние</h3>
+				<span class="chip" data-tone={running ? 'good' : undefined}>
 					{running ? 'работает' : 'остановлен'}
 				</span>
+				<span class="spacer"></span>
+				<button
+					class="icon-btn"
+					class:on={help}
+					title="Пояснения"
+					aria-label="Пояснения"
+					onclick={() => (help = !help)}
+				>
+					<Icon name="info" size={13} />
+				</button>
 			</div>
-			{#if run}
-				<span class="muted mode">
-					{#if installed}
-						сервис · {SERVICE_LABELS[run.service.state]}
-					{:else if run.processPid !== null}
-						процесс · PID {run.processPid}
-					{:else}
-						процесс
+
+			<div class="form">
+				<span class="lbl">Запуск</span>
+				<span>
+					{installed ? 'системная служба' : 'дочерний процесс'}
+					{#if !installed && run.processPid !== null}
+						<span class="muted mono">PID {run.processPid}</span>
 					{/if}
 				</span>
-			{/if}
-		</header>
 
-		{#if run && !run.service.supported}
-			<p class="muted">{run.service.detail}</p>
-		{:else if run}
-			{#if run.service.detail}
-				<div class="banner warn">{run.service.detail}</div>
-			{/if}
+				<span class="lbl">TUN в конфиге</span>
+				<span class:warnish={serviceRequired}>
+					{run.tun ? 'есть — нужны права администратора' : 'нет'}
+				</span>
+
+				<span class="lbl">Конфиг</span>
+				<code class="path ell selectable" title={configPath || 'не задан'}>
+					{configPath || 'не задан'}
+				</code>
+			</div>
 
 			{#if configMissing}
 				<div class="banner warn">
-					Не задан путь к config sing-box — укажите его на вкладке «Настройки».
-				</div>
-			{:else if run.configProblem}
-				<div class="banner warn">Конфиг не прочитан: {run.configProblem}</div>
-			{/if}
-
-			{#if serviceRequired}
-				<div class="banner warn">
-					В конфиге есть TUN-инбаунд. TUN поднимает сетевой адаптер, а это права
-					администратора — без установленного сервиса sing-box не запустится.
+					Не задан путь к config sing-box — укажите его в настройках, раздел «sing-box».
 				</div>
 			{/if}
 
-			<div class="actions">
+			<div class="toolbar">
 				<button
 					class="primary"
 					disabled={busy !== null || running || serviceRequired || configMissing}
@@ -108,84 +122,84 @@
 				</button>
 			</div>
 
-			{#if restart_}
-				<div class="banner" class:ok={restart_.apiBack} class:warn={!restart_.apiBack}>
-					{#if restart_.apiBack}
-						<strong>Перезапуск завершён.</strong>
-						{#if restart_.restored.length > 0}
-							Восстановлен выбор: {restart_.restored.join(', ')}.
-						{:else}
-							Выбор selector'ов менять не пришлось — sing-box поднял его сам.
-						{/if}
-					{:else}
-						<strong>sing-box перезапущен, но Clash API не отозвался.</strong>
-						Проверьте логи sing-box.
-					{/if}
-					{#if restart_.skipped.length > 0}
-						<div class="muted skipped">Пропущено: {restart_.skipped.join('; ')}</div>
-					{/if}
-				</div>
+			{#if help}
+				<p class="hint">
+					Мягкий перезапуск запоминает выбор в selector-группах и накатывает его обратно после
+					старта — поверх того, что sing-box восстановит из
+					<code class="inline">cache_file</code>.
+				</p>
 			{/if}
+		</section>
 
-			<p class="muted hint">
-				Мягкий перезапуск запоминает выбор в selector-группах и накатывает его обратно после
-				старта — поверх того, что sing-box восстановит из <code>cache_file</code>.
-			</p>
-		{:else}
-			<p class="muted">Читаю состояние…</p>
-		{/if}
-	</section>
-
-	{#if run && run.service.supported}
-		<section class="card">
-			<header>
-				<div class="title">
-					<h3>Системный сервис</h3>
-					<span class="state" data-running={installed && running}>
+		{#if run.service.supported}
+			<section class="section">
+				<div class="head">
+					<h3 class="section-title">Системная служба</h3>
+					<span class="chip" data-tone={installed && running ? 'good' : undefined}>
 						{SERVICE_LABELS[run.service.state]}
 					</span>
+					<span class="spacer"></span>
 				</div>
-				<code class="muted selectable">{run.service.name}</code>
-			</header>
 
-			<p class="muted hint">
-				{#if installed}
-					Запуск и остановка идут через диспетчер сервисов и прав администратора не требуют: они
-					выданы вашей учётной записи при установке. Переустановка нужна, если сменился путь к
-					файлу sing-box или к конфигу. После удаления sing-box будет запускаться обычным
-					процессом — это работает для любого конфига без TUN.
-				{:else if run.tun}
-					Сервис обязателен: конфигу нужен TUN, а это права администратора. Установка запросит их
-					один раз, дальше управление идёт без UAC.
-				{:else}
-					Этому конфигу сервис не нужен — TUN в нём нет, и sing-box запускается обычным процессом
-					от вашего имени. Сервис пригодится, если позже добавите TUN или захотите, чтобы sing-box
-					работал без запущенного Vantage Box.
+				<div class="form">
+					<span class="lbl">Имя</span>
+					<code class="path ell selectable" title={run.service.name}>{run.service.name}</code>
+				</div>
+
+				{#if run.service.detail}
+					<div class="banner warn">{run.service.detail}</div>
 				{/if}
-			</p>
 
-			<div class="actions">
-				{#if installed}
+				{#if serviceRequired}
+					<div class="banner warn">
+						В конфиге есть TUN-инбаунд: без установленной службы sing-box не запустится.
+					</div>
+				{/if}
+
+				<div class="toolbar">
 					<button
+						class:primary={run.tun && !installed}
 						disabled={busy !== null || configMissing}
 						onclick={() => act('install', api.installService)}
 					>
-						{busy === 'install' ? 'Переустанавливаю…' : 'Переустановить'}
+						{#if busy === 'install'}
+							{installed ? 'Переустанавливаю…' : 'Устанавливаю…'}
+						{:else}
+							{installed ? 'Переустановить' : 'Установить службу'}
+						{/if}
 					</button>
-					<button disabled={busy !== null} onclick={() => act('uninstall', api.uninstallService)}>
-						{busy === 'uninstall' ? 'Удаляю…' : 'Удалить'}
-					</button>
-				{:else}
-					<button
-						class:primary={run.tun}
-						disabled={busy !== null || configMissing}
-						onclick={() => act('install', api.installService)}
-					>
-						{busy === 'install' ? 'Устанавливаю…' : 'Установить сервис'}
-					</button>
+					{#if installed}
+						<button
+							class="danger"
+							disabled={busy !== null}
+							onclick={() => act('uninstall', api.uninstallService)}
+						>
+							{busy === 'uninstall' ? 'Удаляю…' : 'Удалить'}
+						</button>
+					{/if}
+				</div>
+
+				{#if help}
+					<p class="hint">
+						{#if installed}
+							Запуск и остановка идут через диспетчер служб и прав администратора не требуют: они
+							выданы вашей учётной записи при установке. Переустановка нужна, если сменился путь к
+							файлу sing-box или к конфигу. После удаления sing-box будет запускаться обычным
+							процессом — это работает для любого конфига без TUN.
+						{:else if run.tun}
+							Служба обязательна: конфигу нужен TUN, а это права администратора. Установка
+							запросит их один раз, дальше управление идёт без UAC.
+						{:else}
+							Этому конфигу служба не нужна — TUN в нём нет, и sing-box запускается обычным
+							процессом от вашего имени. Служба пригодится, если позже добавите TUN или захотите,
+							чтобы sing-box работал без запущенного Vantage Box.
+						{/if}
+					</p>
 				{/if}
-			</div>
-		</section>
+			</section>
+		{:else}
+			<p class="hint">{run.service.detail}</p>
+		{/if}
 	{/if}
 
 	<BinaryPanel />
@@ -194,70 +208,34 @@
 <style>
 	.page {
 		display: grid;
-		gap: 12px;
+		grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+		align-items: start;
+		gap: var(--sp-4);
 		align-content: start;
-		max-width: 720px;
 	}
 
-	section {
-		padding: 14px;
-		display: grid;
-		gap: 10px;
+	/* Каталог версий — таблица: в колонке 340px он был бы нечитаем. */
+	.page > :global(.versions) {
+		grid-column: 1 / -1;
 	}
 
-	header {
+	.head {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
+		gap: var(--sp-3);
 	}
 
-	h3 {
-		font-size: 14px;
+	.path {
+		font-family: var(--mono);
+		font-size: var(--fs-sm);
+		max-width: 100%;
 	}
 
-	.title {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-	}
-
-	.state {
-		font-size: 12px;
-		padding: 2px 8px;
-		border-radius: 6px;
-		background: var(--surface-alt);
-		color: var(--text-muted);
-	}
-
-	.state[data-running='true'] {
-		background: color-mix(in srgb, var(--good) 18%, transparent);
-		color: var(--good);
-	}
-
-	.mode {
-		font-size: 12px;
-	}
-
-	.actions {
-		display: flex;
-		gap: 8px;
-		align-items: center;
-		flex-wrap: wrap;
+	.warnish {
+		color: var(--fair);
 	}
 
 	.hint {
-		margin: 0;
-		font-size: 12px;
-	}
-
-	.skipped {
-		margin-top: 4px;
-		font-size: 12px;
-	}
-
-	code {
-		font-family: var(--mono);
-		font-size: 12px;
+		max-width: 62ch;
 	}
 </style>
