@@ -53,6 +53,16 @@ tasks:
     cmds:
       - npm run check
 
+  schema:update:
+    desc: 'Пересобрать схему конфига sing-box для редактора (нужна сеть)'
+    cmds:
+      - npm run schema:update
+
+  verify:editor:
+    desc: 'Проверки редактора конфига: JSONC-режим, автокомплит, подписи, валидация'
+    cmds:
+      - npm run verify:editor
+
   check:rust:
     desc: cargo check (бэкенд компилируется)
     # `dir: src-tauri` обязателен: иначе cargo не найдёт src-tauri/.cargo/config.toml
@@ -92,6 +102,7 @@ tasks:
     desc: Полная локальная проверка перед коммитом (типы + cargo check + тесты)
     cmds:
       - task: check
+      - task: verify:editor
       - task: check:rust
       - task: test
 
