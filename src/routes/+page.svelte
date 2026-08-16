@@ -74,7 +74,7 @@
 
 		<main>
 			{#if tab === 'dashboard'}
-				<Dashboard />
+				<Dashboard ongoto={goto} />
 			{:else if tab === 'connections'}
 				<ConnectionsView />
 			{:else if tab === 'subscriptions'}

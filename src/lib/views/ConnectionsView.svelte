@@ -2,6 +2,7 @@
 	import { api, errorText } from '$lib/api';
 	import { pushAlert } from '$lib/alerts.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { age, destination, outbound, processName, rule, source } from '$lib/connection';
 	import { formatBytes, formatDuration } from '$lib/format';
 	import { app } from '$lib/state.svelte';
 	import type { Connection } from '$lib/types';
@@ -23,40 +24,6 @@
 	let viewportHeight = $state(0);
 	/** Возраст соединения тикает сам: снимок /connections не меняет `start`. */
 	let now = $state(Date.now());
-
-	/** Какой outbound несёт соединение — последний элемент цепочки. */
-	function outbound(c: Connection): string {
-		return c.chains.length > 0 ? c.chains[c.chains.length - 1] : '—';
-	}
-
-	/** Цель соединения: хост, если есть, иначе ip:port. */
-	function destination(c: Connection): string {
-		const m = c.metadata;
-		if (m.host) return m.host;
-		if (m.destinationIP) return `${m.destinationIP}:${m.destinationPort}`;
-		return '—';
-	}
-
-	function source(c: Connection): string {
-		return `${c.metadata.sourceIP}:${c.metadata.sourcePort}`;
-	}
-
-	/** Полный путь в колонку не влезает, а имя файла отвечает на вопрос
-	 *  «какое приложение это открыло» целиком. */
-	function processName(c: Connection): string {
-		const path = c.metadata.processPath;
-		if (!path) return '—';
-		return path.split(/[\\/]/).pop() || path;
-	}
-
-	function rule(c: Connection): string {
-		return c.rulePayload ? `${c.rule}(${c.rulePayload})` : c.rule;
-	}
-
-	function age(c: Connection): number {
-		const started = Date.parse(c.start);
-		return Number.isNaN(started) ? 0 : now - started;
-	}
 
 	const filtered = $derived.by(() => {
 		const q = filter.trim().toLowerCase();
@@ -80,7 +47,7 @@
 			rule: (c: Connection) => rule(c).toLowerCase(),
 			down: (c: Connection) => c.download,
 			up: (c: Connection) => c.upload,
-			age: (c: Connection) => age(c)
+			age: (c: Connection) => age(c, now)
 		}[sortKey];
 		// Копия, а не sort() на месте: исходный массив принадлежит состоянию приложения.
 		return [...filtered].sort((a, b) => {
@@ -224,7 +191,7 @@
 						<span class="ell muted c-rule" title={rule(c)}>{rule(c)}</span>
 						<span class="mono right">{formatBytes(c.download)}</span>
 						<span class="mono right">{formatBytes(c.upload)}</span>
-						<span class="mono right muted">{formatDuration(age(c))}</span>
+						<span class="mono right muted">{formatDuration(age(c, now))}</span>
 						<button
 							class="icon-btn"
 							title="Закрыть соединение"
