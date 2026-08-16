@@ -22,7 +22,8 @@
 		lineNumbers
 	} from '@codemirror/view';
 	import { tags } from '@lezer/highlight';
-	import { jsonSchema } from 'codemirror-json-schema';
+	import { json5Schema } from 'codemirror-json-schema/json5';
+	import { jsoncLinter } from '$lib/jsonc-lint';
 	import { singboxSchema } from '$lib/singbox-schema';
 
 	let {
@@ -97,8 +98,12 @@
 					lintGutter(),
 					syntaxHighlighting(highlight),
 					theme,
-					// Даёт JSON-режим, схемный автокомплит, подсказки и линтер разом.
-					jsonSchema(singboxSchema),
+					// JSON5 — надмножество JSONC, поэтому режим разом даёт комментарии и
+					// висячие запятые (бэкенд их уже умеет — src-tauri/src/jsonc.rs),
+					// а вместе с ними схемный автокомплит, подсказки и линтер.
+					json5Schema(singboxSchema),
+					// JSON5 позволяет больше, чем переварит serde на стороне Rust.
+					jsoncLinter,
 					keymap.of([
 						{
 							key: 'Mod-s',
