@@ -1,5 +1,9 @@
 name: CI
 
+# Быстрые проверки на каждом пуш/PR: svelte-check и cargo test.
+# Сборка инсталлятора и портативки — в build.yml (вручную для не-релизов,
+# автоматически для тегов v*).
+
 on:
   push:
     branches: [main]
@@ -40,7 +44,6 @@ jobs:
         # live_singbox — env-gated: без VANTAGE_BOX_TEST_SINGBOX тест ранним return'ом проходит впустую.
         run: cargo test --manifest-path src-tauri/Cargo.toml --no-fail-fast
 
-      - name: tauri build
-        # Без подписи: цель шага — поймать регрессии сборки, а не выпустить релиз.
-        # Апдейтер при отсутствии TAURI_SIGNING_PRIVATE_KEY собирается без .sig.
-        run: npm run tauri build
+      # Сама сборка инсталлятора и портативки вынесена в build.yml: для не-релизов
+      # она запускается вручную (workflow_dispatch), для релизов (тег v*) — всегда.
+      # Здесь только быстрые проверки, ловящие регрессии на каждом пуш/PR.
