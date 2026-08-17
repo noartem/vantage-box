@@ -158,17 +158,32 @@ pub async fn toggle(app: &AppHandle) -> Result<RunStatus> {
 
 pub async fn install(app: &AppHandle) -> Result<RunStatus> {
     let settings = app.state::<AppState>().settings.get();
-    blocking(move || service::install(&settings)).await?;
+    blocking(move || {
+        // Переустановка работающего сервиса рвёт VPN: скрипт установки
+        // сначала останавливает и удаляет старую службу. Первая установка
+        // (сервиса ещё нет) под запрет не попадает — она sing-box не трогает.
+        let service = service::status()?;
+        if service.is_running() {
+            return Err(Error::Other(
+                "sing-box запущен как служба — остановите его перед переустановкой.".into(),
+            ));
+        }
+        service::install(&settings)
+    })
+    .await?;
     announce(app).await
 }
 
-/// Удаление сервиса не должно оставлять sing-box работающим: после него
-/// управлять запущенным сервисом было бы уже нечем.
+/// Удаление работающего сервиса рвёт VPN, поэтому пока он запущен — отказываем:
+/// пусть сначала остановят. Раньше uninstall сам молча останавливал службу,
+/// теперь это ответственность пользователя.
 pub async fn uninstall(app: &AppHandle) -> Result<RunStatus> {
     blocking(|| {
         let service = service::status()?;
         if service.is_running() {
-            let _ = service::stop();
+            return Err(Error::Other(
+                "sing-box запущен как служба — остановите его перед удалением.".into(),
+            ));
         }
         service::uninstall()
     })

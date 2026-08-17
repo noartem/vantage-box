@@ -12,6 +12,9 @@
 	const run = $derived(app.run);
 	const installed = $derived(run !== null && run.mode === 'service');
 	const running = $derived(run?.running === true);
+	/** Сервисная служба именно работает — переустановка/удаление в этот момент
+	 *  рвут VPN, поэтому кнопки блокируются. */
+	const serviceRunning = $derived(run?.service.state === 'running');
 	/** Конфигу нужен TUN, а сервиса нет: запускать нечем, установка обязательна. */
 	const serviceRequired = $derived(run !== null && !installed && run.tun);
 	const configPath = $derived(app.settings?.singBox.configPath ?? '');
@@ -131,10 +134,18 @@
 						</div>
 					{/if}
 
+					{#if serviceRunning}
+						<div class="banner warn">
+							Служба работает — переустановка и удаление заблокированы, чтобы не рвать VPN.
+							Сначала остановите sing-box.
+						</div>
+					{/if}
+
 					<div class="toolbar">
 						<button
 							class:primary={run.tun && !installed}
-							disabled={busy !== null || configMissing}
+							disabled={busy !== null || serviceRunning || configMissing}
+							title={serviceRunning ? 'Остановите sing-box перед переустановкой службы' : undefined}
 							onclick={() => act('install', api.installService)}
 						>
 							{#if busy === 'install'}
@@ -146,7 +157,8 @@
 						{#if installed}
 							<button
 								class="danger"
-								disabled={busy !== null}
+								disabled={busy !== null || serviceRunning}
+								title={serviceRunning ? 'Остановите sing-box перед удалением службы' : undefined}
 								onclick={() => act('uninstall', api.uninstallService)}
 							>
 								{busy === 'uninstall' ? 'Удаляю…' : 'Удалить'}
@@ -159,8 +171,9 @@
 							{#if installed}
 								Запуск и остановка идут через диспетчер служб и прав администратора не требуют: они
 								выданы вашей учётной записи при установке. Переустановка нужна, если сменился путь к
-								файлу sing-box или к конфигу. После удаления sing-box будет запускаться обычным
-								процессом — это работает для любого конфига без TUN.
+								файлу sing-box или к конфигу. Пока служба работает, переустановка и удаление заблокированы
+								— сначала остановите sing-box, иначе VPN порвётся. После удаления sing-box будет
+								запускаться обычным процессом — это работает для любого конфига без TUN.
 							{:else if run.tun}
 								Служба обязательна: конфигу нужен TUN, а это права администратора. Установка
 								запросит их один раз, дальше управление идёт без UAC.
