@@ -10,7 +10,14 @@
 		indentOnInput,
 		syntaxHighlighting
 	} from '@codemirror/language';
-	import { lintGutter, lintKeymap } from '@codemirror/lint';
+	import {
+		diagnosticCount,
+		forEachDiagnostic,
+		forceLinting,
+		lintGutter,
+		lintKeymap,
+		linter
+	} from '@codemirror/lint';
 	import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 	import { EditorState } from '@codemirror/state';
 	import {
@@ -18,27 +25,53 @@
 		drawSelection,
 		highlightActiveLine,
 		highlightActiveLineGutter,
+		hoverTooltip,
 		keymap,
 		lineNumbers
 	} from '@codemirror/view';
 	import { tags } from '@lezer/highlight';
-	import { json5Schema } from 'codemirror-json-schema/json5';
+	import type { JSONSchema7 } from 'json-schema';
+	import { json5, json5Language, json5ParseLinter } from 'codemirror-json5';
+	import { json5Completion, json5SchemaHover } from 'codemirror-json-schema/json5';
+	import { stateExtensions } from 'codemirror-json-schema';
 	import { jsoncLinter } from '$lib/jsonc-lint';
-	import { singboxSchema } from '$lib/singbox-schema';
+	import { schemaLinter } from '$lib/schema-lint';
+	import { autocompleteSchema, lintSchemaForVersion } from '$lib/singbox-schemas';
+
+	/** Одна диагностика из редактора, пересчитанная в строку/колонку для списка. */
+	export type EditorDiagnostic = {
+		from: number;
+		to: number;
+		line: number;
+		col: number;
+		message: string;
+		severity: 'error' | 'warning' | 'info';
+		/** Источник: 'sing-box' — схема, иначе — JSON5-линтер. */
+		source: string | undefined;
+	};
 
 	let {
 		value,
 		onchange,
-		onsave
+		onsave,
+		ondiagnostics,
+		version = null
 	}: {
 		value: string;
 		onchange: (next: string) => void;
 		/** Ctrl+S внутри редактора — привычнее, чем тянуться к кнопке. */
 		onsave?: () => void;
+		/** Список активных диагностиок, пересчитывается по мере правок и линта. */
+		ondiagnostics?: (diags: EditorDiagnostic[]) => void;
+		/** Версия запущенного sing-box — по ней выбираем схему для линтера. */
+		version?: string | null;
 	} = $props();
 
 	let container = $state<HTMLDivElement | null>(null);
 	let view: EditorView | null = null;
+
+	/** Текущая схема для линтера (меняется при смене версии). `null` — линтера нет. */
+	let activeLintSchema: JSONSchema7 | null = null;
 
 	// Цвета берём из тем приложения, чтобы редактор не выпадал из оформления.
 	const highlight = HighlightStyle.define([
@@ -99,9 +132,18 @@
 					syntaxHighlighting(highlight),
 					theme,
 					// JSON5 — надмножество JSONC, поэтому режим разом даёт комментарии и
-					// висячие запятые (бэкенд их уже умеет — src-tauri/src/jsonc.rs),
-					// а вместе с ними схемный автокомплит, подсказки и линтер.
-					json5Schema(singboxSchema),
+					// висячие запятые (бэкенд их уже умеет — src-tauri/src/jsonc.rs).
+					json5(),
+					// Автокомплит и hover — всегда от официальной схемы 1.14: у неё русские
+					// подписи и union-трансформ, а подсказки по полям версионно-нейтральны.
+					json5Language.data.of({ autocomplete: json5Completion() }),
+					hoverTooltip(json5SchemaHover()),
+					stateExtensions(autocompleteSchema),
+					linter(json5ParseLinter()),
+					// Линтер — свой (src/lib/schema-lint.ts) против схемы под версию
+					// запущенного sing-box (singbox-schemas.ts). Геттер читает
+					// activeLintSchema, которую $effect ниже меняет при смене версии.
+					schemaLinter(() => activeLintSchema),
 					// JSON5 позволяет больше, чем переварит serde на стороне Rust.
 					jsoncLinter,
 					keymap.of([
@@ -124,6 +166,11 @@
 					]),
 					EditorView.updateListener.of((update) => {
 						if (update.docChanged) onchange(update.state.doc.toString());
+						// Пересчитываем список ошибок, когда поменялся документ или
+						// отработал линт (его результат приезжает отдельной транзакцией).
+						const countChanged =
+							diagnosticCount(update.state) !== diagnosticCount(update.startState);
+						if (update.docChanged || countChanged) emitDiagnostics(update.state);
 					})
 				]
 			})
@@ -135,6 +182,43 @@
 		};
 	});
 
+	/** Текущие диагностики — для чипа и списка ошибок в ConfigView. */
+	let lastDiagSig = '';
+	function emitDiagnostics(state: EditorState) {
+		if (!ondiagnostics) return;
+		const diags: EditorDiagnostic[] = [];
+		forEachDiagnostic(state, (d, from, to) => {
+			const line = state.doc.lineAt(from);
+			diags.push({
+				from,
+				to,
+				line: line.number,
+				col: from - line.from + 1,
+				message: d.message,
+				severity: d.severity === 'error' ? 'error' : d.severity === 'warning' ? 'warning' : 'info',
+				source: d.source
+			});
+		});
+		// Сигнатура гасит лишние вызовы: курсорные шевеления не меняют ни состав, ни
+		// позиции диагностики, а значит родителю пересылать нечего.
+		const first = diags[0]?.from ?? -1;
+		const last = diags[diags.length - 1]?.from ?? -1;
+		const sig = `${diags.length}:${first}:${last}:${state.doc.length}`;
+		if (sig === lastDiagSig) return;
+		lastDiagSig = sig;
+		ondiagnostics(diags);
+	}
+
+	/** Прыгнуть к диапазону и поставить туда курсор — вызывается из списка ошибок. */
+	export function jumpTo(from: number, to: number) {
+		if (!view) return;
+		view.dispatch({
+			selection: { anchor: from, head: to ?? from },
+			effects: EditorView.scrollIntoView(from, { y: 'center' })
+		});
+		view.focus();
+	}
+
 	$effect(() => {
 		// Внешнее обновление (перечитали файл с диска). Свои же правки сюда
 		// возвращаются без изменений, поэтому сравнение гасит цикл.
@@ -144,6 +228,16 @@
 				changes: { from: 0, to: view.state.doc.length, insert: next }
 			});
 		}
+	});
+
+	$effect(() => {
+		// Смена версии sing-box → меняем схему линтера и принудительно перезапускаем
+		// линт, чтобы ошибки перевычислились против новой схемы.
+		version;
+		const next = lintSchemaForVersion(version);
+		if (next === activeLintSchema) return;
+		activeLintSchema = next;
+		if (view) forceLinting(view);
 	});
 </script>
 

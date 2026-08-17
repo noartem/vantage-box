@@ -2,7 +2,7 @@
 	import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 	import { api, errorText } from '$lib/api';
 	import { pushAlert } from '$lib/alerts.svelte';
-	import CodeEditor from '$lib/components/CodeEditor.svelte';
+	import CodeEditor, { type EditorDiagnostic } from '$lib/components/CodeEditor.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { app } from '$lib/state.svelte';
 	import type { CheckResult } from '$lib/types';
@@ -16,8 +16,22 @@
 	let needsRestart = $state(false);
 	let showOutput = $state(false);
 
+	/** Диагностики редактора (схема + JSON5-линтер) — для чипа и списка ошибок. */
+	let diags = $state<EditorDiagnostic[]>([]);
+	let showErrors = $state(false);
+	/** Ссылка на редактор, чтобы прыгать к строке из списка ошибок. */
+	let editor = $state<{ jumpTo: (from: number, to: number) => void } | null>(null);
+
 	const path = $derived((app.settings?.singBox.configPath ?? '').trim());
 	const dirty = $derived(content !== saved);
+
+	/** Есть ли реальные ошибки значений — те, что не отсеяны как версионный шум. */
+	const errorCount = $derived(diags.filter((d) => d.severity === 'error').length);
+
+	function goto(diag: EditorDiagnostic) {
+		editor?.jumpTo(diag.from, diag.to);
+		showErrors = false;
+	}
 
 	type Notice = {
 		tone: 'error' | 'warn' | 'ok';
@@ -137,6 +151,21 @@
 
 			{#if dirty}<span class="chip" data-tone="fair">не сохранено</span>{/if}
 
+			{#if errorCount > 0}
+				<!-- Чип-триггер: открывает список ошибок редактора, клик по строке прыгает к ней. -->
+				<button
+					class="chip err-chip"
+					data-tone="poor"
+					data-open={showErrors}
+					aria-expanded={showErrors}
+					onclick={() => (showErrors = !showErrors)}
+					title="Ошибки редактора"
+				>
+					<Icon name="alert" size={13} />
+					Ошибки: {errorCount}
+				</button>
+			{/if}
+
 			<span class="spacer"></span>
 
 			<button
@@ -200,16 +229,48 @@
 		{/if}
 
 		{#if loaded}
-			<CodeEditor
-				value={content}
-				onchange={(next) => {
-					content = next;
-					needsRestart = false;
-					check = null;
-					showOutput = false;
-				}}
-				onsave={save}
-			/>
+			<div class="editor-wrap">
+				<CodeEditor
+					bind:this={editor}
+					value={content}
+					version={app.status.version}
+					onchange={(next) => {
+						content = next;
+						needsRestart = false;
+						check = null;
+						showOutput = false;
+					}}
+					ondiagnostics={(next) => {
+						diags = next;
+						// Если ошибки схлопнулись — закрываем попап, чтобы не висел пустым.
+						if (next.length === 0) showErrors = false;
+					}}
+					onsave={save}
+				/>
+
+				{#if showErrors && diags.length > 0}
+					<div class="err-popup card">
+						<div class="err-head">
+							<span>Ошибки редактора: {diags.length}</span>
+							<button
+								class="act"
+								aria-label="Закрыть список"
+								onclick={() => (showErrors = false)}
+							>
+								✕
+							</button>
+						</div>
+						<div class="err-list">
+							{#each diags as diag, i (i)}
+								<button class="err-row" onclick={() => goto(diag)}>
+									<span class="err-loc">{diag.line}:{diag.col}</span>
+									<span class="err-msg selectable">{diag.message}</span>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			</div>
 		{/if}
 	{/if}
 </div>
@@ -288,8 +349,91 @@
 	}
 
 	/* Только редактор растягивается; всё остальное — по содержимому. */
-	.page > :global(.editor) {
+	.editor-wrap {
+		position: relative;
 		flex: 1;
 		min-height: 180px;
+		display: flex;
+		min-width: 0;
+	}
+
+	.editor-wrap > :global(.editor) {
+		flex: 1;
+		min-width: 0;
+	}
+
+	/* Чип-триггер списка ошибок: кнопке сбрасываем рамку, остальное берёт .chip. */
+	.err-chip {
+		gap: var(--sp-1);
+		border: none;
+		cursor: pointer;
+		line-height: 1;
+	}
+
+	.err-chip[data-open='true'] {
+		outline: 1px solid currentcolor;
+	}
+
+	/* Попап со списком ошибок: висит в правом верхнем углу редактора. */
+	.err-popup {
+		position: absolute;
+		top: var(--sp-2);
+		right: var(--sp-2);
+		z-index: 5;
+		width: min(440px, 86%);
+		max-height: 64%;
+		display: flex;
+		flex-direction: column;
+		padding: var(--sp-2);
+		gap: var(--sp-1);
+		box-shadow: var(--shadow, 0 4px 16px rgba(0, 0, 0, 0.25));
+	}
+
+	.err-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		font-size: var(--fs-sm);
+		color: var(--text-muted);
+		padding: 0 var(--sp-1);
+	}
+
+	.err-list {
+		overflow: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+	}
+
+	.err-row {
+		display: flex;
+		gap: var(--sp-2);
+		align-items: baseline;
+		text-align: left;
+		padding: var(--sp-1) var(--sp-2);
+		border: none;
+		border-radius: var(--radius-ctl);
+		background: transparent;
+		color: var(--text);
+		cursor: pointer;
+		font-size: var(--fs-sm);
+		line-height: 1.35;
+	}
+
+	.err-row:hover {
+		background: var(--surface-alt);
+	}
+
+	.err-loc {
+		flex-shrink: 0;
+		font-family: var(--mono);
+		font-size: var(--fs-xs);
+		color: var(--poor);
+		min-width: 3.5em;
+	}
+
+	.err-msg {
+		min-width: 0;
+		word-break: break-word;
 	}
 </style>

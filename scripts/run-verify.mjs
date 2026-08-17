@@ -17,7 +17,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const SUITES = [
-	['scripts/verify-singbox-schema.mjs', 'схема: автокомплит, подписи, валидация'],
+	['scripts/verify-singbox-schema.mjs', 'схема 1.14: автокомплит, подписи, валидация'],
+	['scripts/verify-singbox-schemas.mjs', 'per-version схемы 1.11–1.13 + маппинг по версии'],
 	['scripts/verify-jsonc-lint.mjs', 'JSONC-режим редактора'],
 	['scripts/verify-completion.mjs', 'автокомплит через реальный источник CodeMirror']
 ];
