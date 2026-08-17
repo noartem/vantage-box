@@ -134,35 +134,42 @@
 						</div>
 					{/if}
 
-					{#if serviceRunning}
-						<div class="banner warn">
-							Служба работает — переустановка и удаление заблокированы, чтобы не рвать VPN.
-							Сначала остановите sing-box.
-						</div>
-					{/if}
-
 					<div class="toolbar">
-						<button
-							class:primary={run.tun && !installed}
-							disabled={busy !== null || serviceRunning || configMissing}
-							title={serviceRunning ? 'Остановите sing-box перед переустановкой службы' : undefined}
-							onclick={() => act('install', api.installService)}
-						>
-							{#if busy === 'install'}
-								{installed ? 'Переустанавливаю…' : 'Устанавливаю…'}
-							{:else}
-								{installed ? 'Переустановить' : 'Установить службу'}
-							{/if}
-						</button>
-						{#if installed}
+						<span class="tip">
 							<button
-								class="danger"
-								disabled={busy !== null || serviceRunning}
-								title={serviceRunning ? 'Остановите sing-box перед удалением службы' : undefined}
-								onclick={() => act('uninstall', api.uninstallService)}
+								class:primary={run.tun && !installed}
+								disabled={busy !== null || serviceRunning || configMissing}
+								onclick={() => act('install', api.installService)}
 							>
-								{busy === 'uninstall' ? 'Удаляю…' : 'Удалить'}
+								{#if busy === 'install'}
+									{installed ? 'Переустанавливаю…' : 'Устанавливаю…'}
+								{:else}
+									{installed ? 'Переустановить' : 'Установить службу'}
+								{/if}
 							</button>
+							{#if serviceRunning}
+								<span class="tip-balloon">
+									Служба работает — переустановка и удаление заблокированы, чтобы не рвать
+									VPN. Сначала остановите sing-box.
+								</span>
+							{/if}
+						</span>
+						{#if installed}
+							<span class="tip">
+								<button
+									class="danger"
+									disabled={busy !== null || serviceRunning}
+									onclick={() => act('uninstall', api.uninstallService)}
+								>
+									{busy === 'uninstall' ? 'Удаляю…' : 'Удалить'}
+								</button>
+								{#if serviceRunning}
+									<span class="tip-balloon">
+										Служба работает — переустановка и удаление заблокированы, чтобы не рвать
+										VPN. Сначала остановите sing-box.
+									</span>
+								{/if}
+							</span>
 						{/if}
 					</div>
 
