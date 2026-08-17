@@ -121,13 +121,13 @@
 						{#if t.id === 'dashboard'}
 							<Dashboard ongoto={goto} />
 						{:else if t.id === 'connections'}
-							<ConnectionsView />
+							<ConnectionsView active={tab === 'connections'} />
 						{:else if t.id === 'subscriptions'}
 							<SubscriptionsView />
 						{:else if t.id === 'config'}
 							<ConfigView />
 						{:else if t.id === 'logs'}
-							<LogsView />
+							<LogsView active={tab === 'logs'} />
 						{:else if t.id === 'service'}
 							<ServiceView />
 						{:else if t.id === 'settings'}
