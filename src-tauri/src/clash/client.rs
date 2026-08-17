@@ -228,9 +228,32 @@ pub(crate) fn urlencode(value: &str) -> String {
     out
 }
 
+/// Отвязывает голую версию от префикса, который sing-box пишет сам:
+/// поле `version` ответа `/version` — `"sing-box 1.13.18"`, первая строка
+/// вывода `sing-box version` — `"sing-box version 1.11.4"`. Без этого
+/// статус-строка показывает «sing-box sing-box …», а `parse_version`
+/// спотыкается о дефис в «sing-box». Регистр и ведущий `v` тоже снимаем.
+pub fn normalize_version(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    // длина отрезанного префикса одинакова в `lower` и исходной строке,
+    // поэтому режем исходник по ней — сохраняем регистр суффикса (v1.x, beta…).
+    let prefix_len = if lower.starts_with("sing-box version ") {
+        "sing-box version ".len()
+    } else if lower.starts_with("sing-box ") {
+        "sing-box ".len()
+    } else {
+        0
+    };
+    trimmed[prefix_len..]
+        .trim()
+        .trim_start_matches('v')
+        .to_string()
+}
+
 /// Разбирает `1.12.0-beta.3` в `(1, 12, 0)`; суффиксы игнорируем.
 pub fn parse_version(raw: &str) -> Option<(u32, u32, u32)> {
-    let core = raw.trim().trim_start_matches('v');
+    let core = normalize_version(raw);
     let core = core.split(['-', '+']).next()?;
     let mut parts = core.split('.');
     let major = parts.next()?.parse().ok()?;
@@ -280,10 +303,26 @@ mod tests {
     }
 
     #[test]
+    fn normalizes_versions() {
+        // `/version` отдаёт версию с префиксом «sing-box ».
+        assert_eq!(normalize_version("sing-box 1.13.18"), "1.13.18");
+        // `sing-box version` пишет «sing-box version …».
+        assert_eq!(normalize_version("sing-box version 1.11.4"), "1.11.4");
+        // Голая версия и ведущий `v` остаются совместимыми.
+        assert_eq!(normalize_version("1.13.18"), "1.13.18");
+        assert_eq!(normalize_version("v1.12.0-beta.3"), "1.12.0-beta.3");
+        assert_eq!(normalize_version("  sing-box 1.13.18  "), "1.13.18");
+        assert_eq!(normalize_version(""), "");
+    }
+
+    #[test]
     fn parses_versions() {
         assert_eq!(parse_version("1.12.0"), Some((1, 12, 0)));
         assert_eq!(parse_version("v1.12.0-beta.3"), Some((1, 12, 0)));
         assert_eq!(parse_version("1.11"), Some((1, 11, 0)));
+        // sing-box отдаёт версию с префиксом — парсер должен её переваривать.
+        assert_eq!(parse_version("sing-box 1.13.18"), Some((1, 13, 18)));
+        assert_eq!(parse_version("sing-box version 1.11.4"), Some((1, 11, 4)));
         assert_eq!(parse_version("не-версия"), None);
     }
 
@@ -293,6 +332,9 @@ mod tests {
         assert_eq!(compatibility("1.10.7"), Compatibility::Supported);
         assert_eq!(compatibility("1.10.6"), Compatibility::TooOld);
         assert_eq!(compatibility("1.14.0"), Compatibility::TooNew);
+        // Префикс из ответа `/version` не должен ломать классификацию.
+        assert_eq!(compatibility("sing-box 1.13.18"), Compatibility::Supported);
+        assert_eq!(compatibility("sing-box 1.14.0"), Compatibility::TooNew);
         assert_eq!(compatibility(""), Compatibility::Unknown);
     }
 }

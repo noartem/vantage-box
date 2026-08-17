@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
-use super::client::{compatibility, ClashClient};
+use super::client::{compatibility, normalize_version, ClashClient};
 use super::models::*;
 use crate::settings::LogLevel;
 
@@ -147,12 +147,18 @@ fn spawn_health(
     tauri::async_runtime::spawn(async move {
         loop {
             match client.version().await {
-                Ok(info) => manager.set_status(ConnectionStatus {
-                    state: ConnectionState::Connected,
-                    compatibility: compatibility(&info.version),
-                    version: Some(info.version),
-                    error: None,
-                }),
+                Ok(info) => {
+                    // `/version` отдаёт «sing-box 1.13.18» — отрезаем префикс,
+                    // чтобы статус-строка не показывала «sing-box sing-box …»,
+                    // а compatibility() получала разборчивую версию.
+                    let version = normalize_version(&info.version);
+                    manager.set_status(ConnectionStatus {
+                        state: ConnectionState::Connected,
+                        compatibility: compatibility(&version),
+                        version: Some(version),
+                        error: None,
+                    })
+                }
                 Err(err) => manager.set_status(ConnectionStatus {
                     state: ConnectionState::Disconnected,
                     version: None,
