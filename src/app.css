@@ -563,13 +563,12 @@ code.inline {
 	background: color-mix(in srgb, var(--good) 12%, transparent);
 }
 
-/* Попап-подсказка над отключённой кнопкой. Нативный title на disabled-кнопке
-   в WebView2 не показывается, поэтому объяснение «почему недоступно» уходит в
-   собственный balloontip. pointer-events:none на disabled-кнопке делает
-   обёртку .tip единственной целью попадания курсора — иначе :hover на ней
-   не сработал бы. */
+/* Попап-подсказка. Живёт в <body> (см. use:tooltip в lib/tooltip.ts), поэтому
+   её не clips родитель с overflow:auto, и position:fixed считает координаты от
+   окна. Позицию задаёт action — здесь только внешний вид. pointer-events:none
+   на disabled-кнопке делает обёртку .tip единственной целью попадания курсора
+   — иначе hover на ней не сработал бы. */
 .tip {
-	position: relative;
 	display: inline-flex;
 }
 
@@ -578,30 +577,22 @@ code.inline {
 }
 
 .tip-balloon {
-	position: absolute;
-	bottom: 100%;
-	left: 50%;
-	transform: translateX(-50%);
-	margin-bottom: var(--sp-3);
-	width: max-content;
+	position: fixed;
+	top: 0;
+	left: 0;
 	max-width: 280px;
 	padding: var(--sp-3) var(--sp-4);
 	background: var(--surface);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-ctl);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
 	font-size: var(--fs-sm);
 	color: var(--text);
 	text-align: left;
 	white-space: normal;
 	pointer-events: none;
-	opacity: 0;
+	z-index: 1000;
 	transition: opacity 0.12s ease;
-	z-index: 5;
-}
-
-.tip:hover .tip-balloon {
-	opacity: 1;
 }
 
 /* Полоса сохранения внизу формы. Была скопирована в SettingsView и
