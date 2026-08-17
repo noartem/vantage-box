@@ -144,6 +144,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit ${{ github.ref_name }} --draft=false
 
+      # Релиз снят с draft'а и виден в GitHub API — теперь дёргаем Scoop-бакет,
+      # чтобы Excavator обновил манифест vantage-box через checkver/autoupdate.
+      # Dispatch шлём именно после публикации, а не после tauri-action: пока
+      # релиз был draft, checkver через GitHub API тег/релиз не увидит.
+      # shell: bash — на windows-latest дефолтный pwsh делает `curl` алиасом
+      # Invoke-WebRequest, который эти флаги не понимает.
+      - name: Notify scoop bucket
+        if: startsWith(github.ref, 'refs/tags/v') && success()
+        shell: bash
+        env:
+          BUCKET_DISPATCH_TOKEN: ${{ secrets.BUCKET_DISPATCH_TOKEN }}
+        run: |
+          curl -sSf -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $BUCKET_DISPATCH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/noartem/bucket/dispatches \
+            -d '{"event_type":"new-release","client_payload":{"app":"vantage-box"}}'
+
       # Ручной запуск: портативка — как артефакт прогона.
       - name: Upload portable zip artifact
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
