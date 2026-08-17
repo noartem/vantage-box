@@ -37,11 +37,34 @@
 		saveTab(next);
 	}
 
-	/** Ctrl+1…7 — вкладки по порядку, как в браузере. Запись хоткея в настройках
-	 *  перехватывает нажатие раньше нас и гасит его — уважаем это. */
+	/** Ctrl+1…7 — вкладки по порядку, как в браузере. Ctrl+Tab / Ctrl+Shift+Tab —
+	 *  циклический переход по вкладкам вперёд и назад. Ctrl+Alt+S — настройки.
+	 *  Запись хоткея в настройках перехватывает нажатие раньше нас и гасит его —
+	 *  уважаем это. */
 	function onKeydown(event: KeyboardEvent) {
 		if (isPopup || event.defaultPrevented) return;
-		if (!event.ctrlKey || event.altKey || event.shiftKey) return;
+		if (!event.ctrlKey) return;
+
+		// Ctrl+Alt+S — настройки. Проверяем до общего отсева по Alt, иначе этот
+		//  хоткей никогда не дойдёт до дела.
+		if (event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+			event.preventDefault();
+			goto('settings');
+			return;
+		}
+
+		if (event.altKey) return;
+
+		if (event.key === 'Tab') {
+			event.preventDefault();
+			const current = TABS.findIndex((t) => t.id === tab);
+			const dir = event.shiftKey ? -1 : 1;
+			const next = (current + dir + TABS.length) % TABS.length;
+			goto(TABS[next].id);
+			return;
+		}
+
+		if (event.shiftKey) return;
 		const index = Number(event.key) - 1;
 		if (!Number.isInteger(index) || index < 0 || index >= TABS.length) return;
 		event.preventDefault();
