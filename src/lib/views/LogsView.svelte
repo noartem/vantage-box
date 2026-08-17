@@ -32,11 +32,13 @@
 	const needle = $derived(query.trim().toLowerCase());
 
 	const visible = $derived(
-		app.logs.filter((entry) => {
-			if (rank(entry.level) < rank(minLevel)) return false;
-			if (needle && !entry.message.toLowerCase().includes(needle)) return false;
-			return true;
-		})
+		active
+			? app.logs.filter((entry) => {
+					if (rank(entry.level) < rank(minLevel)) return false;
+					if (needle && !entry.message.toLowerCase().includes(needle)) return false;
+					return true;
+				})
+			: []
 	);
 
 	// В DOM держим только видимое окно: лента упирается в потолок 2000 записей,
@@ -169,7 +171,9 @@
 	</div>
 
 	<div class="viewport card bounce" bind:this={viewport} bind:clientHeight={viewportHeight} onscroll={onScroll}>
-		{#if visible.length === 0}
+		{#if !active}
+			<!-- вкладка не активна: строки не рисуем -->
+		{:else if visible.length === 0}
 			<p class="hint empty">
 				{app.logs.length === 0
 					? 'Логи ещё не приходили. Поток /logs открывается автоматически при связи с sing-box.'

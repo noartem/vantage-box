@@ -32,6 +32,7 @@
 	let now = $state(Date.now());
 
 	const filtered = $derived.by(() => {
+		if (!active) return [];
 		const q = filter.trim().toLowerCase();
 		if (q === '') return app.connections;
 		return app.connections.filter(
@@ -45,6 +46,7 @@
 	});
 
 	const sorted = $derived.by(() => {
+		if (!active) return [];
 		const sign = sortDesc ? -1 : 1;
 		const by = {
 			host: (c: Connection) => destination(c).toLowerCase(),
@@ -106,6 +108,9 @@
 	}
 
 	$effect(() => {
+		// Тикер возраста нужен только на активной вкладке: иначе он каждую секунду
+		// перезапускал бы сортировку впустую.
+		if (!active) return;
 		const timer = setInterval(() => (now = Date.now()), 1000);
 		return () => clearInterval(timer);
 	});
@@ -180,7 +185,9 @@
 		</button>
 	</div>
 
-	{#if app.status.state !== 'connected'}
+	{#if !active}
+		<!-- вкладка не активна: таблицу не рисуем -->
+	{:else if app.status.state !== 'connected'}
 		<p class="hint">Нет связи с Clash API — sing-box не запущен.</p>
 	{:else if app.connections.length === 0}
 		<p class="hint">Активных соединений нет.</p>

@@ -11,7 +11,7 @@
 
 	/** Дашборд показывает выжимки чужих вкладок, поэтому умеет на них уводить —
 	 *  переключением владеет +page.svelte, как и в строке алертов. */
-	let { ongoto }: { ongoto: (tab: TabId) => void } = $props();
+	let { ongoto, active = true }: { ongoto: (tab: TabId) => void; active?: boolean } = $props();
 
 	/** Список групп меняется редко, но выбор могут поменять снаружи — держим свежим. */
 	const REFRESH_MS = 5000;
@@ -80,8 +80,8 @@
 	<!-- Выжимки соседних вкладок: данные для них и так текут в общее состояние
 		 независимо от того, что открыто, — отдельного опроса не нужно. -->
 	<div class="minis">
-		<MiniConnections onopen={() => ongoto('connections')} />
-		<MiniLogs onopen={() => ongoto('logs')} />
+		<MiniConnections {active} onopen={() => ongoto('connections')} />
+		<MiniLogs {active} onopen={() => ongoto('logs')} />
 		<MiniService onopen={() => ongoto('service')} />
 	</div>
 </div>

@@ -119,7 +119,7 @@
 						 Скрываем CSS-классом, узлы остаются живыми. -->
 					<div class="panel" class:hidden={tab !== t.id} aria-hidden={tab !== t.id}>
 						{#if t.id === 'dashboard'}
-							<Dashboard ongoto={goto} />
+							<Dashboard ongoto={goto} active={tab === 'dashboard'} />
 						{:else if t.id === 'connections'}
 							<ConnectionsView active={tab === 'connections'} />
 						{:else if t.id === 'subscriptions'}
