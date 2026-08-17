@@ -33,14 +33,16 @@
 
 <footer>
 	<span class="dot" data-state={app.status.state}></span>
-	<span class="state">{label}</span>
+	<span class="state meta" title={label}>{label}</span>
 
 	{#if app.status.version}
-		<span class="muted selectable">sing-box {app.status.version}</span>
+		<span class="meta muted selectable" title={`sing-box ${app.status.version}`}>
+			sing-box {app.status.version}
+		</span>
 	{/if}
 
 	{#if run}
-		<span class="muted" title={run.mode === 'service' ? 'Запуск через службу Windows' : 'Запуск дочерним процессом'}>
+		<span class="meta muted" title={run.mode === 'service' ? 'Запуск через службу Windows' : 'Запуск дочерним процессом'}>
 			{run.mode === 'service' ? 'служба' : 'процесс'}
 		</span>
 	{/if}
@@ -48,14 +50,14 @@
 	<span class="spacer"></span>
 
 	{#if app.memory.inuse > 0}
-		<span class="muted mono" title="Память sing-box">ОЗУ {formatBytes(app.memory.inuse)}</span>
+		<span class="stat muted mono" title="Память sing-box">ОЗУ {formatBytes(app.memory.inuse)}</span>
 	{/if}
 
 	<!-- Ширина фиксирована: цифры меняются раз в секунду, и без неё соседние
 		 элементы дёргались бы туда-сюда. -->
 	<span class="rate mono" title="Скорость приёма"><span class="arrow">↓</span>{formatSpeed(app.traffic.down)}</span>
 	<span class="rate mono" title="Скорость отдачи"><span class="arrow">↑</span>{formatSpeed(app.traffic.up)}</span>
-	<span class="muted mono" title="Объём за текущий сеанс sing-box">Σ {formatBytes(total)}</span>
+	<span class="stat muted mono" title="Объём за текущий сеанс sing-box">Σ {formatBytes(total)}</span>
 
 	<div class="actions">
 		<button
@@ -99,10 +101,30 @@
 		background: var(--surface);
 		border-top: 1px solid var(--border);
 		flex-shrink: 0;
+		/* Одна строка — переносы текста запрещены везде. */
+		white-space: nowrap;
+		overflow: hidden;
+		min-width: 0;
 	}
 
 	.state {
 		font-weight: 600;
+	}
+
+	/* Левая часть: статус и подписи. При нехватке места жмутся и обрезаются
+	   многоточием; полный текст показывает системный тултип (title). Правая
+	   часть (телеметрия, кнопки) приоритетнее — она не сжимается. */
+	.meta {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.dot,
+	.stat,
+	.rate,
+	.actions {
+		flex-shrink: 0;
 	}
 
 	.rate {
@@ -119,12 +141,5 @@
 		display: flex;
 		gap: var(--sp-1);
 		margin-left: var(--sp-2);
-	}
-
-	/* На узком окне телеметрия уступает место статусу и кнопкам. */
-	@media (max-width: 760px) {
-		.rate {
-			min-width: 0;
-		}
 	}
 </style>
