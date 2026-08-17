@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 	import { api, errorText } from '$lib/api';
 	import { pushAlert } from '$lib/alerts.svelte';
@@ -135,6 +136,25 @@
 		path;
 		if (path) load();
 	});
+
+	$effect(() => {
+		// Файл изменился вне приложения. Перечитываем его, чтобы синхронизировать
+		// `saved` с реальным содержимым диска — тогда чип «не сохранено» точнее
+		// отражает расхождение. Если на диске оказалось то же, что в редакторе,
+		// расхождения нет: гасим флаг, и чип с баннером уходят.
+		// `content` читаем через untrack — иначе эффект зависел бы от каждого нажатия.
+		const ext = app.configChangedExternally;
+		if (!ext) return;
+		void (async () => {
+			try {
+				const text = await api.readSingboxConfig();
+				saved = text;
+				if (text === untrack(() => content)) app.configChangedExternally = null;
+			} catch {
+				// Не вышло прочитать — оставляем уведомление как есть.
+			}
+		})();
+	});
 </script>
 
 <div class="page">
@@ -203,6 +223,15 @@
 				onclick={() => guard(() => revealItemInDir(path))}
 			>
 				<Icon name="folder" size={13} />
+			</button>
+			<button
+				class="icon-btn"
+				title="Документация sing-box"
+				aria-label="Документация sing-box"
+				disabled={busy !== null}
+				onclick={() => guard(() => openPath('https://sing-box.sagernet.org/configuration/'))}
+			>
+				<Icon name="book" size={13} />
 			</button>
 			<button class="primary" onclick={save} disabled={busy !== null || !loaded || !dirty}>
 				{busy === 'save' ? 'Сохраняю…' : busy === 'check' ? 'Проверяю…' : 'Сохранить'}

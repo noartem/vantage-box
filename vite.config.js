@@ -8,6 +8,14 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [sveltekit()],
 
+  // Web-воркеры собираем ES-модулями: бандл воркера (schema-lint-worker) тянет
+  // json-schema-library и @codemirror/lint, из-за чего получает code-splitting,
+  // а дефолтный формат `iife` его не поддерживает. ES-формат поддерживает, и
+  // Chromium-вебвью Tauri умеет module-воркеры.
+  worker: {
+    format: 'es'
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
