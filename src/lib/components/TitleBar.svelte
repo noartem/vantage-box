@@ -1,9 +1,14 @@
 <script lang="ts">
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import Icon from './Icon.svelte';
+	import { app } from '$lib/state.svelte';
 	import { TABS, type TabId } from '$lib/tabs';
 
 	let { tab, ontab }: { tab: TabId; ontab: (next: TabId) => void } = $props();
+
+	/** Тот же сигнал, что у иконки трея (tray.rs): sing-box запущен и соединение
+	 *  установлено — логотип «вкл», иначе дефолтный «выкл». */
+	const active = $derived(app.run?.running === true && app.status.state === 'connected');
 
 	/** В обычном браузере (vite dev без Tauri) окна нет — панель просто не
 	 *  управляет им, но вкладки продолжают работать. */
@@ -30,11 +35,28 @@
 	});
 </script>
 
+<!-- Предзагружаем «вкл»-логотип, чтобы первое переключение состояния не мигало. -->
+<svelte:head>
+	<link rel="preload" as="image" href="/logo-on.svg" />
+</svelte:head>
+
 <!-- data-tauri-drag-region висит на самой полосе и на распорке: Tauri проверяет
 	 именно целевой элемент события, поэтому клики по кнопкам и вкладкам сюда не
 	 попадают, а двойной клик по пустому месту разворачивает окно. -->
 <div class="titlebar" data-tauri-drag-region>
-	<span class="wordmark" data-tauri-drag-region>Vantage&nbsp;Box</span>
+	<span class="brand" data-tauri-drag-region>
+		<!-- Логотип слева от названия. off — дефолт, on — когда туннель активен;
+			 тот же сигнал, что у иконки трея. SVG-исходники кладёт скрипт
+			 npm run icons в static/logo-{off,on}.svg. -->
+		<img
+			class="logo"
+			src={active ? '/logo-on.svg' : '/logo-off.svg'}
+			alt=""
+			draggable="false"
+			data-tauri-drag-region
+		/>
+		<span class="wordmark" data-tauri-drag-region>Vantage&nbsp;Box</span>
+	</span>
 
 	<nav>
 		{#each TABS as item (item.id)}
@@ -84,12 +106,26 @@
 		flex-shrink: 0;
 	}
 
+	.brand {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-2);
+		padding-right: var(--sp-2);
+	}
+
+	.logo {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		/* SVG с явными цветами — не наследует тему, как и иконка трея. */
+		display: block;
+	}
+
 	.wordmark {
 		font-size: var(--fs-sm);
 		font-weight: 600;
 		color: var(--text-muted);
 		letter-spacing: 0.02em;
-		padding-right: var(--sp-2);
 	}
 
 	nav {
