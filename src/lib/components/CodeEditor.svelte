@@ -16,7 +16,8 @@
 		forceLinting,
 		lintGutter,
 		lintKeymap,
-		linter
+		linter,
+		type Diagnostic
 	} from '@codemirror/lint';
 	import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 	import { EditorState } from '@codemirror/state';
@@ -32,10 +33,11 @@
 	import { tags } from '@lezer/highlight';
 	import type { JSONSchema7 } from 'json-schema';
 	import { json5, json5Language, json5ParseLinter } from 'codemirror-json5';
-	import { json5Completion, json5SchemaHover } from 'codemirror-json-schema/json5';
+	import { json5SchemaHover } from 'codemirror-json-schema/json5';
 	import { stateExtensions } from 'codemirror-json-schema';
 	import { jsoncLinter } from '$lib/jsonc-lint';
-	import { schemaLinter } from '$lib/schema-lint';
+	import { jsoncCompletion } from '$lib/double-quote-completion';
+	import SchemaLintWorker from '$lib/schema-lint-worker?worker';
 	import { autocompleteSchema, lintSchemaForVersion } from '$lib/singbox-schemas';
 
 	/** Одна диагностика из редактора, пересчитанная в строку/колонку для списка. */
@@ -73,6 +75,26 @@
 	/** Текущая схема для линтера (меняется при смене версии). `null` — линтера нет. */
 	let activeLintSchema: JSONSchema7 | null = null;
 
+	// Схемный линтер выполняется в Web-воркере (src/lib/schema-lint-worker.ts), чтобы
+	// разбор конфига и Draft07.validate не морозили набор на главном потоке. Воркер
+	// создаётся в onMount и уничтожается вместе с редактором.
+	let lintWorker: Worker | null = null;
+	let lintReqId = 0;
+	const lintPending = new Map<number, (diags: Diagnostic[]) => void>();
+
+	function setLintSchema(schema: JSONSchema7 | null) {
+		lintWorker?.postMessage({ type: 'setSchema', schema });
+	}
+	function lintAsync(text: string): Promise<Diagnostic[]> {
+		const worker = lintWorker;
+		if (!worker) return Promise.resolve([]);
+		const id = ++lintReqId;
+		return new Promise((resolve) => {
+			lintPending.set(id, resolve);
+			worker.postMessage({ type: 'lint', id, text });
+		});
+	}
+
 	// Цвета берём из тем приложения, чтобы редактор не выпадал из оформления.
 	const highlight = HighlightStyle.define([
 		{ tag: tags.propertyName, color: 'var(--cm-key)' },
@@ -96,10 +118,13 @@
 			color: 'var(--text-muted)',
 			border: 'none'
 		},
-		'.cm-activeLine': { backgroundColor: 'var(--surface-alt)' },
+		// Полупрозрачная активная строка: drawSelection рисует выделение ПОД линией,
+		// и непрозрачный фон .cm-activeLine его перекрывал — поэтому выделение в
+		// пределах одной строки не было видно. Пропускаем сквозь него слой выделения.
+		'.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--surface-alt) 45%, transparent)' },
 		'.cm-activeLineGutter': { backgroundColor: 'var(--surface-alt)' },
 		'.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
-			backgroundColor: 'var(--accent-soft)'
+			backgroundColor: 'color-mix(in srgb, var(--accent) 28%, transparent)'
 		},
 		'.cm-cursor': { borderLeftColor: 'var(--text)' },
 		'.cm-tooltip': {
@@ -111,6 +136,17 @@
 
 	onMount(() => {
 		if (!container) return;
+
+		lintWorker = new SchemaLintWorker();
+		lintWorker.onmessage = (event: MessageEvent) => {
+			const msg = event.data;
+			if (msg?.type !== 'lintResult') return;
+			const resolve = lintPending.get(msg.id);
+			if (resolve) {
+				lintPending.delete(msg.id);
+				resolve(msg.diags);
+			}
+		};
 
 		view = new EditorView({
 			parent: container,
@@ -136,14 +172,15 @@
 					json5(),
 					// Автокомплит и hover — всегда от официальной схемы 1.14: у неё русские
 					// подписи и union-трансформ, а подсказки по полям версионно-нейтральны.
-					json5Language.data.of({ autocomplete: json5Completion() }),
+					json5Language.data.of({ autocomplete: jsoncCompletion() }),
 					hoverTooltip(json5SchemaHover()),
 					stateExtensions(autocompleteSchema),
 					linter(json5ParseLinter()),
-					// Линтер — свой (src/lib/schema-lint.ts) против схемы под версию
-					// запущенного sing-box (singbox-schemas.ts). Геттер читает
-					// activeLintSchema, которую $effect ниже меняет при смене версии.
-					schemaLinter(() => activeLintSchema),
+					// Схемный линтер — асинхронный, валидация идёт в Web-воркере
+					// (schema-lint-worker.ts). Схему под версию sing-box шлём туда
+					// отдельным сообщением в $effect ниже. CodeMirror сам отбрасывает
+					// устаревшие результаты, если документ успел измениться за это время.
+					linter(async (v) => lintAsync(v.state.doc.toString())),
 					// JSON5 позволяет больше, чем переварит serde на стороне Rust.
 					jsoncLinter,
 					keymap.of([
@@ -177,6 +214,8 @@
 		});
 
 		return () => {
+			lintWorker?.terminate();
+			lintWorker = null;
 			view?.destroy();
 			view = null;
 		};
@@ -237,6 +276,9 @@
 		const next = lintSchemaForVersion(version);
 		if (next === activeLintSchema) return;
 		activeLintSchema = next;
+		// Сначала отправляем схему в воркер — postMessage сохраняет порядок, поэтому
+		// принудительный линт ниже застаёт воркер уже с новой схемой.
+		setLintSchema(next);
 		if (view) forceLinting(view);
 	});
 </script>
