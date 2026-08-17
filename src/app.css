@@ -56,7 +56,7 @@
 
 	/* Ширины полей. Числовому полю не нужны 500px — отсюда берётся `.num`. */
 	--w-num: 7ch;
-	--w-field: 320px;
+	--w-field: 380px;
 	--w-nav: 150px;
 }
 
@@ -316,7 +316,7 @@ input[type='number']::-webkit-inner-spin-button {
    вниз по колонке, а не слева направо. Отступ снизу вместо gap: между колонками
    работает column-gap, между карточками внутри колонки — только margin. */
 .masonry {
-	column-width: 330px;
+	column-width: 380px;
 	column-gap: var(--sp-4);
 }
 
@@ -561,6 +561,47 @@ code.inline {
 .banner.ok {
 	border-color: var(--good);
 	background: color-mix(in srgb, var(--good) 12%, transparent);
+}
+
+/* Попап-подсказка над отключённой кнопкой. Нативный title на disabled-кнопке
+   в WebView2 не показывается, поэтому объяснение «почему недоступно» уходит в
+   собственный balloontip. pointer-events:none на disabled-кнопке делает
+   обёртку .tip единственной целью попадания курсора — иначе :hover на ней
+   не сработал бы. */
+.tip {
+	position: relative;
+	display: inline-flex;
+}
+
+.tip > button:disabled {
+	pointer-events: none;
+}
+
+.tip-balloon {
+	position: absolute;
+	bottom: 100%;
+	left: 50%;
+	transform: translateX(-50%);
+	margin-bottom: var(--sp-3);
+	width: max-content;
+	max-width: 280px;
+	padding: var(--sp-3) var(--sp-4);
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-ctl);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	font-size: var(--fs-sm);
+	color: var(--text);
+	text-align: left;
+	white-space: normal;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0.12s ease;
+	z-index: 5;
+}
+
+.tip:hover .tip-balloon {
+	opacity: 1;
 }
 
 /* Полоса сохранения внизу формы. Была скопирована в SettingsView и
