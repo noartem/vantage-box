@@ -13,23 +13,21 @@
 		unknown: '—'
 	};
 
-	let catalog = $state<ReleaseCatalog | null>(null);
-	let refreshing = $state(false);
+	let catalog = $derived(app.catalog);
+	let refreshing = $derived(app.catalogRefreshing);
 	/** Версия, с которой сейчас идёт работа, и что именно с ней делают. */
 	let job = $state<{ version: string; kind: string } | null>(null);
 
 	/** Управлять версиями можно только там, где файл наш. */
 	const managed = $derived(app.binaryInfo?.managed === true);
 
-	/** Каталог всегда приезжает из кэша: поход на GitHub — только по кнопке. */
+	/** Каталог живёт в общем состоянии и предзагружается при старте приложения,
+	 *  поэтому открытие вкладки не мигает загрузкой. Поход на GitHub — только по кнопке. */
 	async function loadCatalog(refresh = false) {
-		if (refresh) refreshing = true;
 		try {
-			catalog = await api.listSingboxReleases(refresh);
+			await app.refreshCatalog(refresh);
 		} catch (e) {
 			pushAlert('error', errorText(e));
-		} finally {
-			refreshing = false;
 		}
 	}
 
@@ -47,7 +45,7 @@
 				await loadCatalog();
 				await app.refreshRun();
 			} else {
-				catalog = result as ReleaseCatalog;
+				app.catalog = result as ReleaseCatalog;
 			}
 		} catch (e) {
 			pushAlert('error', errorText(e));
@@ -71,7 +69,7 @@
 			if (!release.assetUrl) return;
 			job = { version: release.version, kind: 'download' };
 			try {
-				catalog = await api.downloadSingboxRelease(release.version, release.assetUrl);
+				app.catalog = await api.downloadSingboxRelease(release.version, release.assetUrl);
 			} catch (e) {
 				pushAlert('error', errorText(e));
 				job = null;
@@ -84,13 +82,6 @@
 	function remove(release: ReleaseInfo) {
 		return run(release.version, 'delete', () => api.deleteSingboxRelease(release.version));
 	}
-
-	$effect(() => {
-		// Перечитываем при смене настроек: путь к файлу sing-box мог поменяться,
-		// а с ним — какая версия считается активной.
-		app.settings?.singBox.binaryPath;
-		loadCatalog();
-	});
 
 	const fetchedAt = $derived(
 		catalog && catalog.fetchedAt > 0

@@ -30,11 +30,19 @@
 		}
 	}
 
-	let tab = $state<TabId>(loadTab());
+	/** Вкладка переживает перезапуск: приложение открывают ради того, на чём
+	 *  остановились, а не ради дашборда. */
+	const initialTab = loadTab();
+	let tab = $state<TabId>(initialTab);
+	/** Какие вкладки уже открывали. Компонент монтируется при первом открытии и
+	 *  остаётся в DOM до закрытия окна — поэтому повторные переходы не мигают
+	 *  пустой загрузкой и не сбрасывают состояние (фильтры, черновики, прокрутку). */
+	let opened = $state<Record<string, boolean>>({ [initialTab]: true });
 
 	function goto(next: TabId) {
 		tab = next;
 		saveTab(next);
+		opened[next] = true;
 	}
 
 	/** Ctrl+1…7 — вкладки по порядку, как в браузере. Ctrl+Tab / Ctrl+Shift+Tab —
@@ -96,21 +104,30 @@
 		</div>
 
 		<main>
-			{#if tab === 'dashboard'}
-				<Dashboard ongoto={goto} />
-			{:else if tab === 'connections'}
-				<ConnectionsView />
-			{:else if tab === 'subscriptions'}
-				<SubscriptionsView />
-			{:else if tab === 'config'}
-				<ConfigView />
-			{:else if tab === 'logs'}
-				<LogsView />
-			{:else if tab === 'service'}
-				<ServiceView />
-			{:else}
-				<SettingsView />
-			{/if}
+			{#each TABS as t (t.id)}
+				{#if opened[t.id]}
+					<!-- Не {#if tab === ...}: иначе переключение разрушает вкладку и
+						 строит заново — отсюда мигание пустым и потеря состояния.
+						 Скрываем CSS-классом, узлы остаются живыми. -->
+					<div class="panel" class:hidden={tab !== t.id} aria-hidden={tab !== t.id}>
+						{#if t.id === 'dashboard'}
+							<Dashboard ongoto={goto} />
+						{:else if t.id === 'connections'}
+							<ConnectionsView />
+						{:else if t.id === 'subscriptions'}
+							<SubscriptionsView />
+						{:else if t.id === 'config'}
+							<ConfigView />
+						{:else if t.id === 'logs'}
+							<LogsView />
+						{:else if t.id === 'service'}
+							<ServiceView />
+						{:else if t.id === 'settings'}
+							<SettingsView active={tab === 'settings'} />
+						{/if}
+					</div>
+				{/if}
+			{/each}
 		</main>
 
 		<StatusBar />
@@ -135,5 +152,16 @@
 		overflow-y: auto;
 		min-height: 0;
 		padding: var(--sp-4);
+	}
+
+	/* Каждая вкладка-панель заполняет main; скрытые убраны из раскладки, но узлы
+	   живы. height: 100% нужен видам с собственной прокруткой (соединения, логи). */
+	.panel {
+		height: 100%;
+		min-height: 0;
+	}
+
+	.panel.hidden {
+		display: none;
 	}
 </style>
