@@ -72,6 +72,14 @@
 			return;
 		}
 
+		// Ctrl+Shift+W — закрыть окно. close() идёт через CloseRequested, поэтому
+		// настройка «сворачивать в трей» продолжает работать.
+		if (event.shiftKey && event.code === 'KeyW') {
+			event.preventDefault();
+			getCurrentWindow().close();
+			return;
+		}
+
 		if (event.shiftKey) return;
 		const index = Number(event.key) - 1;
 		if (!Number.isInteger(index) || index < 0 || index >= TABS.length) return;
