@@ -21,7 +21,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::binary;
-use crate::clash::client::{compatibility, ClashClient};
+use crate::clash::client::{compatibility, normalize_version, ClashClient};
 use crate::clash::models::Compatibility;
 use crate::runtime;
 use crate::settings::{ClashApiSettings, Settings, SingBoxSettings};
@@ -372,7 +372,7 @@ async fn wait_for_api(client: &ClashClient, timeout: Duration) -> Option<String>
     let deadline = Instant::now() + timeout;
     loop {
         if let Ok(info) = client.version().await {
-            return Some(info.version);
+            return Some(normalize_version(&info.version));
         }
         if Instant::now() >= deadline {
             return None;
