@@ -10,6 +10,7 @@ import type {
 	ConnectionStatus,
 	LogEntry,
 	Memory,
+	ReleaseCatalog,
 	RunStatus,
 	Settings,
 	Theme,
@@ -61,6 +62,11 @@ class AppState {
 	/** Сведения о файле sing-box — нужен онбордингу, чтобы понять, есть ли бинарник. */
 	binaryInfo = $state<BinaryInfo | null>(null);
 
+	/** Каталог версий sing-box. Живёт в общем состоянии, чтобы вкладка «Сервис»
+	 *  открывалась без мигания: предзагружаем при старте, дальше держим. */
+	catalog = $state<ReleaseCatalog | null>(null);
+	catalogRefreshing = $state(false);
+
 	/** Показывать онбординг первого запуска: нет конфига или нет бинарника.
 	 *  Пока настройки/бинарник не загружены — false, чтобы не мигать оверлеем. */
 	needsOnboarding = $derived(
@@ -102,6 +108,8 @@ class AppState {
 			this.checkForAppUpdate();
 			// Путь к бинарнику мог измениться — перечитаем сведения о нём.
 			this.refreshBinaryInfo();
+			// С ним может поменяться и то, какая версия считается активной.
+			this.refreshCatalog().catch(() => {});
 		});
 		events.settingsError((value) => (this.settingsProblem = value));
 		events.configChanged((path) => (this.configChangedExternally = path));
@@ -129,6 +137,12 @@ class AppState {
 
 		// Бинарник sing-box нужен онбордингу — подтянем сразу.
 		this.refreshBinaryInfo();
+
+		// Каталог версий предзагружаем из бэкенд-кэша (без похода на GitHub),
+		// чтобы первое открытие вкладки «Сервис» не мигало загрузкой.
+		this.refreshCatalog().catch(() => {
+			// Бэкенд-кэша может ещё не быть — вкладка дозагрузит сама.
+		});
 	}
 
 	/** Проверяет обновление приложения согласно `settings.guiUpdate.policy`. */
@@ -187,6 +201,18 @@ class AppState {
 			this.binaryInfo = await api.getBinaryInfo();
 		} catch {
 			// Не критично: онбординг просто не покажет шаг про бинарник.
+		}
+	}
+
+	/** Перечитать каталог версий sing-box. `refresh=true` — сходить на GitHub,
+	 *  иначе читаем бэкенд-кэш (быстро, без сети). Ошибки пробрасываем: предзагрузка
+	 *  при старте глушит их сама, а вкладка «Сервис» покажет баннер. */
+	async refreshCatalog(refresh = false) {
+		if (refresh) this.catalogRefreshing = true;
+		try {
+			this.catalog = await api.listSingboxReleases(refresh);
+		} finally {
+			this.catalogRefreshing = false;
 		}
 	}
 
