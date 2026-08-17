@@ -9,7 +9,25 @@
 	 *  поэтому лента не растягивает дашборд по мере поступления логов. */
 	const ROWS = 12;
 
-	const tail = $derived(app.logs.slice(-ROWS));
+	let section = $state<HTMLElement | null>(null);
+	/** Видна ли панель в окне. Скрытую (вкладка не активна или уехала за срез
+	 *  прокрутки) не рисуем — лента логов тянется каждый кадр, — но высоту блока
+	 *  держим, чтобы соседи по ряду не прыгали. */
+	let shown = $state(true);
+
+	$effect(() => {
+		const el = section;
+		if (!el) return;
+		const io = new IntersectionObserver(([entry]) => (shown = entry.isIntersecting), {
+			rootMargin: '120px'
+		});
+		io.observe(el);
+		return () => io.disconnect();
+	});
+
+	// Пока панель не видна, хвост не пересчитываем: иначе каждый лог-кадр
+	// дёргал бы derived впустую.
+	const tail = $derived(shown ? app.logs.slice(-ROWS) : []);
 
 	/** Панель узкая: миллисекунды съедали бы четверть строки, а нужны они при
 	 *  разборе гонок — то есть на полной вкладке. */
@@ -18,7 +36,7 @@
 	}
 </script>
 
-<section class="section">
+<section class="section" bind:this={section}>
 	<div class="head">
 		<button class="title" title="Открыть вкладку «Логи»" onclick={onopen}>
 			<span class="section-title">Логи</span>
@@ -53,9 +71,12 @@
 	</div>
 
 	<!-- Высота фиксируется только когда есть что показывать: пустая лента не
-		 должна держать двенадцать строк белого места. -->
-	<div class="feed" class:filled={tail.length > 0}>
-		{#if tail.length === 0}
+		 должна держать двенадцать строк белого места. filled зависит от наличия
+		 данных, а не от shown — скрытый блок держит ту же высоту, что и видимый. -->
+	<div class="feed" class:filled={app.logs.length > 0}>
+		{#if !shown}
+			<!-- вне поля зрения: строки не рисуем, высоту держит .filled -->
+		{:else if tail.length === 0}
 			<p class="hint">Логи ещё не приходили.</p>
 		{:else}
 			{#each tail as entry (entry.id)}

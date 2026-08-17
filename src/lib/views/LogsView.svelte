@@ -4,6 +4,11 @@
 	import { app } from '$lib/state.svelte';
 	import type { LogEntry } from '$lib/types';
 
+	/** Активна ли вкладка. После >5 мин отсутствия возврат сбрасывает ленту
+	 *  к свежему хвосту — иначе пользователь возвращается к позиции, где стоял
+	 *  полчаса назад, среди уже устаревших строк. */
+	let { active = true }: { active?: boolean } = $props();
+
 	/** Порядок важности: фильтр показывает выбранный уровень и всё, что выше. */
 	const LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
 
@@ -63,6 +68,29 @@
 		if (stickToBottom && viewport) {
 			viewport.scrollTop = viewport.scrollHeight;
 			scrollTop = viewport.scrollTop;
+		}
+	});
+
+	// -------------------------------------------------------------------------
+	// Возврат на вкладку после долгого отсутствия
+	// -------------------------------------------------------------------------
+
+	/** Сколько отсутствовали на вкладке. Plain-переменная, а не $state: её запись
+	 *  не должна перезапускать этот эффект. */
+	const AWAY_RESET_MS = 5 * 60_000;
+	let awaySince: number | null = null;
+
+	$effect(() => {
+		if (active) {
+			const awayFor = awaySince === null ? 0 : Date.now() - awaySince;
+			awaySince = null;
+			if (awayFor > AWAY_RESET_MS) {
+				// Дефолтный режим — свежий хвост внизу. stickToBottom=true
+				// запускает автопрокрутку выше.
+				stickToBottom = true;
+			}
+		} else if (awaySince === null) {
+			awaySince = Date.now();
 		}
 	});
 

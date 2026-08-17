@@ -7,6 +7,11 @@
 	import { app } from '$lib/state.svelte';
 	import type { Connection } from '$lib/types';
 
+	/** Активна ли вкладка. После >5 мин отсутствия возврат сбрасывает список
+	 *  наверх — к самым «тяжёлым» соединениям, а не к строке, на которой
+	 *  остановились полчаса назад. */
+	let { active = true }: { active?: boolean } = $props();
+
 	/** Высота строки. Должна совпадать с --h-row: на ней стоит вся арифметика
 	 *  виртуализации, поэтому значение продублировано осознанно. */
 	const ROW = 22;
@@ -22,6 +27,7 @@
 
 	let scrollTop = $state(0);
 	let viewportHeight = $state(0);
+	let viewport = $state<HTMLDivElement | null>(null);
 	/** Возраст соединения тикает сам: снимок /connections не меняет `start`. */
 	let now = $state(Date.now());
 
@@ -104,6 +110,29 @@
 		return () => clearInterval(timer);
 	});
 
+	// -------------------------------------------------------------------------
+	// Возврат на вкладку после долгого отсутствия
+	// -------------------------------------------------------------------------
+
+	/** Сколько отсутствовали на вкладке. Plain-переменная, а не $state: её запись
+	 *  не должна перезапускать этот эффект. */
+	const AWAY_RESET_MS = 5 * 60_000;
+	let awaySince: number | null = null;
+
+	$effect(() => {
+		if (active) {
+			const awayFor = awaySince === null ? 0 : Date.now() - awaySince;
+			awaySince = null;
+			if (awayFor > AWAY_RESET_MS && viewport) {
+				// Дефолтный режим — список наверх.
+				viewport.scrollTop = 0;
+				scrollTop = 0;
+			}
+		} else if (awaySince === null) {
+			awaySince = Date.now();
+		}
+	});
+
 	// WS `/connections` может ещё не прислать первый кадр — подтянем разово.
 	$effect(() => {
 		if (app.status.state !== 'connected') return;
@@ -173,6 +202,7 @@
 
 			<div
 				class="viewport bounce"
+				bind:this={viewport}
 				bind:clientHeight={viewportHeight}
 				onscroll={(event) => (scrollTop = event.currentTarget.scrollTop)}
 			>
