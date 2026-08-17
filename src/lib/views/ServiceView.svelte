@@ -5,9 +5,14 @@
 	import VersionsPanel from '$lib/components/VersionsPanel.svelte';
 	import { SERVICE_LABELS, runServiceAction } from '$lib/service-actions';
 	import { app } from '$lib/state.svelte';
+	import { tooltip } from '$lib/tooltip';
 
 	let busy = $state<string | null>(null);
 	let help = $state(false);
+
+	/** Текст попапа над заблокированными работающей службой кнопками. */
+	const SERVICE_RUNNING_HINT =
+		'Служба работает — переустановка и удаление заблокированы, чтобы не рвать VPN. Сначала остановите sing-box.';
 
 	const run = $derived(app.run);
 	const installed = $derived(run !== null && run.mode === 'service');
@@ -135,7 +140,7 @@
 					{/if}
 
 					<div class="toolbar">
-						<span class="tip">
+						<span class="tip" use:tooltip={serviceRunning ? SERVICE_RUNNING_HINT : ''}>
 							<button
 								class:primary={run.tun && !installed}
 								disabled={busy !== null || serviceRunning || configMissing}
@@ -147,15 +152,9 @@
 									{installed ? 'Переустановить' : 'Установить службу'}
 								{/if}
 							</button>
-							{#if serviceRunning}
-								<span class="tip-balloon">
-									Служба работает — переустановка и удаление заблокированы, чтобы не рвать
-									VPN. Сначала остановите sing-box.
-								</span>
-							{/if}
 						</span>
 						{#if installed}
-							<span class="tip">
+							<span class="tip" use:tooltip={serviceRunning ? SERVICE_RUNNING_HINT : ''}>
 								<button
 									class="danger"
 									disabled={busy !== null || serviceRunning}
@@ -163,12 +162,6 @@
 								>
 									{busy === 'uninstall' ? 'Удаляю…' : 'Удалить'}
 								</button>
-								{#if serviceRunning}
-									<span class="tip-balloon">
-										Служба работает — переустановка и удаление заблокированы, чтобы не рвать
-										VPN. Сначала остановите sing-box.
-									</span>
-								{/if}
 							</span>
 						{/if}
 					</div>
