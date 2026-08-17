@@ -6,35 +6,19 @@
 	import { app } from '$lib/state.svelte';
 	import Icon from './Icon.svelte';
 
-	let { onopen }: { onopen: () => void } = $props();
+	let { onopen, active = true }: { onopen: () => void; active?: boolean } = $props();
 
 	/** Столько же строк, сколько в мини-логах: панели стоят в одном ряду. */
 	const ROWS = 12;
 
 	let busy = $state<string | null>(null);
 
-	let section = $state<HTMLElement | null>(null);
-	/** Видна ли панель в окне. Скрытую (вкладка не активна или уехала за срез
-	 *  прокрутки) не рисуем — сортировку и строки каждый кадр не тянем, — но
-	 *  высоту блока держим, чтобы соседи по ряду не прыгали. */
-	let shown = $state(true);
-
-	$effect(() => {
-		const el = section;
-		if (!el) return;
-		const io = new IntersectionObserver(([entry]) => (shown = entry.isIntersecting), {
-			rootMargin: '120px'
-		});
-		io.observe(el);
-		return () => io.disconnect();
-	});
-
 	/** Самые «тяжёлые» соединения: при сотне открытых сокетов интересны те,
 	 *  через которые реально идёт трафик, а не самые свежие. Сортировка всех
-	 *  соединений каждый кадр — основная цена панели, поэтому пока она не видна,
-	 *  не платим. */
+	 *  соединений каждый кадр — основная цена панели, поэтому пока вкладка не
+	 *  активна, не платим; высоту блока держит .filled. */
 	const top = $derived.by(() => {
-		if (!shown) return [];
+		if (!active) return [];
 		return [...app.connections].sort((a, b) => b.download - a.download).slice(0, ROWS);
 	});
 
@@ -51,7 +35,7 @@
 	}
 </script>
 
-<section class="section" bind:this={section}>
+<section class="section">
 	<div class="head">
 		<button class="title" title="Открыть вкладку «Соединения»" onclick={onopen}>
 			<span class="section-title">Соединения</span>
@@ -79,10 +63,10 @@
 
 	<!-- Высота фиксируется только когда есть что показывать: пустой список не
 		 должен держать двенадцать строк белого места. filled зависит от наличия
-		 данных, а не от shown — скрытый блок держит ту же высоту, что и видимый. -->
+		 данных, а не от active — скрытый блок держит ту же высоту, что и видимый. -->
 	<div class="list" class:filled={app.connections.length > 0}>
-		{#if !shown}
-			<!-- вне поля зрения: строки не рисуем, высоту держит .filled -->
+		{#if !active}
+			<!-- вкладка не активна: строки не рисуем, высоту держит .filled -->
 		{:else if app.status.state !== 'connected'}
 			<p class="hint">Нет связи с Clash API — sing-box не запущен.</p>
 		{:else if top.length === 0}
