@@ -11,6 +11,7 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "schema:update": "node scripts/gen-singbox-schema.mjs && node scripts/run-verify.mjs",
     "verify:editor": "node scripts/run-verify.mjs",
+    "icons": "node scripts/generate-icons.mjs",
     "tauri": "tauri"
   },
   "license": "MIT",

@@ -396,41 +396,36 @@ fn signature(run: RunSummary, connected: bool, groups: &[TrayGroup]) -> String {
     parts.join(";")
 }
 
-/// Базовая иконка приложения, декодированная один раз.
-fn base_icon() -> Option<&'static (Vec<u8>, u32, u32)> {
-    static CACHE: OnceLock<Option<(Vec<u8>, u32, u32)>> = OnceLock::new();
-    CACHE
+/// Иконка трея в одном из двух состояний, декодированная один раз.
+/// `active = false` — дефолтная («выкл»), `active = true` — «вкл».
+/// Иконки генерируются из Figma-экспорта скриптом `npm run icons`
+/// (scripts/generate-icons.mjs): tray-off.png / tray-on.png в src-tauri/icons.
+fn tray_icon(active: bool) -> Option<&'static (Vec<u8>, u32, u32)> {
+    static OFF: OnceLock<Option<(Vec<u8>, u32, u32)>> = OnceLock::new();
+    static ON: OnceLock<Option<(Vec<u8>, u32, u32)>> = OnceLock::new();
+    let cache = if active { &ON } else { &OFF };
+    let bytes: &'static [u8] = if active {
+        include_bytes!("../icons/tray-on.png")
+    } else {
+        include_bytes!("../icons/tray-off.png")
+    };
+    cache
         .get_or_init(|| {
-            let image = Image::from_bytes(include_bytes!("../icons/32x32.png")).ok()?;
+            let image = Image::from_bytes(bytes).ok()?;
             Some((image.rgba().to_vec(), image.width(), image.height()))
         })
         .as_ref()
 }
 
-/// Активное состояние — обычная иконка, неактивное — она же в сером и
-/// полупрозрачном виде. Пользователю не приходится наводить курсор, чтобы
-/// понять, работает ли туннель.
+/// Активное состояние — иконка «вкл», неактивное — дефолтная «выкл».
+/// Пользователю не приходится наводить курсор, чтобы понять, работает ли
+/// туннель.
 fn icon_for(active: bool) -> Image<'static> {
-    let Some((rgba, width, height)) = base_icon() else {
-        // До иконки не добрались — рисуем однотонный квадрат, чтобы в трее
-        // хоть что-то было видно.
-        let fill = if active { [0x6f, 0x9c, 0xff, 0xff] } else { [0x7b, 0x84, 0x94, 0xb0] };
-        return Image::new_owned(fill.repeat(16 * 16), 16, 16);
-    };
-
-    if active {
+    if let Some((rgba, width, height)) = tray_icon(active) {
         return Image::new_owned(rgba.clone(), *width, *height);
     }
-
-    let mut dimmed = rgba.clone();
-    for pixel in dimmed.chunks_exact_mut(4) {
-        let luma = (0.299 * pixel[0] as f32 + 0.587 * pixel[1] as f32 + 0.114 * pixel[2] as f32)
-            .round()
-            .clamp(0.0, 255.0) as u8;
-        pixel[0] = luma;
-        pixel[1] = luma;
-        pixel[2] = luma;
-        pixel[3] = (pixel[3] as u16 * 110 / 255) as u8;
-    }
-    Image::new_owned(dimmed, *width, *height)
+    // До иконки не добрались — рисуем однотонный квадрат, чтобы в трее
+    // хоть что-то было видно. Цвета повторяют акценты исходных иконок.
+    let fill = if active { [0x4d, 0xbf, 0x45, 0xff] } else { [0x7b, 0x84, 0x94, 0xb0] };
+    Image::new_owned(fill.repeat(16 * 16), 16, 16)
 }
