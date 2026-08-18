@@ -3,15 +3,16 @@
 	import Icon from './Icon.svelte';
 	import { app } from '$lib/state.svelte';
 	import { TABS, type TabId } from '$lib/tabs';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let { tab, ontab }: { tab: TabId; ontab: (next: TabId) => void } = $props();
 
-	/** Тот же сигнал, что у иконки трея (tray.rs): sing-box запущен и соединение
-	 *  установлено — логотип «вкл», иначе дефолтный «выкл». */
+	/** Same signal as the tray icon (tray.rs): sing-box is running and the
+	 *  connection is established — the logo is "on", otherwise the default "off". */
 	const active = $derived(app.run?.running === true && app.status.state === 'connected');
 
-	/** В обычном браузере (vite dev без Tauri) окна нет — панель просто не
-	 *  управляет им, но вкладки продолжают работать. */
+	/** In a regular browser (vite dev without Tauri) there is no window — the
+	 *  bar simply does not control it, but the tabs keep working. */
 	function win() {
 		try {
 			return getCurrentWindow();
@@ -26,8 +27,8 @@
 		const w = win();
 		if (!w) return;
 		w.isMaximized().then((value) => (maximized = value));
-		// Развернуть могут и мимо наших кнопок: Win+↑, Aero Snap, двойной клик
-		// по полосе перетаскивания.
+		// Maximizing can happen outside our buttons too: Win+Up, Aero Snap, a
+		// double-click on the drag strip.
 		const unlisten = w.onResized(() => w.isMaximized().then((value) => (maximized = value)));
 		return () => {
 			unlisten.then((stop) => stop());
@@ -35,19 +36,19 @@
 	});
 </script>
 
-<!-- Предзагружаем «вкл»-логотип, чтобы первое переключение состояния не мигало. -->
+<!-- Preload the "on" logo so the first state change does not flash. -->
 <svelte:head>
 	<link rel="preload" as="image" href="/logo-on.svg" />
 </svelte:head>
 
-<!-- data-tauri-drag-region висит на самой полосе и на распорке: Tauri проверяет
-	 именно целевой элемент события, поэтому клики по кнопкам и вкладкам сюда не
-	 попадают, а двойной клик по пустому месту разворачивает окно. -->
+<!-- data-tauri-drag-region is on the strip itself and on the spacer: Tauri checks
+	 exactly the event's target element, so clicks on buttons and tabs do not reach
+	 here, while a double-click on empty space maximizes the window. -->
 <div class="titlebar" data-tauri-drag-region>
 	<span class="brand" data-tauri-drag-region>
-		<!-- Логотип слева от названия. off — дефолт, on — когда туннель активен;
-			 тот же сигнал, что у иконки трея. SVG-исходники кладёт скрипт
-			 npm run icons в static/logo-{off,on}.svg. -->
+		<!-- Logo to the left of the name. off — default, on — when the tunnel is
+			 active; same signal as the tray icon. The SVG sources are placed by the
+			 npm run icons script into static/logo-{off,on}.svg. -->
 		<img
 			class="logo"
 			src={active ? '/logo-on.svg' : '/logo-off.svg'}
@@ -63,32 +64,32 @@
 			<button
 				class="tab"
 				class:active={tab === item.id}
-				title={item.label}
+				title={item.label()}
 				aria-current={tab === item.id ? 'page' : undefined}
 				onclick={() => ontab(item.id)}
 			>
 				<Icon name={item.icon} size={14} />
-				<span class="label">{item.label}</span>
+				<span class="label">{item.label()}</span>
 			</button>
 		{/each}
 	</nav>
 
 	<div class="spacer" data-tauri-drag-region></div>
 
-	<!-- Глифы — из системного шрифта Windows: своя графика тут только разошлась бы
-		 с нативной метрикой соседних окон. -->
+	<!-- Glyphs — from the Windows system font: custom graphics here would only
+		 diverge from the native metrics of neighboring windows. -->
 	<div class="controls">
-		<button class="win-btn" aria-label="Свернуть" onclick={() => win()?.minimize()}>&#xE921;</button>
+		<button class="win-btn" aria-label={m.titlebar_minimize()} onclick={() => win()?.minimize()}>&#xE921;</button>
 		<button
 			class="win-btn"
-			aria-label={maximized ? 'Восстановить' : 'Развернуть'}
+			aria-label={maximized ? m.titlebar_restore() : m.titlebar_maximize()}
 			onclick={() => win()?.toggleMaximize()}
 		>
 			{maximized ? '' : ''}
 		</button>
-		<!-- close(), а не destroy(): окно должно пройти через CloseRequested, иначе
-			 настройка «сворачивать в трей» перестанет работать. -->
-		<button class="win-btn close" aria-label="Закрыть" onclick={() => win()?.close()}>
+		<!-- close(), not destroy(): the window must go through CloseRequested, otherwise
+			 the "minimize to tray" setting stops working. -->
+		<button class="win-btn close" aria-label={m.titlebar_close()} onclick={() => win()?.close()}>
 			&#xE8BB;
 		</button>
 	</div>
@@ -117,7 +118,7 @@
 		width: 16px;
 		height: 16px;
 		flex-shrink: 0;
-		/* SVG с явными цветами — не наследует тему, как и иконка трея. */
+		/* SVG with explicit colors — does not inherit the theme, like the tray icon. */
 		display: block;
 	}
 
@@ -192,8 +193,8 @@
 		color: #fff;
 	}
 
-	/* Тесно — подписи уходят в title, остаются иконки: семь вкладок помещаются
-	   даже в минимальные 640px. */
+	/* Tight — labels go into title, only icons remain: all seven tabs fit
+	   even at the minimum 640px. */
 	@media (max-width: 1000px) {
 		.wordmark {
 			display: none;

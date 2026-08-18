@@ -1,13 +1,14 @@
 {
   "name": "vantage-box",
   "version": "0.1.0",
-  "description": "Минималистичный десктопный GUI для sing-box",
+  "description": "A minimalist desktop GUI for sing-box",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "i18n:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy globalVariable baseLocale --emit-ts-declarations",
+    "check": "npm run i18n:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "schema:update": "node scripts/gen-singbox-schema.mjs && node scripts/run-verify.mjs",
     "verify:editor": "node scripts/run-verify.mjs",
@@ -35,6 +36,7 @@
     "lezer-json5": "^2.0.2"
   },
   "devDependencies": {
+    "@inlang/paraglide-js": "^2.24.1",
     "@sveltejs/adapter-static": "^3.0.6",
     "@sveltejs/kit": "^2.9.0",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",

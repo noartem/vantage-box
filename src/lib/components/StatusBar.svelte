@@ -3,21 +3,22 @@
 	import { runServiceAction } from '$lib/service-actions';
 	import { app } from '$lib/state.svelte';
 	import { formatBytes, formatSpeed } from '$lib/format';
+	import { m } from '$lib/paraglide/messages.js';
 	import Icon from './Icon.svelte';
 
 	let busy = $state<string | null>(null);
 
 	const label = $derived(
 		{
-			connected: 'подключено',
-			connecting: 'подключение',
-			disconnected: 'нет связи'
+			connected: m.status_connected(),
+			connecting: m.status_connecting(),
+			disconnected: m.status_disconnected()
 		}[app.status.state]
 	);
 
 	const run = $derived(app.run);
 	const running = $derived(run?.running === true);
-	/** Конфигу нужен TUN, а служба не установлена — запускать нечем. */
+	/** The config needs TUN, but the service is not installed — nothing to start it with. */
 	const blocked = $derived(run !== null && run.mode === 'process' && run.tun);
 	const total = $derived(app.totals.up + app.totals.down);
 
@@ -42,28 +43,28 @@
 	{/if}
 
 	{#if run}
-		<span class="meta muted" title={run.mode === 'service' ? 'Запуск через службу Windows' : 'Запуск дочерним процессом'}>
-			{run.mode === 'service' ? 'служба' : 'процесс'}
+		<span class="meta muted" title={run.mode === 'service' ? m.status_service_launch() : m.status_process_launch()}>
+			{run.mode === 'service' ? m.status_service_short() : m.status_process_short()}
 		</span>
 	{/if}
 
 	<span class="spacer"></span>
 
 	{#if app.memory.inuse > 0}
-		<span class="stat muted mono" title="Память sing-box">ОЗУ {formatBytes(app.memory.inuse)}</span>
+		<span class="stat muted mono" title={m.status_memory_title()}>{m.status_memory_label()} {formatBytes(app.memory.inuse)}</span>
 	{/if}
 
-	<!-- Ширина фиксирована: цифры меняются раз в секунду, и без неё соседние
-		 элементы дёргались бы туда-сюда. -->
-	<span class="rate mono" title="Скорость приёма"><span class="arrow">↓</span>{formatSpeed(app.traffic.down)}</span>
-	<span class="rate mono" title="Скорость отдачи"><span class="arrow">↑</span>{formatSpeed(app.traffic.up)}</span>
-	<span class="stat muted mono" title="Объём за текущий сеанс sing-box">Σ {formatBytes(total)}</span>
+	<!-- Width is fixed: the digits change once a second, and without it the
+		 neighboring elements would jump back and forth. -->
+	<span class="rate mono" title={m.status_download_speed()}><span class="arrow">↓</span>{formatSpeed(app.traffic.down)}</span>
+	<span class="rate mono" title={m.status_upload_speed()}><span class="arrow">↑</span>{formatSpeed(app.traffic.up)}</span>
+	<span class="stat muted mono" title={m.status_session_total()}>∑ {formatBytes(total)}</span>
 
 	<div class="actions">
 		<button
 			class="icon-btn"
-			title={blocked ? 'Нужна служба: в конфиге TUN-инбаунд' : 'Запустить sing-box'}
-			aria-label="Запустить"
+			title={blocked ? m.status_start_blocked() : m.status_start_title()}
+			aria-label={m.status_start_label()}
 			disabled={busy !== null || running || blocked}
 			onclick={() => act('start', api.start)}
 		>
@@ -71,8 +72,8 @@
 		</button>
 		<button
 			class="icon-btn"
-			title="Остановить sing-box"
-			aria-label="Остановить"
+			title={m.status_stop_title()}
+			aria-label={m.status_stop_label()}
 			disabled={busy !== null || !running}
 			onclick={() => act('stop', api.stop)}
 		>
@@ -80,8 +81,8 @@
 		</button>
 		<button
 			class="icon-btn"
-			title="Мягкий перезапуск с восстановлением выбранных узлов"
-			aria-label="Перезапустить"
+			title={m.status_restart_title()}
+			aria-label={m.status_restart_label()}
 			disabled={busy !== null || !running}
 			onclick={() => act('restart', api.restart)}
 		>
@@ -101,7 +102,7 @@
 		background: var(--surface);
 		border-top: 1px solid var(--border);
 		flex-shrink: 0;
-		/* Одна строка — переносы текста запрещены везде. */
+		/* One row — text wrapping is forbidden everywhere. */
 		white-space: nowrap;
 		overflow: hidden;
 		min-width: 0;
@@ -111,9 +112,10 @@
 		font-weight: 600;
 	}
 
-	/* Левая часть: статус и подписи. При нехватке места жмутся и обрезаются
-	   многоточием; полный текст показывает системный тултип (title). Правая
-	   часть (телеметрия, кнопки) приоритетнее — она не сжимается. */
+	/* Left part: status and labels. When space is short they compress and are
+	   truncated with an ellipsis; the full text is shown by the system tooltip
+	   (title). The right part (telemetry, buttons) has higher priority — it does
+	   not compress. */
 	.meta {
 		min-width: 0;
 		overflow: hidden;

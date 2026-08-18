@@ -1,22 +1,22 @@
 import type { JSONSchema7 } from 'json-schema';
-// Официальная схема sing-box 1.14-dev — единственная, что существует официально
-// (команда `sing-box schema` и схема на сайте появились только в 1.14.0). У неё есть
-// русские подписи (singbox-schema.ru.mjs) и union-трансформ для автокомплита, поэтому
-// её же используем для автокомплита/hover во вкладке конфига при любой версии —
-// подсказки по полям в основном версионно-нейтральны.
+// The official sing-box 1.14-dev schema — the only one that exists officially
+// (the `sing-box schema` command and the on-site schema appeared only in 1.14.0). It has
+// Manual descriptions (singbox-schema-overlay.mjs) and a union transform for autocomplete,
+// so we also use it for autocomplete/hover in the config tab regardless of version —
+// the field descriptions are mostly version-neutral.
 import generated from './singbox-schema.generated.json';
-// Сторонние per-version схемы для 1.11–1.13 (официальных для этих версий нет).
-// Поддерживаются сообществом в репо BlackDuty/sing-box-schema, собираются из Zod.
+// Third-party per-version schemas for 1.11–1.13 (no official ones exist for these).
+// Maintained by the community in the BlackDuty/sing-box-schema repo, built from Zod.
 import s111 from './schemas/singbox-1.11.1.json';
 import s112 from './schemas/singbox-1.12.22.json';
 import s113 from './schemas/singbox-1.13.13.json';
 
 const asSchema = (s: unknown) => s as unknown as JSONSchema7;
 
-/** Схема для автокомплита/hover — всегда официальная 1.14 (с русскими подписями). */
+/** Schema for autocomplete/hover — always the official 1.14 (with manual descriptions). */
 export const autocompleteSchema = asSchema(generated);
 
-// Минор → схема для линтера. Ключ `major*100+minor`, чтобы 1.11 ≠ 1.1 и т.п.
+// Minor → schema for the linter. Key is `major*100+minor`, so 1.11 ≠ 1.1 etc.
 const BY_MINOR: Record<number, JSONSchema7> = {
 	111: asSchema(s111),
 	112: asSchema(s112),
@@ -25,14 +25,14 @@ const BY_MINOR: Record<number, JSONSchema7> = {
 };
 
 /**
- * Схема для линтера по версии запущенного sing-box.
+ * Schema for the linter based on the running sing-box version.
  *
- * - 1.11/1.12/1.13 — сторонняя схема соответствующего минора (BlackDuty).
- * - 1.14+ — официальная 1.14-dev (единственная, что есть).
- * - 1.10.x и младше, либо неизвестная версия — `null`: подходящей схемы нет,
- *   линтер выключается, ложных ошибок не будет. Реальный гейт — `sing-box check`.
+ * - 1.11/1.12/1.13 — third-party schema for the corresponding minor (BlackDuty).
+ * - 1.14+ — official 1.14-dev (the only one that exists).
+ * - 1.10.x and below, or an unknown version — `null`: no matching schema, the
+ *   linter is disabled, no false errors. The real gate is `sing-box check`.
  *
- * Для версий новыше 1.14 берём 1.14-dev как ближайшее, что есть.
+ * For versions newer than 1.14 we use 1.14-dev as the closest available.
  */
 export function lintSchemaForVersion(raw: string | null | undefined): JSONSchema7 | null {
 	if (!raw) return null;
@@ -41,6 +41,6 @@ export function lintSchemaForVersion(raw: string | null | undefined): JSONSchema
 	const minor = Number(match[1]) * 100 + Number(match[2]);
 
 	if (BY_MINOR[minor]) return BY_MINOR[minor];
-	if (minor < 111) return null; // 1.10 и младше — схемы нет
-	return autocompleteSchema; // новыше 1.14 — ближайшая известная
+	if (minor < 111) return null; // 1.10 and below — no schema
+	return autocompleteSchema; // newer than 1.14 — closest known
 }

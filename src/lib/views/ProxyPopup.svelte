@@ -3,13 +3,14 @@
 	import { emit } from '@tauri-apps/api/event';
 	import { api, errorText, events } from '$lib/api';
 	import { delayTone, formatDelay } from '$lib/format';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { ConnectionStatus, GroupView } from '$lib/types';
 
-	/** С какого числа узлов список перестаёт читаться глазами. */
+	/** The node count past which the list stops being readable by eye. */
 	const FILTER_FROM = 12;
 
-	// Попап живёт в отдельном webview и намеренно не поднимает общее состояние
-	// приложения: ему нужен только список групп, и открываться он должен мгновенно.
+	// The popup lives in a separate webview and intentionally does not spin up the
+	// shared app state: it only needs the list of groups, and it must open instantly.
 	let groups = $state<GroupView[]>([]);
 	let status = $state<ConnectionStatus | null>(null);
 	let error = $state<string | null>(null);
@@ -63,8 +64,8 @@
 	onMount(() => {
 		load();
 		events.status((value) => (status = value));
-		// Сигнал для `--self-test`: webview попапа действительно загрузился
-		// и выполнил наш код. Снаружи это ничем больше не проверить.
+		// Signal for `--self-test`: the popup webview really did load and run
+		// our code. There is no other way to check this from the outside.
 		emit('popup://ready');
 	});
 </script>
@@ -75,7 +76,7 @@
 	<header>
 		<span class="dot" data-state={status?.state ?? 'connecting'}></span>
 		<span class="title">Vantage Box</span>
-		<button class="link" onclick={() => api.showMainWindow()}>окно</button>
+		<button class="link" onclick={() => api.showMainWindow()}>{m.popup_open_window()}</button>
 	</header>
 
 	{#if totalNodes >= FILTER_FROM}
@@ -84,8 +85,8 @@
 			<input
 				class="grow"
 				type="search"
-				placeholder="фильтр…"
-				aria-label="Фильтр узлов"
+				placeholder={m.popup_filter_placeholder()}
+				aria-label={m.popup_filter_label()}
 				autofocus
 				bind:value={filter}
 			/>
@@ -97,12 +98,10 @@
 			<div class="banner">{error}</div>
 		{:else if groups.length === 0}
 			<p class="hint empty">
-				{status?.state === 'connected'
-					? 'Нет групп, которые можно переключать.'
-					: 'Нет связи с sing-box.'}
+				{status?.state === 'connected' ? m.popup_no_groups() : m.popup_no_api()}
 			</p>
 		{:else if shown.length === 0}
-			<p class="hint empty">Ничего не найдено.</p>
+			<p class="hint empty">{m.popup_nothing_found()}</p>
 		{:else}
 			{#each shown as group (group.name)}
 				<section>
@@ -126,7 +125,7 @@
 		{/if}
 	</div>
 
-	<footer class="hint">Esc — закрыть</footer>
+	<footer class="hint">{m.popup_esc_close()}</footer>
 </div>
 
 <style>

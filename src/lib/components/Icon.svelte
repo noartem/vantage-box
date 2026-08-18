@@ -4,7 +4,7 @@
 	let {
 		name,
 		size = 14,
-		/** Сплошная заливка вместо обводки: у ▶ и ■ на 14px контур читается хуже пятна. */
+		/** Solid fill instead of stroke: at 14px the outline of ▶ and ■ reads worse than a filled shape. */
 		fill = false
 	}: { name: IconName; size?: number; fill?: boolean } = $props();
 

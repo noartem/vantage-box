@@ -1,5 +1,5 @@
-// Тонкая обёртка над Tauri-командами и событиями. Вся типизация — здесь,
-// чтобы компоненты не знали строковых имён команд.
+// Thin wrapper over Tauri commands and events. All typing lives here, so
+// components do not deal with command name strings.
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -54,7 +54,7 @@ export const api = {
 	showMainWindow: () => invoke<void>('show_main_window'),
 
 	generateSecret: () => invoke<string>('generate_secret'),
-	/** null — пользователь закрыл диалог. */
+	/** null — the user closed the dialog. */
 	pickFile: (kind: 'config' | 'binary') => invoke<string | null>('pick_file', { kind }),
 
 	getBinaryInfo: () => invoke<BinaryInfo>('get_binary_info'),
@@ -81,9 +81,9 @@ export const events = {
 	settingsChanged: (fn: (value: Settings) => void) => on('settings://changed', fn),
 	settingsError: (fn: (value: string) => void) => on('settings://error', fn),
 	configChanged: (fn: (path: string) => void) => on('singbox://config-changed', fn),
-	/** sing-box запущен/остановлен — в том числе из трея или по хоткею. */
+	/** sing-box started/stopped — including from the tray or via a hotkey. */
 	runStatus: (fn: (value: RunStatus) => void) => on('service://changed', fn),
-	/** Выбор в selector-группе изменился — в том числе из трея или попапа. */
+	/** Selection in a selector group changed — including from the tray or the popup. */
 	proxiesChanged: (fn: () => void) => on('proxies://changed', fn),
 	hotkeyProblems: (fn: (value: string[]) => void) => on('hotkeys://problems', fn)
 };
@@ -92,7 +92,7 @@ function on<T>(name: string, fn: (value: T) => void): Promise<UnlistenFn> {
 	return listen<T>(name, (event) => fn(event.payload));
 }
 
-/** Ошибки из Rust приезжают строкой; всё остальное приводим к читаемому виду. */
+/** Errors from Rust arrive as strings; everything else is reduced to a readable form. */
 export function errorText(error: unknown): string {
 	if (typeof error === 'string') return error;
 	if (error instanceof Error) return error.message;

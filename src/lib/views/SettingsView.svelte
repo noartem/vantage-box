@@ -3,37 +3,46 @@
 	import { api, errorText } from '$lib/api';
 	import { pushAlert } from '$lib/alerts.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import {
+		LANGUAGE_OPTIONS,
+		getLanguagePreference,
+		setLanguagePreference,
+		type LanguagePreference
+	} from '$lib/i18n.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import type { Settings } from '$lib/types';
 
-	/** Активна ли вкладка настроек. Вкладки не разрушаются при переключении,
-	 *  поэтому сами по себе не знают, видны ли. Нужно, чтобы погасить запись
-	 *  хоткея при уходе — иначе capture-перехватчик остался бы активен в других
-	 *  вкладках и перехватывал клавиши. */
+	/** Whether the settings tab is active. Tabs are not destroyed on switch, so
+	 *  they do not know on their own whether they are visible. Needed to stop
+	 *  hotkey recording when leaving — otherwise the capture listener would stay
+	 *  active in other tabs and intercept keys. */
 	let { active = true }: { active?: boolean } = $props();
 
-	/** Пояснения свёрнуты: шесть абзацев в потоке занимали больше места, чем
-	 *  все поля вместе. */
+	/** Explanations are collapsed: six paragraphs in flow took more space than
+	 *  all the fields combined. */
 	let help = $state(false);
 
 	let draft = $state<Settings | null>(null);
 	let saving = $state(false);
-	/** Secret по умолчанию скрыт: он даёт полное управление sing-box. */
+	/** The secret is hidden by default: it grants full control over sing-box. */
 	let secretVisible = $state(false);
 	let copied = $state(false);
-	/** Какой хоткей сейчас записывается с клавиатуры. */
+	/** Which hotkey is currently being recorded from the keyboard. */
 	let recording = $state<'proxyPopup' | 'toggle' | null>(null);
+	/** The selected UI language: "system" or a specific locale. */
+	let langPref = $state<LanguagePreference>(getLanguagePreference());
 
 	$effect(() => {
-		// settings.json — источник правды. Правки в файле снаружи перебивают
-		// незасейвленную форму: иначе UI показывал бы то, чего в системе нет.
+		// settings.json is the source of truth. Edits to the file from outside
+		// override the unsaved form: otherwise the UI would show what is not in the system.
 		const current = app.settings;
 		if (current) draft = structuredClone($state.snapshot(current)) as Settings;
 	});
 
 	$effect(() => {
-		// Уход со вкладки сбрасывает запись хоткея. Остальное состояние (черновик,
-		// раскрытый secret, подсказки) сохраняется — ради этого и держим вкладку живой.
+		// Leaving the tab resets hotkey recording. The rest of the state (draft,
+		// revealed secret, hints) is preserved — that is why we keep the tab alive.
 		if (!active) recording = null;
 	});
 
@@ -90,10 +99,10 @@
 	}
 
 	// -------------------------------------------------------------------------
-	// Запись хоткеев
+	// Hotkey recording
 	// -------------------------------------------------------------------------
 
-	/** Клавиши, которые в акселераторе называются не так, как `KeyboardEvent.code`. */
+	/** Keys whose accelerator name differs from `KeyboardEvent.code`. */
 	const KEY_NAMES: Record<string, string> = {
 		Escape: 'Esc',
 		Backquote: '`',
@@ -109,7 +118,7 @@
 		Slash: '/'
 	};
 
-	/** Основная клавиша комбинации. `null` — нажат только модификатор. */
+	/** The main key of the combination. `null` — only a modifier was pressed. */
 	function mainKey(code: string): string | null {
 		if (/^(Control|Alt|Shift|Meta|OS)/.test(code)) return null;
 		const letter = /^Key([A-Z])$/.exec(code);
@@ -121,14 +130,14 @@
 		return KEY_NAMES[code] ?? code;
 	}
 
-	// Перехват на фазе capture: иначе Ctrl+1…7 успел бы переключить вкладку
-	// раньше, чем запись увидит нажатие.
+	// Intercept on the capture phase: otherwise Ctrl+1…7 would switch the tab
+	// before recording sees the press.
 	function onKeydown(event: KeyboardEvent) {
 		if (!recording || !draft) return;
 		event.preventDefault();
 		event.stopPropagation();
 
-		// Esc выходит из записи, не назначая себя: иначе выйти было бы нечем.
+		// Esc exits recording without assigning itself: otherwise there would be no way out.
 		if (event.code === 'Escape') {
 			recording = null;
 			return;
@@ -143,7 +152,7 @@
 		if (event.shiftKey) mods.push('Shift');
 		if (event.metaKey) mods.push('Super');
 
-		// Глобальный хоткей без модификатора отобрал бы клавишу у всей системы.
+		// A global hotkey without a modifier would steal the key from the whole system.
 		if (mods.length === 0) return;
 
 		draft.hotkeys[recording] = [...mods, key].join('+');
@@ -162,28 +171,28 @@
 <div class="page">
 	{#if draft}
 		<div class="toolbar">
-			<span class="count">Настройки</span>
+			<span class="count">{m.settings_title()}</span>
 			<span class="spacer"></span>
 			<button
 				class="icon-btn"
 				class:on={help}
-				title="Показать пояснения к разделам"
-				aria-label="Пояснения"
+				title={m.settings_help_title()}
+				aria-label={m.common_explanations()}
 				onclick={() => (help = !help)}
 			>
 				<Icon name="info" size={13} />
 			</button>
 		</div>
 
-		<!-- Все восемь разделов сразу, потоком по колонкам: в один свиток они
-			 давали страницу примерно на 1700px при окне в 720, а в гриде под
-			 короткой секцией оставалась пустота до конца ряда. -->
+		<!-- All nine sections at once, flowing through columns: in a single scroll
+			 they gave a page of about 1700px in a 720px window, and in a grid a short
+			 section left empty space to the end of the row. -->
 		<div class="masonry">
 			<section class="section">
 				<h3 class="section-title">Clash API</h3>
 				<div class="form">
 					<label>
-						<span>Адрес</span>
+						<span>{m.settings_address()}</span>
 						<input class="field" bind:value={draft.clashApi.url} placeholder="http://127.0.0.1:9797" />
 					</label>
 					<label>
@@ -193,12 +202,12 @@
 								class="field"
 								type={secretVisible ? 'text' : 'password'}
 								bind:value={draft.clashApi.secret}
-								placeholder="пусто — свой на каждый запуск"
+								placeholder={m.settings_secret_placeholder()}
 							/>
 							<button
 								class="icon-btn"
-								title={secretVisible ? 'Скрыть' : 'Показать'}
-								aria-label={secretVisible ? 'Скрыть' : 'Показать'}
+								title={secretVisible ? m.common_hide() : m.common_show()}
+								aria-label={secretVisible ? m.common_hide() : m.common_show()}
 								onclick={() => (secretVisible = !secretVisible)}
 							>
 								<Icon name="search" size={12} />
@@ -206,19 +215,19 @@
 							{#if secretVisible}
 								<button
 									class="icon-btn"
-									title={copied ? 'Скопировано' : 'Копировать'}
-									aria-label="Копировать"
+									title={copied ? m.common_copied() : m.common_copy()}
+									aria-label={m.common_copy()}
 									disabled={!draft.clashApi.secret}
 									onclick={copySecret}
 								>
 									<Icon name={copied ? 'check' : 'copy'} size={12} />
 								</button>
 							{/if}
-							<button onclick={newSecret}>Сгенерировать</button>
+							<button onclick={newSecret}>{m.settings_generate()}</button>
 						</div>
 					</label>
 					<label>
-						<span>Уровень логов</span>
+						<span>{m.settings_log_level()}</span>
 						<select bind:value={draft.clashApi.logLevel}>
 							{#each ['trace', 'debug', 'info', 'warn', 'error'] as level (level)}
 								<option value={level}>{level}</option>
@@ -228,9 +237,7 @@
 				</div>
 				{#if help}
 					<p class="hint">
-						Изменение адреса, secret'а или уровня логов сразу переоткрывает подписки — перезапуск
-						приложения не нужен. Пустой secret означает, что Vantage Box выдаст свой на каждый запуск
-						sing-box.
+						{m.settings_help_clash_api()}
 					</p>
 				{/if}
 			</section>
@@ -239,17 +246,17 @@
 				<h3 class="section-title">sing-box</h3>
 				<div class="form">
 					<label>
-						<span>Конфиг</span>
+						<span>{m.common_config()}</span>
 						<div class="combo">
 							<input
 								class="field"
 								bind:value={draft.singBox.configPath}
-								placeholder="путь к config.json"
+								placeholder={m.settings_config_path_placeholder()}
 							/>
 							<button
 								class="icon-btn"
-								title="Выбрать файл"
-								aria-label="Выбрать файл"
+								title={m.settings_pick_file_title()}
+								aria-label={m.settings_pick_file_title()}
 								onclick={() => pick('config')}
 							>
 								<Icon name="folder" size={12} />
@@ -257,17 +264,17 @@
 						</div>
 					</label>
 					<label>
-						<span>Файл sing-box</span>
+						<span>{m.binary_file_title()}</span>
 						<div class="combo">
 							<input
 								class="field"
 								bind:value={draft.singBox.binaryPath}
-								placeholder="пусто — под управлением Vantage Box"
+								placeholder={m.settings_binary_path_placeholder()}
 							/>
 							<button
 								class="icon-btn"
-								title="Выбрать файл"
-								aria-label="Выбрать файл"
+								title={m.settings_pick_file_title()}
+								aria-label={m.settings_pick_file_title()}
 								onclick={() => pick('binary')}
 							>
 								<Icon name="folder" size={12} />
@@ -275,39 +282,38 @@
 						</div>
 					</label>
 					<label>
-						<span>Обновление</span>
+						<span>{m.settings_update()}</span>
 						<select bind:value={draft.singBox.updatePolicy}>
-							<option value="off">не проверять</option>
-							<option value="notify">уведомлять</option>
-							<option value="auto">ставить автоматически</option>
+							<option value="off">{m.settings_update_off()}</option>
+							<option value="notify">{m.settings_update_notify()}</option>
+							<option value="auto">{m.settings_update_auto()}</option>
 						</select>
 					</label>
 				</div>
 				{#if help}
 					<p class="hint">
-						Пустой путь к файлу sing-box означает бинарник под управлением приложения — версиями
-						тогда можно рулить на вкладке «Сервис».
+						{m.settings_help_singbox()}
 					</p>
 				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">Интерфейс</h3>
+				<h3 class="section-title">{m.settings_ui_section()}</h3>
 				<div class="form">
 					<label>
-						<span>Тема</span>
+						<span>{m.settings_theme()}</span>
 						<select bind:value={draft.ui.theme}>
-							<option value="system">как в системе</option>
-							<option value="light">светлая</option>
-							<option value="dark">тёмная</option>
+							<option value="system">{m.settings_theme_system()}</option>
+							<option value="light">{m.settings_theme_light()}</option>
+							<option value="dark">{m.settings_theme_dark()}</option>
 						</select>
 					</label>
 					<label>
-						<span>URL latency-теста</span>
+						<span>{m.settings_latency_url()}</span>
 						<input class="field" bind:value={draft.ui.latencyTestUrl} />
 					</label>
 					<label>
-						<span>Таймаут теста, мс</span>
+						<span>{m.settings_latency_timeout()}</span>
 						<input
 							class="num"
 							type="number"
@@ -319,21 +325,42 @@
 				</div>
 				{#if help}
 					<p class="hint">
-						По этому URL проверяется задержка узлов — и кнопкой в карточке группы, и
-						автопереключением. Подходит любой адрес, отдающий короткий ответ.
+						{m.settings_help_ui()}
 					</p>
 				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">Автопереключение</h3>
+				<h3 class="section-title">{m.settings_language()}</h3>
 				<div class="form">
 					<label>
-						<span>Включено</span>
+						<span>{m.settings_language()}</span>
+						<select
+							bind:value={langPref}
+							onchange={() => setLanguagePreference(langPref)}
+						>
+							{#each LANGUAGE_OPTIONS as opt (opt.value)}
+								<option value={opt.value}>{opt.label}</option>
+							{/each}
+						</select>
+					</label>
+				</div>
+				{#if help}
+					<p class="hint">
+						{m.settings_help_language()}
+					</p>
+				{/if}
+			</section>
+
+			<section class="section">
+				<h3 class="section-title">{m.settings_autoswitch()}</h3>
+				<div class="form">
+					<label>
+						<span>{m.common_enabled()}</span>
 						<input type="checkbox" bind:checked={draft.fallback.enabled} />
 					</label>
 					<label>
-						<span>Интервал проверки, с</span>
+						<span>{m.settings_check_interval()}</span>
 						<input
 							class="num"
 							type="number"
@@ -343,7 +370,7 @@
 						/>
 					</label>
 					<label>
-						<span>Таймаут пинга, мс</span>
+						<span>{m.settings_ping_timeout()}</span>
 						<input
 							class="num"
 							type="number"
@@ -353,22 +380,22 @@
 						/>
 					</label>
 					<label>
-						<span>Предел задержки, мс</span>
+						<span>{m.settings_max_delay()}</span>
 						<input
 							class="num"
 							type="number"
 							min="0"
 							max="60000"
-							title="0 — переключать только при полной недоступности"
+							title={m.settings_max_delay_hint()}
 							bind:value={draft.fallback.maxDelayMs}
 						/>
 					</label>
 					<label>
-						<span>Группы</span>
+						<span>{m.common_groups()}</span>
 						<input
 							class="field"
 							value={draft.fallback.groups.join(', ')}
-							placeholder="пусто — все selector-группы"
+							placeholder={m.settings_groups_placeholder()}
 							oninput={(e) => {
 								if (!draft) return;
 								draft.fallback.groups = e.currentTarget.value
@@ -381,67 +408,66 @@
 				</div>
 				{#if help}
 					<p class="hint">
-						Каждые <em>интервал</em> секунд активный узел selector-группы пингуется по URL
-						latency-теста. При отказе или задержке выше предела группа переключается на узел с
-						наименьшей задержкой. <code class="inline">urltest</code>-группы не затрагиваются — они
-						рулят выбором сами. Предел 0 означает «переключать только когда узел совсем не ответил».
+						{m.settings_help_autoswitch_pre()}
+						<em>{m.settings_help_interval()}</em>
+						{m.settings_help_autoswitch_mid()}
+						<code class="inline">urltest</code>
+						{m.settings_help_autoswitch_post()}
 					</p>
 				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">Трей и запуск</h3>
+				<h3 class="section-title">{m.settings_tray_section()}</h3>
 				<div class="form">
 					<label>
-						<span>Иконка в трее</span>
+						<span>{m.settings_tray_icon()}</span>
 						<input type="checkbox" bind:checked={draft.tray.enabled} />
 					</label>
 					<label>
-						<span>Закрывать в трей</span>
+						<span>{m.settings_close_to_tray()}</span>
 						<input type="checkbox" bind:checked={draft.tray.closeToTray} />
 					</label>
 					<label>
-						<span>Стартовать свёрнутым</span>
+						<span>{m.settings_start_minimized()}</span>
 						<input type="checkbox" bind:checked={draft.tray.startMinimized} />
 					</label>
 					<label>
-						<span>Автозапуск при входе</span>
+						<span>{m.settings_autostart()}</span>
 						<input type="checkbox" bind:checked={draft.autostart} />
 					</label>
 				</div>
 				{#if help}
 					<p class="hint">
-						Иконка в трее и запуск свёрнутым появляются после перезапуска приложения — трей
-						создаётся один раз при старте. Запуск свёрнутым без трея игнорируется: иначе окно стало
-						бы нечем открыть.
+						{m.settings_help_tray()}
 					</p>
 				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">Хоткеи</h3>
+				<h3 class="section-title">{m.settings_hotkeys()}</h3>
 				<div class="form">
-					{#each [{ id: 'proxyPopup', label: 'Попап прокси' }, { id: 'toggle', label: 'Вкл. / выкл.' }] as item (item.id)}
+					{#each [{ id: 'proxyPopup', label: () => m.settings_hotkey_proxy_popup() }, { id: 'toggle', label: () => m.settings_hotkey_toggle() }] as item (item.id)}
 						{@const name = item.id as 'proxyPopup' | 'toggle'}
 						<label>
-							<span>{item.label}</span>
+							<span>{item.label()}</span>
 							<div class="combo">
 								<input
 									class="field"
 									bind:value={draft.hotkeys[name]}
-									placeholder="пусто — без хоткея"
+									placeholder={m.settings_hotkey_placeholder()}
 									readonly={recording === name}
 								/>
 								<button
 									class:primary={recording === name}
 									onclick={() => (recording = recording === name ? null : name)}
 								>
-									{recording === name ? 'Нажмите…' : 'Записать'}
+									{recording === name ? m.settings_recording() : m.settings_record()}
 								</button>
 								<button
 									class="icon-btn"
-									title="Очистить"
-									aria-label="Очистить"
+									title={m.common_clear()}
+									aria-label={m.common_clear()}
 									disabled={draft.hotkeys[name] === ''}
 									onclick={() => clearHotkey(name)}
 								>
@@ -452,62 +478,61 @@
 					{/each}
 				</div>
 				{#if app.hotkeyProblems.length > 0}
-					<div class="banner">Не удалось занять: {app.hotkeyProblems.join(', ')}</div>
+					<div class="banner">{m.settings_hotkey_failed()}: {app.hotkeyProblems.join(', ')}</div>
 				{/if}
 				{#if help}
 					<p class="hint">
-						«Записать» — и нажмите комбинацию целиком. Модификаторы:
+						{m.settings_help_hotkeys_a()}
 						<code class="inline">Ctrl</code>, <code class="inline">Alt</code>,
-						<code class="inline">Shift</code>, <code class="inline">Super</code> (клавиша Windows).
-						Нужен хотя бы один: без модификатора хоткей отобрал бы клавишу у всей системы.
-						<code class="inline">Esc</code> отменяет запись. Комбинацию можно и просто вписать
-						руками, через <code class="inline">+</code>. Хоткеи работают глобально, даже когда окно
-						закрыто.
+						<code class="inline">Shift</code>, <code class="inline">Super</code>
+						{m.settings_help_hotkeys_b()}
+						<code class="inline">Esc</code>
+						{m.settings_help_hotkeys_c()}
+						<code class="inline">+</code>
+						{m.settings_help_hotkeys_d()}
 					</p>
 				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">Обновление приложения</h3>
+				<h3 class="section-title">{m.settings_app_update()}</h3>
 				<div class="form">
 					<label>
-						<span>Проверка обновлений</span>
+						<span>{m.settings_check_updates()}</span>
 						<select bind:value={draft.guiUpdate.policy}>
-							<option value="off">не проверять</option>
-							<option value="notify">уведомлять</option>
-							<option value="auto">ставить автоматически</option>
+							<option value="off">{m.settings_update_off()}</option>
+							<option value="notify">{m.settings_update_notify()}</option>
+							<option value="auto">{m.settings_update_auto()}</option>
 						</select>
 					</label>
 				</div>
 				{#if help}
 					<p class="hint">
-						Обновления скачиваются с GitHub и проверяются подписью. «Уведомлять» показывает строку с
-						кнопкой установки, «автоматически» ставит и перезапускает приложение без вопросов.
+						{m.settings_help_app_update()}
 					</p>
 				{/if}
 			</section>
 
-			<!-- Файл настроек — для тех, кто правит его руками; поэтому последним. -->
+			<!-- The settings file — for those who edit it by hand; hence last. -->
 			<section class="section">
-				<h3 class="section-title">Файл настроек</h3>
+				<h3 class="section-title">{m.settings_file_section()}</h3>
 				<div class="form">
-					<span class="lbl">Путь</span>
+					<span class="lbl">{m.common_path()}</span>
 					<code class="path selectable ell" title={app.settingsPath}>{app.settingsPath}</code>
 				</div>
 				<div class="toolbar">
 					<button onclick={() => guard(() => openPath(app.settingsPath))}>
 						<Icon name="external" size={12} />
-						Открыть
+						{m.common_open()}
 					</button>
 					<button onclick={() => guard(() => revealItemInDir(app.settingsPath))}>
 						<Icon name="folder" size={12} />
-						Показать в папке
+						{m.common_show_in_folder()}
 					</button>
 				</div>
 				{#if help}
 					<p class="hint">
-						Файл читается как JSONC — комментарии и висячие запятые допустимы. Правки
-						подхватываются на лету, перезапуск не нужен.
+						{m.settings_help_file()}
 					</p>
 				{/if}
 			</section>
@@ -515,20 +540,20 @@
 
 		<div class="sticky-footer">
 			<button class="primary" onclick={save} disabled={!dirty || saving}>
-				{saving ? 'Сохраняю…' : 'Сохранить'}
+				{saving ? m.common_saving() : m.common_save()}
 			</button>
-			<button onclick={() => app.refreshSettings()} disabled={!dirty || saving}>Отменить</button>
-			{#if dirty}<span class="hint">есть несохранённые изменения</span>{/if}
+			<button onclick={() => app.refreshSettings()} disabled={!dirty || saving}>{m.common_cancel()}</button>
+			{#if dirty}<span class="hint">{m.common_unsaved_changes()}</span>{/if}
 		</div>
 	{:else}
-		<p class="hint">Загружаю настройки…</p>
+		<p class="hint">{m.common_loading_settings()}</p>
 	{/if}
 </div>
 
 <style>
-	/* Колонка, а не грид: плитка разделов лежит внутри .masonry, а тулбар и
-	   полоса сохранения идут во всю ширину сами собой. min-height нужен, чтобы
-	   `margin-top: auto` у полосы прижимал её к низу и на коротких формах. */
+	/* A column, not a grid: the section tile sits inside .masonry, while the
+	   toolbar and save bar span the full width on their own. min-height is needed
+	   so the bar's `margin-top: auto` pins it to the bottom even on short forms. */
 	.page {
 		display: flex;
 		flex-direction: column;
@@ -540,7 +565,7 @@
 		font-weight: 600;
 	}
 
-	/* Поле с кнопками справа: кнопки по содержимому, поле забирает остаток. */
+	/* Field with buttons on the right: buttons size to content, the field takes the rest. */
 	.combo {
 		display: flex;
 		align-items: center;

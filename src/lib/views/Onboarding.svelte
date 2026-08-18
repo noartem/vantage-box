@@ -3,19 +3,20 @@
 	import BinaryPanel from '$lib/components/BinaryPanel.svelte';
 	import VersionsPanel from '$lib/components/VersionsPanel.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import type { Settings } from '$lib/types';
 
 	let dismissed = $state(false);
 	let busy = $state(false);
-	// Ошибки онбординга остаются в диалоге: общая строка алертов лежит под
-	// оверлеем и оттуда её было бы не видно.
+	// Onboarding errors stay in the dialog: the shared alert strip is beneath
+	// the overlay and would not be visible from there.
 	let error = $state<string | null>(null);
 
 	const binaryOk = $derived(app.binaryInfo?.present === true);
 	const configOk = $derived((app.settings?.singBox.configPath.trim() ?? '') !== '');
 
-	/** Применить изменённые настройки: онбординг правит тот же settings.json. */
+	/** Apply the changed settings: onboarding edits the same settings.json. */
 	async function applySettings(mut: (s: Settings) => void) {
 		if (!app.settings) return;
 		busy = true;
@@ -63,22 +64,21 @@
 </script>
 
 {#if dismissed}
-	<!-- Чтобы онбординг не терялся после «пропустить»: маленькая кнопка возврата. -->
-	<button class="resume" onclick={() => (dismissed = false)} title="Снова показать онбординг">
-		Онбординг
+	<!-- So onboarding is not lost after "skip": a small return button. -->
+	<button class="resume" onclick={() => (dismissed = false)} title={m.onboarding_resume_title()}>
+		{m.onboarding_button()}
 	</button>
 {:else}
 	<div class="overlay">
 		<div class="dialog bounce">
 			<header>
-				<h2>Добро пожаловать в Vantage Box</h2>
+				<h2>{m.onboarding_welcome()}</h2>
 				<span class="spacer"></span>
-				<button class="ghost" onclick={() => (dismissed = true)}>Пропустить</button>
+				<button class="ghost" onclick={() => (dismissed = true)}>{m.common_skip()}</button>
 			</header>
 
 			<p class="hint">
-				Нужны бинарник sing-box и config.json. Можно выбрать свои или скачать sing-box прямо
-				здесь — инсталлер его не включает.
+				{m.onboarding_hint()}
 			</p>
 
 			{#if error}
@@ -87,12 +87,12 @@
 
 			<section class="section step" data-done={binaryOk}>
 				<div class="step-head">
-					<h3 class="section-title">1. Бинарник sing-box</h3>
+					<h3 class="section-title">{m.onboarding_step_binary()}</h3>
 					<span class="spacer"></span>
 					{#if binaryOk}
 						<span class="chip" data-tone="good">
 							<Icon name="check" size={10} />
-							готово
+							{m.common_done()}
 						</span>
 					{/if}
 				</div>
@@ -101,35 +101,34 @@
 				<VersionsPanel />
 
 				<div class="toolbar">
-					<button onclick={pickBinary} disabled={busy}>Указать свой файл…</button>
+					<button onclick={pickBinary} disabled={busy}>{m.onboarding_pick_binary()}</button>
 				</div>
 			</section>
 
 			<section class="section step" data-done={configOk}>
 				<div class="step-head">
-					<h3 class="section-title">2. Конфиг sing-box</h3>
+					<h3 class="section-title">{m.onboarding_step_config()}</h3>
 					<span class="spacer"></span>
 					{#if configOk}
 						<span class="chip" data-tone="good">
 							<Icon name="check" size={10} />
-							готово
+							{m.common_done()}
 						</span>
 					{/if}
 				</div>
 
 				<p class="hint">
-					Готовый config.json или минимальный: локальный mixed-инбаунд и selector «proxy», куда
-					потом вльются узлы подписок.
+					{m.onboarding_config_hint()}
 				</p>
 
 				<div class="toolbar">
-					<button onclick={pickConfig} disabled={busy}>Указать config.json…</button>
-					<button onclick={createMinimal} disabled={busy}>Создать минимальный</button>
+					<button onclick={pickConfig} disabled={busy}>{m.onboarding_pick_config()}</button>
+					<button onclick={createMinimal} disabled={busy}>{m.onboarding_create_minimal()}</button>
 				</div>
 			</section>
 
 			{#if binaryOk && configOk}
-				<div class="banner ok">Готово — можно запускать sing-box кнопкой в статус-строке.</div>
+				<div class="banner ok">{m.onboarding_ready()}</div>
 			{/if}
 		</div>
 	</div>
@@ -147,8 +146,8 @@
 		z-index: 100;
 	}
 
-	/* Диалог прокручивается сам: вместе с вложенным каталогом версий он легко
-	   перерастал высоту окна. */
+	/* The dialog scrolls itself: together with the nested version catalog it
+	   easily outgrew the window height. */
 	.dialog {
 		background: var(--bg);
 		border: 1px solid var(--border);

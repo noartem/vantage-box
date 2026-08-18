@@ -4,18 +4,19 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import { age, destination, outbound, processName, rule, source } from '$lib/connection';
 	import { formatBytes, formatDuration } from '$lib/format';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import type { Connection } from '$lib/types';
 
-	/** Активна ли вкладка. После >5 мин отсутствия возврат сбрасывает список
-	 *  наверх — к самым «тяжёлым» соединениям, а не к строке, на которой
-	 *  остановились полчаса назад. */
+	/** Whether the tab is active. After >5 min away, returning resets the list
+	 *  to the top — to the "heaviest" connections, not the row we stopped on
+	 *  half an hour ago. */
 	let { active = true }: { active?: boolean } = $props();
 
-	/** Высота строки. Должна совпадать с --h-row: на ней стоит вся арифметика
-	 *  виртуализации, поэтому значение продублировано осознанно. */
+	/** Row height. Must match --h-row: all the virtualization arithmetic rests on
+	 *  it, so the value is intentionally duplicated. */
 	const ROW = 22;
-	/** Сколько строк дорисовываем сверху и снизу окна, чтобы прокрутка не мигала. */
+	/** How many extra rows we render above and below the viewport so scrolling does not flash. */
 	const OVERSCAN = 8;
 
 	type SortKey = 'host' | 'process' | 'outbound' | 'rule' | 'down' | 'up' | 'age';
@@ -28,7 +29,7 @@
 	let scrollTop = $state(0);
 	let viewportHeight = $state(0);
 	let viewport = $state<HTMLDivElement | null>(null);
-	/** Возраст соединения тикает сам: снимок /connections не меняет `start`. */
+	/** Connection age ticks on its own: a /connections snapshot does not change `start`. */
 	let now = $state(Date.now());
 
 	const filtered = $derived.by(() => {
@@ -57,7 +58,7 @@
 			up: (c: Connection) => c.upload,
 			age: (c: Connection) => age(c, now)
 		}[sortKey];
-		// Копия, а не sort() на месте: исходный массив принадлежит состоянию приложения.
+		// A copy, not an in-place sort(): the source array belongs to app state.
 		return [...filtered].sort((a, b) => {
 			const left = by(a);
 			const right = by(b);
@@ -66,8 +67,8 @@
 		});
 	});
 
-	// Виртуализация: в DOM живёт только видимое окно строк. Без неё тысяча
-	// соединений превращалась в тысячу узлов, которые перерисовываются раз в секунду.
+	// Virtualization: only the visible window of rows lives in the DOM. Without it,
+	// a thousand connections became a thousand nodes repainted once a second.
 	const first = $derived(Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
 	const visible = $derived(Math.ceil(viewportHeight / ROW) + OVERSCAN * 2);
 	const slice = $derived(sorted.slice(first, first + visible));
@@ -80,7 +81,7 @@
 			return;
 		}
 		sortKey = key;
-		// Числовые колонки интереснее по убыванию, текстовые — по алфавиту.
+		// Numeric columns are more interesting descending, text ones alphabetical.
 		sortDesc = key === 'down' || key === 'up' || key === 'age';
 	}
 
@@ -88,7 +89,7 @@
 		busy = id;
 		try {
 			await api.closeConnection(id);
-			// Следующий кадр /connections сам приедет — обновлять вручную не нужно.
+			// The next /connections frame arrives on its own — no manual refresh needed.
 		} catch (e) {
 			pushAlert('error', errorText(e));
 		} finally {
@@ -108,19 +109,19 @@
 	}
 
 	$effect(() => {
-		// Тикер возраста нужен только на активной вкладке: иначе он каждую секунду
-		// перезапускал бы сортировку впустую.
+		// The age ticker is only needed on the active tab: otherwise it would
+		// retrigger sorting every second for nothing.
 		if (!active) return;
 		const timer = setInterval(() => (now = Date.now()), 1000);
 		return () => clearInterval(timer);
 	});
 
 	// -------------------------------------------------------------------------
-	// Возврат на вкладку после долгого отсутствия
+	// Returning to the tab after a long absence
 	// -------------------------------------------------------------------------
 
-	/** Сколько отсутствовали на вкладке. Plain-переменная, а не $state: её запись
-	 *  не должна перезапускать этот эффект. */
+	/** How long we were away from the tab. A plain variable, not $state: writing
+	 *  it must not retrigger this effect. */
 	const AWAY_RESET_MS = 5 * 60_000;
 	let awaySince: number | null = null;
 
@@ -129,7 +130,7 @@
 			const awayFor = awaySince === null ? 0 : Date.now() - awaySince;
 			awaySince = null;
 			if (awayFor > AWAY_RESET_MS && viewport) {
-				// Дефолтный режим — список наверх.
+				// Default mode — list at the top.
 				viewport.scrollTop = 0;
 				scrollTop = 0;
 			}
@@ -138,7 +139,7 @@
 		}
 	});
 
-	// WS `/connections` может ещё не прислать первый кадр — подтянем разово.
+	// WS `/connections` may not have sent the first frame yet — pull it once.
 	$effect(() => {
 		if (app.status.state !== 'connected') return;
 		api
@@ -148,7 +149,7 @@
 				app.connectionTotals = { down: snap.downloadTotal, up: snap.uploadTotal };
 			})
 			.catch(() => {
-				// Поток придёт сам — молча.
+				// The stream will arrive on its own — stay silent.
 			});
 	});
 </script>
@@ -164,7 +165,7 @@
 
 <div class="page">
 	<div class="toolbar">
-		<span class="count">{app.connections.length} активных</span>
+		<span class="count">{m.connections_active_count({ count: app.connections.length })}</span>
 		<span class="muted mono totals">
 			↓ {formatBytes(app.connectionTotals.down)} · ↑ {formatBytes(app.connectionTotals.up)}
 		</span>
@@ -173,37 +174,37 @@
 			class="filter"
 			type="search"
 			bind:value={filter}
-			placeholder="хост, процесс, outbound, правило…"
-			aria-label="Фильтр соединений"
+			placeholder={m.connections_filter_placeholder()}
+			aria-label={m.connections_filter_label()}
 		/>
 		<button
 			class="danger"
 			disabled={busy !== null || app.connections.length === 0}
 			onclick={closeAll}
 		>
-			{busy === 'all' ? 'Закрываю…' : 'Закрыть все'}
+			{busy === 'all' ? m.connections_closing() : m.connections_close_all()}
 		</button>
 	</div>
 
 	{#if !active}
-		<!-- вкладка не активна: таблицу не рисуем -->
+		<!-- tab inactive: do not render the table -->
 	{:else if app.status.state !== 'connected'}
-		<p class="hint">Нет связи с Clash API — sing-box не запущен.</p>
+		<p class="hint">{m.connections_no_api()}</p>
 	{:else if app.connections.length === 0}
-		<p class="hint">Активных соединений нет.</p>
+		<p class="hint">{m.connections_none()}</p>
 	{:else if sorted.length === 0}
-		<p class="hint">Ничего не подходит под фильтр.</p>
+		<p class="hint">{m.common_no_filter_match()}</p>
 	{:else}
 		<div class="table card">
 			<div class="row head">
-				{@render th('host', 'Хост')}
-				{@render th('process', 'Процесс', 'c-process')}
-				<span class="th static c-net">Сеть</span>
-				{@render th('outbound', 'Outbound')}
-				{@render th('rule', 'Правило', 'c-rule')}
+				{@render th('host', m.connections_col_host())}
+				{@render th('process', m.connections_col_process(), 'c-process')}
+				<span class="th static c-net">{m.connections_col_network()}</span>
+				{@render th('outbound', m.connections_col_outbound())}
+				{@render th('rule', m.connections_col_rule(), 'c-rule')}
 				{@render th('down', '↓', 'right')}
 				{@render th('up', '↑', 'right')}
-				{@render th('age', 'Время', 'right')}
+				{@render th('age', m.connections_col_age(), 'right')}
 				<span></span>
 			</div>
 
@@ -217,10 +218,10 @@
 
 				{#each slice as c (c.id)}
 					<div class="row">
-						<span class="ell" title="{destination(c)}&#10;источник {source(c)}">
+						<span class="ell" title={`${destination(c)}\n${m.connections_source({ src: source(c) })}`}>
 							{destination(c)}
 						</span>
-						<span class="ell muted c-process" title={c.metadata.processPath || 'процесс неизвестен'}>
+						<span class="ell muted c-process" title={c.metadata.processPath || m.connections_process_unknown()}>
 							{processName(c)}
 						</span>
 						<span class="muted c-net">{c.metadata.network}</span>
@@ -231,8 +232,8 @@
 						<span class="mono right muted">{formatDuration(age(c, now))}</span>
 						<button
 							class="icon-btn"
-							title="Закрыть соединение"
-							aria-label="Закрыть соединение"
+							title={m.connections_close_one_title()}
+							aria-label={m.connections_close_one_title()}
 							disabled={busy !== null}
 							onclick={() => closeOne(c.id)}
 						>
@@ -302,7 +303,7 @@
 		background: var(--surface);
 	}
 
-	/* Заголовок колонки — кнопка сортировки, но выглядеть должен подписью. */
+	/* A column header is a sort button but should look like a label. */
 	.th {
 		display: flex;
 		align-items: center;
@@ -336,7 +337,7 @@
 		justify-content: flex-end;
 	}
 
-	/* Узкое окно: колонки уходят по одной, начиная с наименее срочных. */
+	/* Narrow window: columns drop off one by one, starting with the least urgent. */
 	@media (max-width: 1000px) {
 		.row {
 			grid-template-columns:

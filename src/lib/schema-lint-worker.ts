@@ -1,15 +1,15 @@
 /// <reference lib="webworker" />
-// Воркер, выносящий валидацию конфига по схеме за пределы главного потока.
+// Worker that moves schema-based config validation off the main thread.
 //
-// Схемный линтер — самый тяжёлый из трёх: он разбирает весь документ и гоняет его
-// через Draft07.validate против схемы в сотни КБ. На главном потоке это давало
-// фризы при наборе. Здесь же разбор (parseJSON5DocumentState через json5.parse +
-// Lezer-дерево) и валидация выполняются в воркере — главный поток свободен.
+// The schema linter is the heaviest of the three: it parses the whole document and
+// runs it through Draft07.validate against a schema of hundreds of KB. On the main
+// thread this caused typing freezes. Here the parsing (parseJSON5DocumentState via
+// json5.parse + Lezer tree) and validation run in the worker — the main thread is free.
 //
-// Диагностика считается той же чистой функцией schemaDiagnostics, что и на главном
-// потоке (src/lib/schema-lint.ts), поэтому смещения from/to совпадают с тем, что
-// было раньше. Схему присылает главный поток при смене версии sing-box
-// (setSchema), а lint-запросы шлёт асинхронный линтер в CodeEditor.
+// Diagnostics are computed by the same pure schemaDiagnostics function used on the
+// main thread (src/lib/schema-lint.ts), so the from/to offsets match what they were
+// before. The schema is sent by the main thread when the sing-box version changes
+// (setSchema), and lint requests are issued by the async linter in CodeEditor.
 
 import { EditorState } from '@codemirror/state';
 import type { Diagnostic } from '@codemirror/lint';

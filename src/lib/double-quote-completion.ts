@@ -2,17 +2,18 @@ import type { CompletionContext, CompletionResult } from '@codemirror/autocomple
 import { JSONCompletion } from 'codemirror-json-schema';
 import { json5Completion } from 'codemirror-json-schema/json5';
 
-// Редактор работает в JSON5-режиме — только так CodeMirror понимает комментарии и
-// висячие запятые (то есть JSONC). Но файл на диске — это JSONC/JSON, и одинарных
-// кавычек бэкенд не примет. В режиме JSON5 codemirror-json-schema:
-//   • getInsertTextForString    — оборачивает строки в одинарные кавычки `'…'`;
-//   • getInsertTextForPropertyName — оставляет ключ без кавычек, если ничего не
-//     набрано, и тут же наш jsoncLinter помечает его как ошибку.
-// Перекрываем оба метода на прототипе, чтобы автокомплит всегда выдавал двойные
-// кавычки — единый стандарт для всего конфига.
+// The editor runs in JSON5 mode — that is the only way CodeMirror understands
+// comments and trailing commas (i.e. JSONC). But the file on disk is JSONC/JSON,
+// and the backend will not accept single quotes. In JSON5 mode codemirror-json-schema:
+//   • getInsertTextForString    — wraps strings in single quotes `'…'`;
+//   • getInsertTextForPropertyName — leaves the key unquoted if nothing has been
+//     typed, and our jsoncLinter immediately flags that as an error.
+// We override both methods on the prototype so autocomplete always produces double
+// quotes — a single standard for the whole config.
 //
-// Методы приватные в .d.ts, поэтому лезем через unknown — в собранном JS это обычные
-// методы на прототипе, и экземпляр из json5Completion() их подхватывает.
+// The methods are private in the .d.ts, so we reach in via unknown — in the built JS
+// these are ordinary methods on the prototype, and the instance from json5Completion()
+// picks them up.
 const proto = JSONCompletion.prototype as unknown as {
 	getInsertTextForPropertyName: (key: string) => string;
 	getInsertTextForString: (value: string, prf?: string) => string;
@@ -20,7 +21,7 @@ const proto = JSONCompletion.prototype as unknown as {
 proto.getInsertTextForPropertyName = (key) => `"${key}"`;
 proto.getInsertTextForString = (value, prf = '#') => `"${prf}{${value}}"`;
 
-/** Источник автокомплита от схемы sing-box, всегда с двойными кавычками. */
+/** Autocomplete source backed by the sing-box schema, always with double quotes. */
 export function jsoncCompletion(): (ctx: CompletionContext) => CompletionResult | never[] {
 	return json5Completion();
 }

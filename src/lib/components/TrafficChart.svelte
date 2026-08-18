@@ -1,17 +1,18 @@
 <script lang="ts">
 	import { formatSpeed } from '$lib/format';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { Traffic } from '$lib/types';
 
 	let { history, current }: { history: Traffic[]; current: Traffic } = $props();
 
-	/** Ширина viewBox; растягиваем по контейнеру через preserveAspectRatio. */
+	/** viewBox width; we stretch to the container via preserveAspectRatio. */
 	const W = 100;
 	const H = 24;
 
-	// Шкала общая для обеих серий, иначе скачок вниз выглядел бы как скачок вверх.
+	// Scale is shared by both series, otherwise a downward spike would look like an upward one.
 	const peak = $derived(Math.max(1, ...history.flatMap((point) => [point.up, point.down])));
 
-	/** Линия и область под ней: на 24px высоты один волосок читается хуже пятна. */
+	/** Line and the area beneath it: at 24px height a single hairline reads worse than a filled area. */
 	function shape(pick: (point: Traffic) => number): { line: string; area: string } {
 		if (history.length < 2) return { line: '', area: '' };
 		const step = W / (history.length - 1);
@@ -27,13 +28,13 @@
 
 	const down = $derived(shape((p) => p.down));
 	const up = $derived(shape((p) => p.up));
-	const hint = $derived(`Минута истории, общая шкала обеих серий. Пик ${formatSpeed(peak)}`);
+	const hint = $derived(m.traffic_hint({ peak: formatSpeed(peak) }));
 </script>
 
 <div class="chart card" title={hint}>
 	<div class="series">
 		<span class="value mono"><span class="arrow down">↓</span>{formatSpeed(current.down)}</span>
-		<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="Приём">
+		<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label={m.traffic_download()}>
 			{#if down.line}
 				<path class="area down" d={down.area} />
 				<path class="line down" d={down.line} />
@@ -43,7 +44,7 @@
 
 	<div class="series">
 		<span class="value mono"><span class="arrow up">↑</span>{formatSpeed(current.up)}</span>
-		<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="Отдача">
+		<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label={m.traffic_upload()}>
 			{#if up.line}
 				<path class="area up" d={up.area} />
 				<path class="line up" d={up.line} />
@@ -53,8 +54,8 @@
 </div>
 
 <style>
-	/* Полоса, а не карточка-график: текущая скорость и так есть в статус-строке,
-	   здесь нужна только форма минуты — под неё хватает 24px. */
+	/* A strip, not a chart card: the current speed is already in the status bar,
+	   here we only need the shape of a minute — 24px is enough for that. */
 	.chart {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
@@ -96,7 +97,7 @@
 	path.line {
 		fill: none;
 		stroke-width: 1.5;
-		/* Растянутый viewBox иначе деформировал бы толщину линии. */
+		/* Otherwise the stretched viewBox would deform the line thickness. */
 		vector-effect: non-scaling-stroke;
 		stroke-linejoin: round;
 	}
@@ -121,7 +122,7 @@
 		fill: color-mix(in srgb, var(--good) 18%, transparent);
 	}
 
-	/* Узкое окно: две колонки превращаются в одну строку с двумя парами. */
+	/* Narrow window: two columns become a single row with two pairs. */
 	@media (max-width: 640px) {
 		.chart {
 			grid-template-columns: 1fr;

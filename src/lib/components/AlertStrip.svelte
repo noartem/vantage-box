@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import { dismissAlert, transientAlerts, type AlertSeverity } from '$lib/alerts.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import type { TabId } from '$lib/tabs';
 
@@ -13,9 +14,9 @@
 		action?: { label: string; disabled?: boolean; run: () => void };
 	};
 
-	/** Раньше каждая проблема была отдельным баннером в шапке, и верхняя строка
-	 *  окна прыгала с 33px до 250px. Теперь все они — один список, из которого
-	 *  видна ровно одна запись: высота полосы постоянна, контент не съезжает. */
+	/** Previously each problem was its own banner in the header, and the top row
+	 *  of the window jumped from 33px to 250px. Now they are all one list, of which
+	 *  exactly one entry is visible: the strip's height stays constant, the content does not shift. */
 	const items = $derived.by<Item[]>(() => {
 		const list: Item[] = [];
 
@@ -23,8 +24,8 @@
 			list.push({
 				key: 'settings',
 				severity: 'error',
-				text: `settings.json: ${app.settingsProblem}`,
-				action: { label: 'Настройки', run: () => ongoto('settings') }
+				text: m.alert_settings_problem({ detail: app.settingsProblem }),
+				action: { label: m.tabs_settings(), run: () => ongoto('settings') }
 			});
 		}
 
@@ -32,8 +33,8 @@
 			list.push({
 				key: 'api',
 				severity: 'error',
-				text: `sing-box запущен, но Clash API не отвечает. ${app.status.error}`,
-				action: { label: 'Конфиг', run: () => ongoto('config') }
+				text: m.alert_api_down({ detail: app.status.error }),
+				action: { label: m.tabs_config(), run: () => ongoto('config') }
 			});
 		}
 
@@ -41,8 +42,8 @@
 			list.push({
 				key: 'config',
 				severity: 'error',
-				text: `Не удалось прочитать конфиг: ${app.run.configProblem}`,
-				action: { label: 'Конфиг', run: () => ongoto('config') }
+				text: m.alert_config_read_failed({ detail: app.run.configProblem }),
+				action: { label: m.tabs_config(), run: () => ongoto('config') }
 			});
 		}
 
@@ -51,17 +52,17 @@
 				key: `t${alert.id}`,
 				severity: alert.severity,
 				text: alert.text,
-				action: { label: 'Скрыть', run: () => dismissAlert(alert.id) }
+				action: { label: m.common_hide(), run: () => dismissAlert(alert.id) }
 			});
 		}
 
-		// Конфигу нужен TUN, а служба не установлена — запускать нечем.
+		// The config needs TUN, but the service is not installed — nothing to start it with.
 		if (app.run?.mode === 'process' && app.run.tun) {
 			list.push({
 				key: 'tun',
 				severity: 'warn',
-				text: 'В конфиге есть TUN-инбаунд — ему нужны права администратора. Установите службу.',
-				action: { label: 'Сервис', run: () => ongoto('service') }
+				text: m.alert_tun_admin(),
+				action: { label: m.tabs_service(), run: () => ongoto('service') }
 			});
 		}
 
@@ -69,7 +70,7 @@
 			list.push({
 				key: 'compat',
 				severity: 'warn',
-				text: `Версия sing-box ${app.status.version ?? ''} вне протестированного диапазона: приложение работает, но часть возможностей может вести себя иначе.`
+				text: m.alert_compat_out_of_range({ version: app.status.version ?? '' })
 			});
 		}
 
@@ -77,9 +78,9 @@
 			list.push({
 				key: 'update',
 				severity: 'ok',
-				text: `Доступно обновление Vantage Box ${app.updateAvailable.version}.`,
+				text: m.alert_update_available({ version: app.updateAvailable.version }),
 				action: {
-					label: app.updateInstalling ? 'Устанавливаю…' : 'Обновить',
+					label: app.updateInstalling ? m.alert_installing() : m.alert_update_now(),
 					disabled: app.updateInstalling,
 					run: () => app.installAppUpdate()
 				}
@@ -111,11 +112,11 @@
 		{/if}
 
 		{#if items.length > 1}
-			<button class="icon-btn" aria-label="Предыдущее сообщение" onclick={() => step(-1)}>
+			<button class="icon-btn" aria-label={m.alert_prev()} onclick={() => step(-1)}>
 				<Icon name="chevronLeft" size={12} />
 			</button>
 			<span class="count mono">{position + 1}/{items.length}</span>
-			<button class="icon-btn" aria-label="Следующее сообщение" onclick={() => step(1)}>
+			<button class="icon-btn" aria-label={m.alert_next()} onclick={() => step(1)}>
 				<Icon name="chevronRight" size={12} />
 			</button>
 		{/if}
@@ -145,13 +146,13 @@
 		background: color-mix(in srgb, var(--good) 12%, var(--bg));
 	}
 
-	/* Текст занимает всё свободное место и обрезается; целиком он есть в title —
-	   так строка не может вырасти во вторую. */
+	/* The text takes all free space and is truncated; the full text is in title —
+	   so the row can never grow a second line. */
 	.text {
 		flex: 1;
 	}
 
-	/* Кнопка внутри полосы ниже обычной: 22px не влезают в 24px строку. */
+	/* The button inside the strip is shorter than usual: 22px does not fit a 24px row. */
 	.act {
 		height: 18px;
 		padding: 0 var(--sp-3);

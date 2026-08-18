@@ -2,6 +2,7 @@
 	import { api, errorText } from '$lib/api';
 	import { pushAlert } from '$lib/alerts.svelte';
 	import { delayTone, formatDelay } from '$lib/format';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { GroupView } from '$lib/types';
 	import Icon from './Icon.svelte';
 
@@ -11,14 +12,14 @@
 		onjump
 	}: {
 		group: GroupView;
-		/** Просим родителя перечитать /proxies — состояние держит sing-box, не мы. */
+		/** Ask the parent to re-read /proxies — sing-box holds the state, not us. */
 		onchanged: () => Promise<void>;
-		/** Перейти к карточке вложенной группы. */
+		/** Jump to a nested group's card. */
 		onjump: (name: string) => void;
 	} = $props();
 
-	/** Порог, после которого список без поиска перестаёт быть списком. Подписки
-	 *  легко приносят полсотни узлов в одну группу. */
+	/** Threshold past which a list without search stops being a list. Subscriptions
+	 *  easily bring half a hundred nodes into a single group. */
 	const FILTER_FROM = 12;
 
 	let pending = $state<string | null>(null);
@@ -56,7 +57,7 @@
 		}
 	}
 
-	/** Перепроверить один узел, не гоняя всю группу: правый клик по строке. */
+	/** Re-test a single node without running the whole group: right-click on a row. */
 	async function testOne(event: MouseEvent, name: string) {
 		event.preventDefault();
 		if (pending !== null) return;
@@ -77,13 +78,13 @@
 		<h3 class="ell" title={group.name}>{group.name}</h3>
 		<span class="chip">{group.kind}</span>
 		{#if !group.selectable}
-			<span class="chip" title="Выбор внутри этой группы sing-box делает сам">авто</span>
+			<span class="chip" title={m.group_auto_title()}>{m.group_auto()}</span>
 		{/if}
 		<span class="spacer"></span>
 		<button
 			class="icon-btn"
-			title={testing ? 'Проверяю задержку…' : 'Проверить задержку всех узлов'}
-			aria-label="Проверить задержку"
+			title={testing ? m.group_testing_title() : m.group_test_title()}
+			aria-label={m.group_test_label()}
 			disabled={testing}
 			onclick={testGroup}
 		>
@@ -92,15 +93,15 @@
 	</header>
 
 	{#if group.now}
-		<div class="now ell" title="Текущий узел: {group.now}">{group.now}</div>
+		<div class="now ell" title={m.group_now_label({ node: group.now })}>{group.now}</div>
 	{/if}
 
 	{#if group.items.length >= FILTER_FROM}
 		<input
 			class="grow"
 			type="search"
-			placeholder="Фильтр по имени…"
-			aria-label="Фильтр узлов"
+			placeholder={m.group_filter_placeholder()}
+			aria-label={m.group_filter_label()}
 			bind:value={filter}
 		/>
 	{/if}
@@ -113,13 +114,13 @@
 					disabled={!group.selectable || pending !== null}
 					onclick={() => select(item.name)}
 					oncontextmenu={(event) => testOne(event, item.name)}
-					title="{item.kind}&#10;Правый клик — перепроверить задержку"
+					title={`${item.kind}\n${m.group_retest_hint()}`}
 				>
 					{item.name}
 				</button>
 
 				{#if item.udp}
-					<span class="chip" title="Узел поддерживает UDP">UDP</span>
+					<span class="chip" title={m.group_udp_title()}>UDP</span>
 				{/if}
 
 				<span class="delay" data-tone={delayTone(item.delay)}>
@@ -129,8 +130,8 @@
 				{#if item.isGroup}
 					<button
 						class="icon-btn"
-						title="Перейти к группе «{item.name}»"
-						aria-label="Перейти к группе"
+						title={m.group_goto_group_title({ name: item.name })}
+						aria-label={m.group_goto_group_label()}
 						onclick={() => onjump(item.name)}
 					>
 						<Icon name="chevronRight" size={12} />
@@ -138,7 +139,7 @@
 				{/if}
 			</li>
 		{:else}
-			<li class="empty hint">Ничего не найдено</li>
+			<li class="empty hint">{m.group_nothing_found()}</li>
 		{/each}
 	</ul>
 </section>
@@ -160,7 +161,7 @@
 		min-width: 0;
 	}
 
-	/* Текущий узел виден всегда, даже когда список прокручен вниз. */
+	/* The current node is always visible, even when the list is scrolled down. */
 	.now {
 		font-size: var(--fs-sm);
 		color: var(--accent);
@@ -172,8 +173,8 @@
 		padding: 0;
 		display: grid;
 		align-content: start;
-		/* Группа из подписки бывает на полсотни узлов: карточка не должна
-		   растягивать всю страницу. */
+		/* A subscription group can have half a hundred nodes: the card must not
+		   stretch the whole page. */
 		max-height: 264px;
 		overflow-y: auto;
 	}
@@ -185,7 +186,7 @@
 		height: var(--h-row);
 		padding-right: var(--sp-2);
 		border-radius: var(--radius-ctl);
-		/* Полоса слева резервируется всегда, иначе строки при выборе съезжали бы. */
+		/* The left band is always reserved, otherwise rows would shift on selection. */
 		border-left: 2px solid transparent;
 	}
 
@@ -202,7 +203,7 @@
 		justify-content: center;
 	}
 
-	/* Кликабельна вся строка: при 22px промахнуться по тексту слишком легко. */
+	/* The whole row is clickable: at 22px it is too easy to miss the text. */
 	.node {
 		flex: 1;
 		min-width: 0;
@@ -217,7 +218,7 @@
 		border-color: transparent;
 	}
 
-	/* Выключенная кнопка в неизменяемой группе — это индикатор, а не «сломано». */
+	/* A disabled button in a non-editable group is an indicator, not "broken". */
 	.node:disabled {
 		opacity: 1;
 		cursor: default;

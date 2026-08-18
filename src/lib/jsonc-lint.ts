@@ -1,26 +1,28 @@
 import { syntaxTree } from '@codemirror/language';
 import { linter, type Diagnostic } from '@codemirror/lint';
 import type { EditorState } from '@codemirror/state';
+import { m } from '$lib/paraglide/messages.js';
 
 /**
- * Ловит конструкции JSON5, которые не переживёт бэкенд.
+ * Catches JSON5 constructs that the backend will not accept.
  *
- * Редактор работает в режиме JSON5 — только так CodeMirror понимает комментарии и
- * висячие запятые, то есть JSONC. Но JSON5 разрешает заметно больше: одинарные кавычки,
- * ключи без кавычек, `Infinity`, hex-числа. Разбор на стороне Rust — это
- * `strip_jsonc()` (снимает только комментарии и висячие запятые) плюс `serde_json`,
- * и всё перечисленное он отвергнет.
+ * The editor runs in JSON5 mode — that is the only way CodeMirror understands
+ * comments and trailing commas, i.e. JSONC. But JSON5 permits noticeably more:
+ * single quotes, unquoted keys, `Infinity`, hex numbers. Parsing on the Rust side is
+ * `strip_jsonc()` (strips only comments and trailing commas) plus `serde_json`,
+ * and it rejects all of the above.
  *
- * Без этой проверки редактор был бы добрее бэкенда: подсветка чистая, а сохранение
- * падает с «некорректный JSON». Поэтому помечаем такое сразу.
+ * Without this check the editor would be more lenient than the backend: the
+ * highlighting is clean, but saving fails with "invalid JSON". So we flag such
+ * constructs up front.
  */
 
 const HEX_OR_SIGNED = /^[+]|^0[xX]|^\.|\.$/;
 const NOT_JSON = new Set(['Infinity', '-Infinity', '+Infinity', 'NaN', '-NaN', '+NaN']);
 
 /**
- * Отдельно от `linter()`, потому что так проверяется без DOM — хватает EditorState
- * (см. scripts/verify-jsonc-lint.mjs).
+ * Separate from `linter()` so it can be checked without a DOM — an EditorState is
+ * enough (see scripts/verify-jsonc-lint.mjs).
  */
 export function jsoncDiagnostics(state: EditorState): Diagnostic[] {
 	const diagnostics: Diagnostic[] = [];
@@ -36,14 +38,14 @@ export function jsoncDiagnostics(state: EditorState): Diagnostic[] {
 							from: node.from,
 							to: node.to,
 							severity: 'error',
-							message: 'Ключ в одинарных кавычках — это JSON5. sing-box и serde ждут двойные кавычки.'
+							message: m.jsonc_single_quote_key()
 						});
 					} else if (!raw.startsWith('"')) {
 						diagnostics.push({
 							from: node.from,
 							to: node.to,
 							severity: 'error',
-							message: 'Ключ без кавычек — это JSON5. Оберните имя в двойные кавычки.'
+							message: m.jsonc_unquoted_key()
 						});
 					}
 					break;
@@ -54,7 +56,7 @@ export function jsoncDiagnostics(state: EditorState): Diagnostic[] {
 							from: node.from,
 							to: node.to,
 							severity: 'error',
-							message: 'Строка в одинарных кавычках — это JSON5. Нужны двойные кавычки.'
+							message: m.jsonc_single_quote_string()
 						});
 					}
 					break;
@@ -66,14 +68,14 @@ export function jsoncDiagnostics(state: EditorState): Diagnostic[] {
 							from: node.from,
 							to: node.to,
 							severity: 'error',
-							message: `\`${raw}\` в JSON не существует — уберите или замените числом.`
+							message: m.jsonc_invalid_token({ raw })
 						});
 					} else if (HEX_OR_SIGNED.test(raw)) {
 						diagnostics.push({
 							from: node.from,
 							to: node.to,
 							severity: 'error',
-							message: `Запись \`${raw}\` — это JSON5. Нужно обычное десятичное число, например 1.5 вместо .5.`
+							message: m.jsonc_json5_number({ raw })
 						});
 					}
 					break;

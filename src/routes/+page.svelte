@@ -16,27 +16,27 @@
 	import SettingsView from '$lib/views/SettingsView.svelte';
 	import SubscriptionsView from '$lib/views/SubscriptionsView.svelte';
 
-	// Попап открывается тем же бандлом во втором окне. Различаем окна по метке,
-	// а не по адресу: любой путь или query увёл бы SvelteKit на несуществующий
-	// маршрут и вместо попапа показал бы 404.
+	// The popup is opened by the same bundle in a second window. We tell windows
+	// apart by label, not by URL: any path or query would send SvelteKit to a
+	// nonexistent route and show a 404 instead of the popup.
 	const isPopup = currentWindowLabel() === 'popup';
 
 	function currentWindowLabel(): string {
 		try {
 			return getCurrentWindow().label;
 		} catch {
-			// Открыли в обычном браузере — значит, это главное окно.
+			// Opened in a regular browser — so this is the main window.
 			return 'main';
 		}
 	}
 
-	/** Вкладка переживает перезапуск: приложение открывают ради того, на чём
-	 *  остановились, а не ради дашборда. */
+	/** The tab survives a restart: the app is opened for what we stopped on,
+	 *  not for the dashboard. */
 	const initialTab = loadTab();
 	let tab = $state<TabId>(initialTab);
-	/** Какие вкладки уже открывали. Компонент монтируется при первом открытии и
-	 *  остаётся в DOM до закрытия окна — поэтому повторные переходы не мигают
-	 *  пустой загрузкой и не сбрасывают состояние (фильтры, черновики, прокрутку). */
+	/** Which tabs have already been opened. A component mounts on first open and
+	 *  stays in the DOM until the window closes — so re-entering does not flash
+	 *  an empty loader and does not reset state (filters, drafts, scroll). */
 	let opened = $state<Record<string, boolean>>({ [initialTab]: true });
 
 	function goto(next: TabId) {
@@ -45,16 +45,16 @@
 		opened[next] = true;
 	}
 
-	/** Ctrl+1…7 — вкладки по порядку, как в браузере. Ctrl+Tab / Ctrl+Shift+Tab —
-	 *  циклический переход по вкладкам вперёд и назад. Ctrl+Alt+S — настройки.
-	 *  Запись хоткея в настройках перехватывает нажатие раньше нас и гасит его —
-	 *  уважаем это. */
+	/** Ctrl+1…7 — tabs in order, like in a browser. Ctrl+Tab / Ctrl+Shift+Tab —
+	 *  cycle through tabs forward and back. Ctrl+Alt+S — settings.
+	 *  Hotkey recording in settings intercepts the press before us and cancels it —
+	 *  we respect that. */
 	function onKeydown(event: KeyboardEvent) {
 		if (isPopup || event.defaultPrevented) return;
 		if (!event.ctrlKey) return;
 
-		// Ctrl+Alt+S — настройки. Проверяем до общего отсева по Alt, иначе этот
-		//  хоткей никогда не дойдёт до дела.
+		// Ctrl+Alt+S — settings. Check before the general Alt filter, otherwise
+		// this hotkey never takes effect.
 		if (event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
 			event.preventDefault();
 			goto('settings');
@@ -72,8 +72,8 @@
 			return;
 		}
 
-		// Ctrl+Shift+W — закрыть окно. close() идёт через CloseRequested, поэтому
-		// настройка «сворачивать в трей» продолжает работать.
+		// Ctrl+Shift+W — close the window. close() goes through CloseRequested, so
+		// the "minimize to tray" setting keeps working.
 		if (event.shiftKey && event.code === 'KeyW') {
 			event.preventDefault();
 			getCurrentWindow().close();
@@ -88,7 +88,7 @@
 	}
 
 	onMount(() => {
-		// Попапу общее состояние не нужно: он сам ходит за списком групп.
+		// The popup does not need the shared state: it fetches the group list itself.
 		if (!isPopup) app.start();
 	});
 </script>
@@ -98,15 +98,15 @@
 {#if isPopup}
 	<ProxyPopup />
 {:else}
-	<!-- Окно без нативной рамки: заголовок, вкладки и кнопки управления — одна
-		 полоса в 32px. Строка алертов между ней и контентом либо занимает ровно
-		 24px, либо не существует, поэтому контент никогда не съезжает. -->
+	<!-- Frameless window: title, tabs and window controls are one 32px strip.
+		 The alert row between it and the content either takes exactly 24px or does
+		 not exist, so the content never shifts. -->
 	<div class="shell">
 		<TitleBar {tab} ontab={goto} />
 
-		<!-- Обёртка обязательна: без алертов AlertStrip не рисует ни одного узла, и
-			 тогда строки сетки съезжают — статус-строка попадает в растягивающийся
-			 ряд вместо нижнего. Пустой div честно занимает свои 0px. -->
+		<!-- The wrapper is required: with no alerts AlertStrip renders no nodes,
+			 and then the grid rows shift — the status bar lands in the stretching
+			 row instead of the bottom one. An empty div honestly takes its 0px. -->
 		<div class="alerts">
 			<AlertStrip ongoto={goto} />
 		</div>
@@ -114,9 +114,9 @@
 		<main>
 			{#each TABS as t (t.id)}
 				{#if opened[t.id]}
-					<!-- Не {#if tab === ...}: иначе переключение разрушает вкладку и
-						 строит заново — отсюда мигание пустым и потеря состояния.
-						 Скрываем CSS-классом, узлы остаются живыми. -->
+					<!-- Not {#if tab === ...}: otherwise switching destroys the tab and
+						 rebuilds it — hence the empty flash and the lost state.
+						 We hide via a CSS class; the nodes stay alive. -->
 					<div class="panel" class:hidden={tab !== t.id} aria-hidden={tab !== t.id}>
 						{#if t.id === 'dashboard'}
 							<Dashboard ongoto={goto} active={tab === 'dashboard'} />
@@ -141,7 +141,7 @@
 		<StatusBar />
 	</div>
 
-	<!-- Онбординг первого запуска: поверх всего, пока не выбраны бинарник и конфиг. -->
+	<!-- First-run onboarding: on top of everything until a binary and config are chosen. -->
 	{#if app.needsOnboarding}<Onboarding />{/if}
 {/if}
 
@@ -162,8 +162,9 @@
 		padding: var(--sp-4);
 	}
 
-	/* Каждая вкладка-панель заполняет main; скрытые убраны из раскладки, но узлы
-	   живы. height: 100% нужен видам с собственной прокруткой (соединения, логи). */
+	/* Each tab panel fills main; hidden ones are taken out of layout but the
+	   nodes stay alive. height: 100% is needed by views with their own scroll
+	   (connections, logs). */
 	.panel {
 		height: 100%;
 		min-height: 0;

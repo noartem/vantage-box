@@ -2,29 +2,30 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import { formatTime } from '$lib/format';
 	import { app } from '$lib/state.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 	import type { LogEntry } from '$lib/types';
 
-	/** Активна ли вкладка. После >5 мин отсутствия возврат сбрасывает ленту
-	 *  к свежему хвосту — иначе пользователь возвращается к позиции, где стоял
-	 *  полчаса назад, среди уже устаревших строк. */
+	/** Whether the tab is active. After >5 min away, returning resets the feed
+	 *  to the fresh tail — otherwise the user comes back to the position they
+	 *  were at half an hour ago, among already-stale lines. */
 	let { active = true }: { active?: boolean } = $props();
 
-	/** Порядок важности: фильтр показывает выбранный уровень и всё, что выше. */
+	/** Importance order: the filter shows the selected level and everything above it. */
 	const LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
 
-	/** Должна совпадать с --h-row: на ней стоит арифметика виртуализации. */
+	/** Must match --h-row: the virtualization arithmetic rests on it. */
 	const ROW = 22;
 	const OVERSCAN = 12;
 
 	let minLevel = $state<(typeof LEVELS)[number]>('trace');
 	let query = $state('');
 	let copied = $state(false);
-	/** Перенос длинных сообщений. Ценой отключения виртуализации: строки
-	 *  переменной высоты нельзя разложить по фиксированной сетке. */
+	/** Wrap long messages. At the cost of disabling virtualization: rows of
+	 *  variable height cannot be laid out on a fixed grid. */
 	let wrap = $state(false);
 
 	let viewport = $state<HTMLDivElement | null>(null);
-	/** Автопрокрутка только пока пользователь сам не отлистал вверх. */
+	/** Auto-scroll only while the user has not scrolled up themselves. */
 	let stickToBottom = $state(true);
 	let scrollTop = $state(0);
 	let viewportHeight = $state(0);
@@ -41,8 +42,8 @@
 			: []
 	);
 
-	// В DOM держим только видимое окно: лента упирается в потолок 2000 записей,
-	// и раньше все 2000 узлов существовали одновременно.
+	// Keep only the visible window in the DOM: the feed is capped at 2000 entries,
+	// and previously all 2000 nodes existed at once.
 	const first = $derived(wrap ? 0 : Math.max(0, Math.floor(scrollTop / ROW) - OVERSCAN));
 	const count = $derived(
 		wrap ? visible.length : Math.ceil(viewportHeight / ROW) + OVERSCAN * 2
@@ -53,7 +54,7 @@
 
 	function rank(level: string): number {
 		const index = LEVELS.indexOf(level.toLowerCase() as (typeof LEVELS)[number]);
-		// Незнакомый уровень не должен пропадать из ленты — считаем его важным.
+		// An unknown level must not disappear from the feed — treat it as important.
 		return index === -1 ? LEVELS.length : index;
 	}
 
@@ -65,7 +66,7 @@
 	}
 
 	$effect(() => {
-		// Зависимость от visible: перерисовали ленту — доехали до низа.
+		// Depend on visible: repainted the feed — scroll to the bottom.
 		visible.length;
 		if (stickToBottom && viewport) {
 			viewport.scrollTop = viewport.scrollHeight;
@@ -74,11 +75,11 @@
 	});
 
 	// -------------------------------------------------------------------------
-	// Возврат на вкладку после долгого отсутствия
+	// Returning to the tab after a long absence
 	// -------------------------------------------------------------------------
 
-	/** Сколько отсутствовали на вкладке. Plain-переменная, а не $state: её запись
-	 *  не должна перезапускать этот эффект. */
+	/** How long we were away from the tab. A plain variable, not $state: writing
+	 *  it must not retrigger this effect. */
 	const AWAY_RESET_MS = 5 * 60_000;
 	let awaySince: number | null = null;
 
@@ -87,8 +88,8 @@
 			const awayFor = awaySince === null ? 0 : Date.now() - awaySince;
 			awaySince = null;
 			if (awayFor > AWAY_RESET_MS) {
-				// Дефолтный режим — свежий хвост внизу. stickToBottom=true
-				// запускает автопрокрутку выше.
+				// Default mode — the fresh tail at the bottom. stickToBottom=true
+				// triggers the auto-scroll above.
 				stickToBottom = true;
 			}
 		} else if (awaySince === null) {
@@ -111,7 +112,7 @@
 
 <div class="page">
 	<div class="toolbar">
-		<select bind:value={minLevel} aria-label="Минимальный уровень">
+		<select bind:value={minLevel} aria-label={m.logs_min_level()}>
 			{#each LEVELS as level (level)}
 				<option value={level}>{level}</option>
 			{/each}
@@ -120,16 +121,16 @@
 		<input
 			class="grow"
 			type="search"
-			placeholder="поиск по сообщению"
-			aria-label="Поиск по сообщению"
+			placeholder={m.logs_search_placeholder()}
+			aria-label={m.logs_search_placeholder()}
 			bind:value={query}
 		/>
 
 		<button
 			class="icon-btn"
 			class:on={app.logsPaused}
-			title={app.logsPaused ? 'Продолжить: накопленное появится сразу' : 'Пауза'}
-			aria-label={app.logsPaused ? 'Продолжить' : 'Пауза'}
+			title={app.logsPaused ? m.logs_resume_title() : m.logs_pause()}
+			aria-label={app.logsPaused ? m.common_resume() : m.logs_pause()}
 			onclick={() => app.setLogsPaused(!app.logsPaused)}
 		>
 			<Icon name={app.logsPaused ? 'play' : 'pause'} size={12} fill />
@@ -138,8 +139,8 @@
 		<button
 			class="icon-btn"
 			class:on={wrap}
-			title="Переносить длинные сообщения"
-			aria-label="Переносить длинные сообщения"
+			title={m.logs_wrap_title()}
+			aria-label={m.logs_wrap_title()}
 			onclick={() => (wrap = !wrap)}
 		>
 			<Icon name="logs" size={13} />
@@ -147,8 +148,8 @@
 
 		<button
 			class="icon-btn"
-			title={copied ? 'Скопировано' : 'Скопировать отфильтрованное'}
-			aria-label="Копировать"
+			title={copied ? m.common_copied() : m.logs_copy_filtered()}
+			aria-label={m.common_copy()}
 			disabled={visible.length === 0}
 			onclick={copy}
 		>
@@ -157,8 +158,8 @@
 
 		<button
 			class="icon-btn"
-			title="Очистить ленту"
-			aria-label="Очистить"
+			title={m.logs_clear_title()}
+			aria-label={m.common_clear()}
 			disabled={app.logs.length === 0}
 			onclick={() => app.clearLogs()}
 		>
@@ -166,18 +167,16 @@
 		</button>
 
 		<span class="muted mono counter">
-			{visible.length}/{app.logs.length}{app.logsPaused ? ' · пауза' : ''}
+			{visible.length}/{app.logs.length}{app.logsPaused ? ` · ${m.logs_paused_suffix()}` : ''}
 		</span>
 	</div>
 
 	<div class="viewport card bounce" bind:this={viewport} bind:clientHeight={viewportHeight} onscroll={onScroll}>
 		{#if !active}
-			<!-- вкладка не активна: строки не рисуем -->
+			<!-- tab inactive: do not render rows -->
 		{:else if visible.length === 0}
 			<p class="hint empty">
-				{app.logs.length === 0
-					? 'Логи ещё не приходили. Поток /logs открывается автоматически при связи с sing-box.'
-					: 'Под фильтр ничего не подходит.'}
+				{app.logs.length === 0 ? m.logs_empty() : m.common_no_filter_match()}
 			</p>
 		{:else}
 			<div style:height="{padTop}px"></div>
@@ -210,7 +209,7 @@
 		width: auto;
 	}
 
-	/* Счётчик был отдельной строкой сетки — целая строка окна ради одной цифры. */
+	/* The counter was its own grid row — a whole window row for a single digit. */
 	.counter {
 		font-size: var(--fs-sm);
 		white-space: nowrap;
@@ -226,8 +225,8 @@
 
 	.row {
 		display: grid;
-		/* 80px — ровно под «15:28:58.494» в моноширинном 11px; при 72px метка
-		   времени упиралась в уровень. */
+		/* 80px — exactly fits "15:28:58.494" in monospace 11px; at 72px the
+		   timestamp ran into the level. */
 		grid-template-columns: 80px 40px 1fr;
 		gap: var(--sp-3);
 		align-items: center;

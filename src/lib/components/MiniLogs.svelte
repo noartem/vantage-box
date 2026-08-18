@@ -1,20 +1,21 @@
 <script lang="ts">
 	import { formatTime } from '$lib/format';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import Icon from './Icon.svelte';
 
 	let { onopen, active = true }: { onopen: () => void; active?: boolean } = $props();
 
-	/** Сколько строк держим в панели. Высота карточки от этого числа и считается,
-	 *  поэтому лента не растягивает дашборд по мере поступления логов. */
+	/** How many rows we keep in the panel. The card's height is derived from this
+	 *  number, so the feed does not stretch the dashboard as logs arrive. */
 	const ROWS = 12;
 
-	// Пока вкладка не активна, хвост не пересчитываем: иначе каждый лог-кадр
-	// дёргал бы derived впустую. Высоту блока держит .filled — соседи не прыгают.
+	// While the tab is inactive, do not recompute the tail: otherwise every log
+	// frame would churn the derived for nothing. The block's height is held by .filled — neighbors do not jump.
 	const tail = $derived(active ? app.logs.slice(-ROWS) : []);
 
-	/** Панель узкая: миллисекунды съедали бы четверть строки, а нужны они при
-	 *  разборе гонок — то есть на полной вкладке. */
+	/** The panel is narrow: milliseconds would eat a quarter of a row, and they
+	 *  are needed when debugging races — i.e. on the full tab. */
 	function shortTime(millis: number): string {
 		return formatTime(millis).slice(0, 8);
 	}
@@ -22,13 +23,13 @@
 
 <section class="section">
 	<div class="head">
-		<button class="title" title="Открыть вкладку «Логи»" onclick={onopen}>
-			<span class="section-title">Логи</span>
+		<button class="title" title={m.mini_open_logs_tab()} onclick={onopen}>
+			<span class="section-title">{m.tabs_logs()}</span>
 			<Icon name="external" size={11} />
 		</button>
 
 		<span class="muted mono counter">
-			{app.logs.length}{app.logsPaused ? ' · пауза' : ''}
+			{app.logs.length}{app.logsPaused ? ` · ${m.logs_paused_suffix()}` : ''}
 		</span>
 
 		<span class="spacer"></span>
@@ -36,8 +37,8 @@
 		<button
 			class="icon-btn"
 			class:on={app.logsPaused}
-			title={app.logsPaused ? 'Продолжить: накопленное появится сразу' : 'Пауза'}
-			aria-label={app.logsPaused ? 'Продолжить' : 'Пауза'}
+			title={app.logsPaused ? m.logs_resume_title() : m.logs_pause()}
+			aria-label={app.logsPaused ? m.common_resume() : m.logs_pause()}
 			onclick={() => app.setLogsPaused(!app.logsPaused)}
 		>
 			<Icon name={app.logsPaused ? 'play' : 'pause'} size={12} fill />
@@ -45,8 +46,8 @@
 
 		<button
 			class="icon-btn"
-			title="Очистить ленту"
-			aria-label="Очистить"
+			title={m.logs_clear_title()}
+			aria-label={m.common_clear()}
 			disabled={app.logs.length === 0}
 			onclick={() => app.clearLogs()}
 		>
@@ -54,14 +55,14 @@
 		</button>
 	</div>
 
-	<!-- Высота фиксируется только когда есть что показывать: пустая лента не
-		 должна держать двенадцать строк белого места. filled зависит от наличия
-		 данных, а не от active — скрытый блок держит ту же высоту, что и видимый. -->
+	<!-- Height is fixed only when there is something to show: an empty feed
+		 should not hold twelve rows of whitespace. filled depends on the presence
+		 of data, not on active — a hidden block keeps the same height as a visible one. -->
 	<div class="feed" class:filled={app.logs.length > 0}>
 		{#if !active}
-			<!-- вкладка не активна: строки не рисуем, высоту держит .filled -->
+			<!-- tab inactive: do not render rows, height is held by .filled -->
 		{:else if tail.length === 0}
-			<p class="hint">Логи ещё не приходили.</p>
+			<p class="hint">{m.logs_empty_short()}</p>
 		{:else}
 			{#each tail as entry (entry.id)}
 				<div class="row">
@@ -81,7 +82,7 @@
 		gap: var(--sp-3);
 	}
 
-	/* Заголовок — кнопка перехода, но выглядеть должен подписью секции. */
+	/* The title is a navigation button but should look like a section label. */
 	.title {
 		display: flex;
 		align-items: center;
@@ -113,9 +114,9 @@
 		user-select: text;
 	}
 
-	/* Строки прижаты к низу окна постоянной высоты: пока их меньше ROWS, свежая
-	   всё равно оказывается там, где её ждут, и панель не растёт с каждой новой
-	   записью, дёргая соседей по ряду. */
+	/* Rows are pinned to the bottom of a fixed-height window: while there are
+	   fewer than ROWS, the newest one still lands where expected, and the panel
+	   does not grow with each new entry, jostling its row neighbors. */
 	.feed.filled {
 		height: calc(12 * var(--h-row));
 	}

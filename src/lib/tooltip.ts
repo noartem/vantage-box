@@ -1,15 +1,15 @@
 /**
- * Попап-подсказка, которая сама уходит в `<body>` и позиционируется так, чтобы
- * влезть в окно. Нативный `title` на disabled-кнопке в WebView2 не показывается,
- * а балун внутри разметки clipped бы родителем с `overflow:auto` (так `main`
- * обрезал его за верхом окна).
+ * Tooltip popup that portals itself into `<body>` and positions itself so it fits
+ * in the window. The native `title` is not shown on disabled buttons in WebView2,
+ * and an in-markup balloon would be clipped by a parent with `overflow:auto`
+ * (this is how `main` clipped it past the top of the window).
  *
- * Использование:
+ * Usage:
  *   <span use:tooltip={text ? '…' : ''}>…</span>
  *
- * Пустой текст — подсказки нет: узел не создаётся, hover не блокируется.
- * Позицию считает `position()`: по умолчанию снизу от якоря, не хватило места —
- * сверху; по горизонтали прижимается в окно.
+ * Empty text — no tooltip: no node is created, hover is not blocked.
+ * Position is computed by `position()`: by default below the anchor, and if there
+ * is not enough room — above; horizontally it is clamped into the window.
  */
 export function tooltip(node: HTMLElement, text: string) {
 	let card: HTMLDivElement | null = null;
@@ -26,7 +26,7 @@ export function tooltip(node: HTMLElement, text: string) {
 		card = document.createElement('div');
 		card.className = 'tip-balloon';
 		card.textContent = current;
-		// Сначала opacity:0, чтобы позиционирование не мигнуло.
+		// Start with opacity:0 so positioning does not flash.
 		card.style.opacity = '0';
 		document.body.appendChild(card);
 		position();
@@ -64,7 +64,7 @@ export function tooltip(node: HTMLElement, text: string) {
 		} else if (above >= 0) {
 			top = rect.top - GAP - ch;
 		} else {
-			// Не помещается ни сверху, ни снизу — туда, где места больше, и в окно.
+			// Fits neither above nor below — go where there is more room, clamped into the window.
 			top = vh - below <= -above ? rect.bottom + GAP : rect.top - GAP - ch;
 			top = Math.max(MARGIN, Math.min(top, vh - ch - MARGIN));
 		}
@@ -81,7 +81,7 @@ export function tooltip(node: HTMLElement, text: string) {
 
 	node.addEventListener('mouseenter', onEnter);
 	node.addEventListener('mouseleave', onLeave);
-	// Скролл родителя двигает якорь — перепозиционируем (или прячем, если ушёл).
+	// Parent scroll moves the anchor — reposition (or hide if it has gone away).
 	window.addEventListener('scroll', position, true);
 	window.addEventListener('resize', position);
 

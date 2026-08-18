@@ -2,18 +2,19 @@
 	import { api, errorText } from '$lib/api';
 	import { pushAlert } from '$lib/alerts.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import type { Settings, SubStateEntry, SubscriptionSettings } from '$lib/types';
 
 	let draft = $state<Settings | null>(null);
 	let saving = $state(false);
 	let refreshing = $state(false);
-	/** Состояние подписок из sidecar-файла: время/число узлов/ошибки. */
+	/** Subscription state from the sidecar file: time/node count/errors. */
 	let subState = $state<Record<string, SubStateEntry>>({});
 
 	$effect(() => {
-		// settings.json — источник правды. Правки в файле снаружи перебивают
-		// незасейвленную форму.
+		// settings.json is the source of truth. Edits to the file from outside
+		// override the unsaved form.
 		const current = app.settings;
 		if (current) draft = structuredClone($state.snapshot(current)) as Settings;
 	});
@@ -29,8 +30,8 @@
 		saving = true;
 		try {
 			const next = $state.snapshot(draft) as Settings;
-			// Пустая строка в поле группы означает «во все selector/urltest», а
-			// бэкенд ждёт в этом случае null.
+			// An empty string in the group field means "into all selector/urltest",
+			// and the backend expects null in that case.
 			next.subscriptions = next.subscriptions.map((s) => ({
 				...s,
 				targetGroup: s.targetGroup?.trim() ? s.targetGroup.trim() : null
@@ -68,14 +69,14 @@
 			const state = await api.getSubscriptionState();
 			subState = state.entries ?? {};
 		} catch {
-			// Sidecar-файла может ещё не быть — молча.
+			// The sidecar file may not exist yet — stay silent.
 		}
 	}
 
 	async function refreshNow() {
 		if (!draft) return;
 		if (dirty) {
-			pushAlert('warn', 'Сначала сохраните изменения — обновление читает уже сохранённые подписки.');
+			pushAlert('warn', m.subs_save_first());
 			return;
 		}
 		refreshing = true;
@@ -84,12 +85,10 @@
 			const total = outcome.updates.reduce((n, u) => n + u.nodeCount, 0);
 			const failed = outcome.updates.filter((u) => u.lastError);
 			if (failed.length > 0) {
-				pushAlert('error', `Не удалось обновить: ${failed.map((u) => u.name || u.id).join(', ')}`);
+				pushAlert('error', m.subs_refresh_failed({ names: failed.map((u) => u.name || u.id).join(', ') }));
 			} else {
-				pushAlert(
-					'ok',
-					`Влито узлов: ${total}.${outcome.restarted ? ' sing-box перезапущен.' : ' Конфиг обновлён без перезапуска.'}`
-				);
+				const suffix = outcome.restarted ? m.subs_restarted_suffix() : m.subs_no_restart_suffix();
+				pushAlert('ok', `${m.subs_nodes_poured({ count: total })}${suffix}`);
 			}
 			await loadState();
 		} catch (e) {
@@ -99,7 +98,7 @@
 		}
 	}
 
-	/** Колонка узкая: год и секунды в ней всё равно не нужны. */
+	/** The column is narrow: year and seconds are not needed here anyway. */
 	function fmtTime(ms: number): string {
 		if (!ms) return '—';
 		try {
@@ -120,7 +119,7 @@
 		return entry.nodeCount > 0 ? 'good' : 'none';
 	}
 
-	// Состояние подтягиваем при открытии вкладки и после каждого обновления.
+	// We pull state on tab open and after each refresh.
 	$effect(() => {
 		if (app.settings) loadState();
 	});
@@ -129,37 +128,37 @@
 <div class="page">
 	{#if draft}
 		<div class="toolbar">
-			<span class="count">{draft.subscriptions.length} подписок</span>
+			<span class="count">{m.subs_count({ count: draft.subscriptions.length })}</span>
 			<span
 				class="hint ell"
-				title="URL может отдавать конфиг sing-box с outbounds, голый массив outbound'ов или base64-список ss:// vmess:// vless:// trojan:// hysteria2:// tuic://"
+				title={m.subs_url_hint()}
 			>
-				URL отдаёт sing-box JSON или base64-список URI
+				{m.subs_url_short()}
 			</span>
 			<span class="spacer"></span>
 			<button onclick={add}>
 				<Icon name="plus" size={12} />
-				Добавить
+				{m.subs_add()}
 			</button>
 			<button class="primary" onclick={refreshNow} disabled={refreshing}>
-				{refreshing ? 'Обновляю…' : 'Обновить сейчас'}
+				{refreshing ? m.subs_refreshing() : m.subs_refresh_now()}
 			</button>
 		</div>
 
 		{#if draft.subscriptions.length === 0}
-			<p class="hint">Подписок нет. «Добавить» создаёт новую — впишите URL, имя и группу.</p>
+			<p class="hint">{m.subs_empty()}</p>
 		{:else}
-			<!-- Строки редактируются прямо в таблице: раньше каждая подписка была
-				 карточкой на пять строк-лейблов, то есть ~230px под четыре поля. -->
+			<!-- Rows are edited right in the table: previously each subscription was
+				 a card with five label rows, i.e. ~230px for four fields. -->
 			<div class="table card">
 				<div class="row head">
-					<span title="Подписка учитывается при обновлении"></span>
-					<span>Имя</span>
+					<span title={m.subs_enabled_hint()}></span>
+					<span>{m.common_name()}</span>
 					<span>URL</span>
-					<span title="Пусто — узлы уйдут во все selector/urltest-группы">Группа</span>
-					<span class="right" title="Интервал автообновления в часах">Ч</span>
-					<span class="right">Узлов</span>
-					<span>Обновлено</span>
+					<span title={m.subs_group_hint()}>{m.subs_group()}</span>
+					<span class="right" title={m.subs_interval_hint()}>{m.subs_interval_h()}</span>
+					<span class="right">{m.subs_nodes()}</span>
+					<span>{m.subs_updated()}</span>
 					<span></span>
 					<span></span>
 				</div>
@@ -167,13 +166,13 @@
 				{#each draft.subscriptions as sub (sub.id)}
 					{@const st = subState[sub.id]}
 					<div class="row">
-						<input type="checkbox" bind:checked={sub.enabled} aria-label="Включена" />
-						<input bind:value={sub.name} placeholder="имя" aria-label="Имя" />
+						<input type="checkbox" bind:checked={sub.enabled} aria-label={m.subs_enabled_label()} />
+						<input bind:value={sub.name} placeholder={m.subs_name_placeholder()} aria-label={m.common_name()} />
 						<input bind:value={sub.url} placeholder="https://…/sub" aria-label="URL" />
 						<input
 							bind:value={sub.targetGroup}
-							placeholder="все группы"
-							aria-label="Целевая группа"
+							placeholder={m.subs_group_placeholder()}
+							aria-label={m.subs_target_group()}
 						/>
 						<input
 							class="num"
@@ -181,19 +180,19 @@
 							min="1"
 							max="168"
 							bind:value={sub.updateInterval}
-							aria-label="Интервал обновления, часов"
+							aria-label={m.subs_interval_label()}
 						/>
 						<span class="mono right muted">{st ? st.nodeCount : '—'}</span>
 						<span class="mono muted ell">{st ? fmtTime(st.lastUpdated) : '—'}</span>
 						<span
 							class="dot"
 							data-tone={tone(st)}
-							title={st?.lastError ?? (st ? `узлов: ${st.nodeCount}` : 'ещё не обновлялась')}
+							title={st?.lastError ?? (st ? m.subs_nodes_count({ count: st.nodeCount }) : m.subs_not_refreshed())}
 						></span>
 						<button
 							class="icon-btn"
-							title="Удалить подписку"
-							aria-label="Удалить подписку"
+							title={m.subs_delete_title()}
+							aria-label={m.subs_delete_title()}
 							onclick={() => remove(sub.id)}
 						>
 							<Icon name="trash" size={12} />
@@ -204,20 +203,20 @@
 		{/if}
 
 		<p class="hint">
-			Узлы вливаются в config.json под тегами <code class="inline">sub:</code> и дописываются в
-			целевые группы; при обновлении старые снимаются, поэтому дубликатов не возникает.
-			Комментарии в config.json не сохраняются — как и в редакторе конфига.
+			{m.subs_hint_pre()}
+			<code class="inline">sub:</code>
+			{m.subs_hint_post()}
 		</p>
 
 		<div class="sticky-footer">
 			<button class="primary" onclick={save} disabled={!dirty || saving}>
-				{saving ? 'Сохраняю…' : 'Сохранить'}
+				{saving ? m.common_saving() : m.common_save()}
 			</button>
-			<button onclick={() => app.refreshSettings()} disabled={!dirty || saving}>Отменить</button>
-			{#if dirty}<span class="hint">есть несохранённые изменения</span>{/if}
+			<button onclick={() => app.refreshSettings()} disabled={!dirty || saving}>{m.common_cancel()}</button>
+			{#if dirty}<span class="hint">{m.common_unsaved_changes()}</span>{/if}
 		</div>
 	{:else}
-		<p class="hint">Загружаю настройки…</p>
+		<p class="hint">{m.common_loading_settings()}</p>
 	{/if}
 </div>
 
@@ -284,8 +283,8 @@
 		border-color: transparent;
 	}
 
-	/* Поле выглядит текстом, пока в него не целятся: таблица должна читаться
-	   как таблица, а не как форма из девяти рамок в каждой строке. */
+	/* A field looks like text until it is focused: the table should read as a
+	   table, not as a form with nine borders in every row. */
 	.row input:not([type='checkbox']):hover,
 	.row input:not([type='checkbox']):focus {
 		background: var(--surface-alt);

@@ -5,6 +5,7 @@
 	import { pushAlert } from '$lib/alerts.svelte';
 	import CodeEditor, { type EditorDiagnostic } from '$lib/components/CodeEditor.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import type { CheckResult } from '$lib/types';
 
@@ -13,20 +14,20 @@
 	let loaded = $state(false);
 	let busy = $state<string | null>(null);
 	let check = $state<CheckResult | null>(null);
-	/** Показывается после успешного сохранения: sing-box читает конфиг только при старте. */
+	/** Shown after a successful save: sing-box reads the config only at startup. */
 	let needsRestart = $state(false);
 	let showOutput = $state(false);
 
-	/** Диагностики редактора (схема + JSON5-линтер) — для чипа и списка ошибок. */
+	/** Editor diagnostics (schema + JSON5 linter) — for the chip and the error list. */
 	let diags = $state<EditorDiagnostic[]>([]);
 	let showErrors = $state(false);
-	/** Ссылка на редактор, чтобы прыгать к строке из списка ошибок. */
+	/** Reference to the editor, to jump to a line from the error list. */
 	let editor = $state<{ jumpTo: (from: number, to: number) => void } | null>(null);
 
 	const path = $derived((app.settings?.singBox.configPath ?? '').trim());
 	const dirty = $derived(content !== saved);
 
-	/** Есть ли реальные ошибки значений — те, что не отсеяны как версионный шум. */
+	/** Whether there are real value errors — those not filtered out as version noise. */
 	const errorCount = $derived(diags.filter((d) => d.severity === 'error').length);
 
 	function goto(diag: EditorDiagnostic) {
@@ -40,31 +41,29 @@
 		action?: { label: string; run: () => void };
 	};
 
-	/** Раньше над редактором могли выстроиться четыре баннера сразу и съесть
-	 *  треть его высоты. Показываем самое срочное одной строкой. */
+	/** Previously up to four banners could stack above the editor at once and
+	 *  eat a third of its height. We show the most urgent one in a single line. */
 	const notice = $derived.by<Notice | null>(() => {
 		if (check && !check.ok) {
-			return { tone: 'error', text: `Конфиг не прошёл проверку: ${firstLine(check.output)}` };
+			return { tone: 'error', text: m.config_check_failed({ output: firstLine(check.output) }) };
 		}
 		if (app.configChangedExternally) {
 			return {
 				tone: 'warn',
-				text: dirty
-					? 'Файл изменился вне Vantage Box — несохранённые правки будут потеряны.'
-					: 'Файл изменился вне Vantage Box.',
-				action: { label: 'Перечитать', run: load }
+				text: dirty ? m.config_changed_externally_dirty() : m.config_changed_externally(),
+				action: { label: m.config_reload(), run: load }
 			};
 		}
 		if (needsRestart) {
 			return {
 				tone: 'warn',
-				text: 'Конфиг сохранён. sing-box читает его только при запуске — нужен перезапуск.'
+				text: m.config_saved_restart()
 			};
 		}
 		if (check?.ok) {
 			return {
 				tone: 'ok',
-				text: check.available ? 'sing-box check: конфиг корректен.' : `JSON корректен. ${check.output}`
+				text: check.available ? m.config_check_ok() : m.config_json_ok({ output: check.output })
 			};
 		}
 		return null;
@@ -106,8 +105,8 @@
 	}
 
 	async function save() {
-		// Проверяем до записи: испорченный config.json ломает следующий запуск
-		// sing-box, а откатываться потом придётся руками.
+		// Validate before writing: a broken config.json breaks the next sing-box
+		// startup, and rolling back afterward would have to be done by hand.
 		const result = await validate();
 		if (!result || !result.ok) return;
 
@@ -132,17 +131,17 @@
 	}
 
 	$effect(() => {
-		// Перечитываем при смене пути в настройках.
+		// Re-read when the path in settings changes.
 		path;
 		if (path) load();
 	});
 
 	$effect(() => {
-		// Файл изменился вне приложения. Перечитываем его, чтобы синхронизировать
-		// `saved` с реальным содержимым диска — тогда чип «не сохранено» точнее
-		// отражает расхождение. Если на диске оказалось то же, что в редакторе,
-		// расхождения нет: гасим флаг, и чип с баннером уходят.
-		// `content` читаем через untrack — иначе эффект зависел бы от каждого нажатия.
+		// The file changed outside the app. Re-read it to sync `saved` with the
+		// actual on-disk content — then the "not saved" chip reflects the
+		// discrepancy more accurately. If the disk content equals the editor
+		// content, there is no discrepancy: clear the flag, and the chip and banner go away.
+		// `content` is read via untrack — otherwise the effect would depend on every keystroke.
 		const ext = app.configChangedExternally;
 		if (!ext) return;
 		void (async () => {
@@ -151,7 +150,7 @@
 				saved = text;
 				if (text === untrack(() => content)) app.configChangedExternally = null;
 			} catch {
-				// Не вышло прочитать — оставляем уведомление как есть.
+				// Could not read — leave the notification as is.
 			}
 		})();
 	});
@@ -160,29 +159,30 @@
 <div class="page">
 	{#if !path}
 		<p class="hint">
-			Путь к <code class="inline">config.json</code> sing-box не задан. Укажите его в настройках,
-			раздел «sing-box».
+			{m.config_path_missing_pre()}
+			<code class="inline">config.json</code>
+			{m.config_path_missing_post()}
 		</p>
 	{:else}
-		<!-- Панель строго в одну строку: раньше длинный путь с word-break ломал её
-			 на две и двигал редактор вниз. -->
+		<!-- The bar stays on a single line: previously a long path with word-break
+			 wrapped it onto two and shifted the editor down. -->
 		<div class="toolbar">
 			<code class="path ell selectable" title={path}>{path}</code>
 
-			{#if dirty}<span class="chip" data-tone="fair">не сохранено</span>{/if}
+			{#if dirty}<span class="chip" data-tone="fair">{m.config_not_saved()}</span>{/if}
 
 			{#if errorCount > 0}
-				<!-- Чип-триггер: открывает список ошибок редактора, клик по строке прыгает к ней. -->
+				<!-- Trigger chip: opens the editor error list, clicking a row jumps to it. -->
 				<button
 					class="chip err-chip"
 					data-tone="poor"
 					data-open={showErrors}
 					aria-expanded={showErrors}
 					onclick={() => (showErrors = !showErrors)}
-					title="Ошибки редактора"
+					title={m.config_editor_errors_title()}
 				>
 					<Icon name="alert" size={13} />
-					Ошибки: {errorCount}
+					{m.config_errors_label()}: {errorCount}
 				</button>
 			{/if}
 
@@ -190,8 +190,8 @@
 
 			<button
 				class="icon-btn"
-				title="Проверить через sing-box check"
-				aria-label="Проверить"
+				title={m.config_check_title()}
+				aria-label={m.config_check_label()}
 				disabled={busy !== null || !loaded}
 				onclick={validate}
 			>
@@ -199,8 +199,8 @@
 			</button>
 			<button
 				class="icon-btn"
-				title="Перечитать файл с диска"
-				aria-label="Перечитать"
+				title={m.config_reload_disk_title()}
+				aria-label={m.config_reload()}
 				disabled={busy !== null}
 				onclick={load}
 			>
@@ -208,8 +208,8 @@
 			</button>
 			<button
 				class="icon-btn"
-				title="Открыть во внешнем редакторе"
-				aria-label="Открыть во внешнем редакторе"
+				title={m.config_open_external_title()}
+				aria-label={m.config_open_external_title()}
 				disabled={busy !== null}
 				onclick={() => guard(() => openPath(path))}
 			>
@@ -217,8 +217,8 @@
 			</button>
 			<button
 				class="icon-btn"
-				title="Показать в папке"
-				aria-label="Показать в папке"
+				title={m.common_show_in_folder()}
+				aria-label={m.common_show_in_folder()}
 				disabled={busy !== null}
 				onclick={() => guard(() => revealItemInDir(path))}
 			>
@@ -226,15 +226,15 @@
 			</button>
 			<button
 				class="icon-btn"
-				title="Документация sing-box"
-				aria-label="Документация sing-box"
+				title={m.config_docs_title()}
+				aria-label={m.config_docs_title()}
 				disabled={busy !== null}
 				onclick={() => guard(() => openPath('https://sing-box.sagernet.org/configuration/'))}
 			>
 				<Icon name="book" size={13} />
 			</button>
 			<button class="primary" onclick={save} disabled={busy !== null || !loaded || !dirty}>
-				{busy === 'save' ? 'Сохраняю…' : busy === 'check' ? 'Проверяю…' : 'Сохранить'}
+				{busy === 'save' ? m.common_saving() : busy === 'check' ? m.config_checking() : m.common_save()}
 			</button>
 		</div>
 
@@ -247,7 +247,7 @@
 				{/if}
 				{#if check && !check.ok}
 					<button class="act" onclick={() => (showOutput = !showOutput)}>
-						{showOutput ? 'Свернуть' : 'Подробно'}
+						{showOutput ? m.common_collapse() : m.common_details()}
 					</button>
 				{/if}
 			</div>
@@ -271,7 +271,7 @@
 					}}
 					ondiagnostics={(next) => {
 						diags = next;
-						// Если ошибки схлопнулись — закрываем попап, чтобы не висел пустым.
+						// If errors collapsed — close the popup so it does not hang empty.
 						if (next.length === 0) showErrors = false;
 					}}
 					onsave={save}
@@ -280,10 +280,10 @@
 				{#if showErrors && diags.length > 0}
 					<div class="err-popup card">
 						<div class="err-head">
-							<span>Ошибки редактора: {diags.length}</span>
+							<span>{m.config_editor_errors_title()}: {diags.length}</span>
 							<button
 								class="act"
-								aria-label="Закрыть список"
+								aria-label={m.config_close_list()}
 								onclick={() => (showErrors = false)}
 							>
 								✕
@@ -305,8 +305,8 @@
 </div>
 
 <style>
-	/* Flex, а не grid: строка результата то есть, то нет, и привязывать редактор
-	   к конкретной строке сетки было бы хрупко. */
+	/* Flex, not grid: the result row comes and goes, and pinning the editor to
+	   a specific grid row would be fragile. */
 	.page {
 		display: flex;
 		flex-direction: column;
@@ -377,7 +377,7 @@
 		flex-shrink: 0;
 	}
 
-	/* Только редактор растягивается; всё остальное — по содержимому. */
+	/* Only the editor stretches; everything else sizes to content. */
 	.editor-wrap {
 		position: relative;
 		flex: 1;
@@ -391,7 +391,7 @@
 		min-width: 0;
 	}
 
-	/* Чип-триггер списка ошибок: кнопке сбрасываем рамку, остальное берёт .chip. */
+	/* Trigger chip for the error list: the button drops its border, the rest comes from .chip. */
 	.err-chip {
 		gap: var(--sp-1);
 		border: none;
@@ -403,7 +403,7 @@
 		outline: 1px solid currentcolor;
 	}
 
-	/* Попап со списком ошибок: висит в правом верхнем углу редактора. */
+	/* Error-list popup: sits in the top-right corner of the editor. */
 	.err-popup {
 		position: absolute;
 		top: var(--sp-2);

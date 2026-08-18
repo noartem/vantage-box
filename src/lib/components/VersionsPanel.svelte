@@ -2,27 +2,30 @@
 	import { api, errorText } from '$lib/api';
 	import { pushAlert } from '$lib/alerts.svelte';
 	import { formatBytes } from '$lib/format';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import type { InstallOutcome, ReleaseCatalog, ReleaseInfo } from '$lib/types';
 	import Icon from './Icon.svelte';
 
-	const COMPAT_LABELS: Record<string, string> = {
-		supported: 'в диапазоне',
-		tooNew: 'новее',
-		tooOld: 'старее',
-		unknown: '—'
+	/** Compatibility labels — lazy functions: m.x() reads the locale at call time,
+	 *  not at module load. Callers invoke COMPAT_LABELS[key](). */
+	const COMPAT_LABELS: Record<string, () => string> = {
+		supported: () => m.versions_compat_supported(),
+		tooNew: () => m.versions_compat_too_new(),
+		tooOld: () => m.versions_compat_too_old(),
+		unknown: () => m.versions_compat_unknown()
 	};
 
 	let catalog = $derived(app.catalog);
 	let refreshing = $derived(app.catalogRefreshing);
-	/** Версия, с которой сейчас идёт работа, и что именно с ней делают. */
+	/** The version currently being worked on, and what is being done with it. */
 	let job = $state<{ version: string; kind: string } | null>(null);
 
-	/** Управлять версиями можно только там, где файл наш. */
+	/** Versions can only be managed where the file is ours. */
 	const managed = $derived(app.binaryInfo?.managed === true);
 
-	/** Каталог живёт в общем состоянии и предзагружается при старте приложения,
-	 *  поэтому открытие вкладки не мигает загрузкой. Поход на GitHub — только по кнопке. */
+	/** The catalog lives in shared state and is preloaded at app startup, so
+	 *  opening the tab does not flash a loader. Hitting GitHub happens only via the button. */
 	async function loadCatalog(refresh = false) {
 		try {
 			await app.refreshCatalog(refresh);
@@ -37,10 +40,8 @@
 			const result = await call();
 			if (kind === 'use') {
 				const outcome = result as InstallOutcome;
-				pushAlert(
-					'ok',
-					`Версия ${outcome.binary.version ?? '—'} теперь используется.${outcome.restarted ? ' sing-box был перезапущен.' : ''}`
-				);
+				const suffix = outcome.restarted ? ` ${m.versions_restarted_suffix()}` : '';
+				pushAlert('ok', `${m.versions_now_used({ version: outcome.binary.version ?? '—' })}${suffix}`);
 				await app.refreshBinaryInfo();
 				await loadCatalog();
 				await app.refreshRun();
@@ -63,7 +64,7 @@
 		);
 	}
 
-	/** Выбор невыкачанной версии сначала её скачивает — отдельного шага не нужно. */
+	/** Selecting an undownloaded version first downloads it — no separate step needed. */
 	async function use(release: ReleaseInfo) {
 		if (!release.downloaded) {
 			if (!release.assetUrl) return;
@@ -91,20 +92,20 @@
 					hour: '2-digit',
 					minute: '2-digit'
 				})
-			: 'ни разу'
+			: m.versions_never()
 	);
 </script>
 
 {#if managed}
 	<section class="section">
 		<div class="head">
-			<h3 class="section-title">Версии</h3>
-			<span class="hint">список обновлён: {fetchedAt}</span>
+			<h3 class="section-title">{m.versions_title()}</h3>
+			<span class="hint">{m.versions_list_updated()}: {fetchedAt}</span>
 			<span class="spacer"></span>
 			<button
 				class="icon-btn"
-				title="Запросить список с GitHub"
-				aria-label="Обновить список"
+				title={m.versions_refresh_title()}
+				aria-label={m.versions_refresh_list()}
 				disabled={refreshing || job !== null}
 				onclick={() => loadCatalog(true)}
 			>
@@ -119,21 +120,21 @@
 						<span class="mono">{release.version}</span>
 
 						<span class="chip" data-tone={release.compatibility === 'supported' ? 'good' : undefined}>
-							{COMPAT_LABELS[release.compatibility] ?? '—'}
+							{COMPAT_LABELS[release.compatibility]?.() ?? '—'}
 						</span>
 
 						<span class="muted ell">
 							{#if release.downloaded}
-								на диске
+								{m.versions_on_disk()}
 							{:else if release.asset}
 								{formatBytes(release.size)}
 							{:else}
-								нет сборки под эту платформу
+								{m.versions_no_build()}
 							{/if}
 						</span>
 
 						{#if release.active}
-							<span class="badge">используется</span>
+							<span class="badge">{m.versions_in_use()}</span>
 						{:else}
 							<button
 								disabled={job !== null ||
@@ -141,15 +142,15 @@
 									release.compatibility !== 'supported'}
 								onclick={() => use(release)}
 								title={release.compatibility !== 'supported'
-									? 'Автоматически ставим только версии из протестированного диапазона'
-									: 'Сделать этой версией рабочего файла'}
+									? m.versions_unsupported_title()
+									: m.versions_use_title()}
 							>
 								{#if job?.version === release.version && job.kind === 'download'}
-									Качаю…
+									{m.versions_downloading()}
 								{:else if job?.version === release.version && job.kind === 'use'}
-									Ставлю…
+									{m.versions_installing()}
 								{:else}
-									Выбрать
+									{m.versions_select()}
 								{/if}
 							</button>
 						{/if}
@@ -159,8 +160,8 @@
 								class="icon-btn"
 								disabled={job !== null || release.active}
 								onclick={() => remove(release)}
-								title="Удалить скачанный файл этой версии"
-								aria-label="Удалить"
+								title={m.versions_delete_title()}
+								aria-label={m.common_delete()}
 							>
 								<Icon name="trash" size={12} />
 							</button>
@@ -169,8 +170,8 @@
 								class="icon-btn"
 								disabled={job !== null || !release.assetUrl}
 								onclick={() => download(release)}
-								title="Скачать, не переключаясь"
-								aria-label="Скачать"
+								title={m.versions_download_title()}
+								aria-label={m.common_download()}
 							>
 								<Icon name="download" size={12} />
 							</button>
@@ -180,16 +181,14 @@
 			</div>
 
 			<p class="hint">
-				Каждая версия хранится отдельным файлом и остаётся на диске, пока её не удалить: откат не
-				требует повторной загрузки. Выбранная версия копируется в рабочий файл, на который
-				ссылается служба, — переустанавливать её не нужно.
+				{m.versions_hint()}
 			</p>
 		{:else if catalog}
 			<p class="hint">
-				Список пуст. Кнопка обновления загрузит его с GitHub, дальше он показывается из кэша.
+				{m.versions_empty()}
 			</p>
 		{:else}
-			<p class="hint">Читаю каталог…</p>
+			<p class="hint">{m.versions_reading()}</p>
 		{/if}
 	</section>
 {/if}

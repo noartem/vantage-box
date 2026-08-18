@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { app } from '$lib/state.svelte';
+	import { m } from '$lib/paraglide/messages.js';
 	import Icon from './Icon.svelte';
 
-	// Сведения о файле живут в общем состоянии: их же читает онбординг, чтобы
-	// понять, есть ли вообще бинарник. Своей копии здесь нет намеренно —
-	// иначе после смены версии две панели показывали бы разное.
+	// File details live in shared state: onboarding reads them too, to tell whether
+	// a binary exists at all. There is intentionally no local copy here — otherwise
+	// after a version change the two panels would show different things.
 	const info = $derived(app.binaryInfo);
 	const managed = $derived(info?.managed === true);
 
@@ -22,12 +23,12 @@
 
 <section class="section">
 	<div class="head">
-		<h3 class="section-title">Файл sing-box</h3>
+		<h3 class="section-title">{m.binary_file_title()}</h3>
 		<span class="spacer"></span>
 		<button
 			class="icon-btn"
-			title="Перечитать сведения о файле"
-			aria-label="Перечитать"
+			title={m.binary_refresh_title()}
+			aria-label={m.common_refresh()}
 			disabled={refreshing}
 			onclick={refresh}
 		>
@@ -37,16 +38,16 @@
 
 	{#if info}
 		<div class="form">
-			<span class="lbl">Путь</span>
+			<span class="lbl">{m.common_path()}</span>
 			<code class="path ell selectable" title={info.path}>{info.path}</code>
 
-			<span class="lbl">Режим</span>
-			<span>{info.managed ? 'под управлением Vantage Box' : 'задан вручную'}</span>
+			<span class="lbl">{m.binary_mode()}</span>
+			<span>{info.managed ? m.binary_managed() : m.binary_manual()}</span>
 
-			<span class="lbl">Версия</span>
-			<span class="mono">{info.version ?? (info.present ? 'не определена' : 'нет файла')}</span>
+			<span class="lbl">{m.common_version()}</span>
+			<span class="mono">{info.version ?? (info.present ? m.service_version_undefined() : m.service_no_file())}</span>
 
-			<span class="lbl">Поддерживается</span>
+			<span class="lbl">{m.binary_supported()}</span>
 			<span class="mono muted">{info.supportedRange}</span>
 		</div>
 
@@ -55,22 +56,20 @@
 		{/if}
 
 		{#if info.compatibility === 'tooOld'}
-			<div class="banner warn">Версия ниже поддерживаемого диапазона — обновите её.</div>
+			<div class="banner warn">{m.binary_too_old()}</div>
 		{:else if info.compatibility === 'tooNew'}
 			<div class="banner warn">
-				Версия выше протестированного диапазона. Работать будет, но поведение может отличаться.
+				{m.binary_too_new()}
 			</div>
 		{/if}
 
 		{#if !managed}
 			<p class="hint">
-				Путь задан вручную, поэтому Vantage Box этот файл не трогает — только сообщает о
-				несовместимой версии. Очистите поле «Файл sing-box» в настройках, чтобы отдать версии
-				приложению.
+				{m.binary_manual_hint()}
 			</p>
 		{/if}
 	{:else}
-		<p class="hint">Читаю сведения о файле…</p>
+		<p class="hint">{m.binary_reading()}</p>
 	{/if}
 </section>
 

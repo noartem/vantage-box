@@ -1,13 +1,13 @@
 /**
- * Иконки — только строки `d` для <path>, viewBox 24×24, обводка 2, скруглённые
- * концы (стиль lucide). Библиотеку не тянем: нужных значков меньше тридцати, а
- * любой icon-пакет добавил бы к бандлу больше, чем весит этот файл.
+ * Icons — only the `d` strings for <path>, viewBox 24x24, stroke 2, rounded caps
+ * (lucide style). We do not pull in a library: there are fewer than thirty icons
+ * we need, and any icon pack would add more to the bundle than this file weighs.
  *
- * Кружки записаны дугами (`a r r 0 1 0 …`), а не <circle>, чтобы Icon.svelte
- * умел рендерить всё одним циклом по путям.
+ * Circles are written as arcs (`a r r 0 1 0 …`) rather than <circle>, so
+ * Icon.svelte can render everything in a single loop over paths.
  */
 export const icons = {
-	// Вкладки
+	// Tabs
 	dashboard: ['m12 14 4-4', 'M3.34 19a10 10 0 1 1 17.32 0'],
 	connections: ['M8 3 4 7l4 4', 'M4 7h16', 'm16 21 4-4-4-4', 'M20 17H4'],
 	subscriptions: ['M20 16.2A4.5 4.5 0 0 0 17.5 8h-1.8A7 7 0 1 0 4 14.9', 'M12 12v9', 'm8 17 4 4 4-4'],
@@ -29,13 +29,13 @@ export const icons = {
 		'M7 4a3 3 0 1 0 0 6 3 3 0 1 0 0-6'
 	],
 
-	// Управление sing-box
+	// sing-box controls
 	play: ['M7 4.5v15l13-7.5z'],
 	stop: ['M7 6h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z'],
 	restart: ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
 	pause: ['M6 4h3v16H6z', 'M15 4h3v16h-3z'],
 
-	// Действия
+	// Actions
 	refresh: ['M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8', 'M21 3v5h-5'],
 	search: ['M11 4a7 7 0 1 0 0 14 7 7 0 1 0 0-14', 'm21 21-4.3-4.3'],
 	close: ['M18 6 6 18', 'm6 6 12 12'],
@@ -70,7 +70,7 @@ export const icons = {
 	zap: ['M13 2 3 14h9l-1 8 10-12h-9z'],
 	check: ['M20 6 9 17l-5-5'],
 
-	// Навигация и статус
+	// Navigation and status
 	chevronRight: ['m9 18 6-6-6-6'],
 	chevronLeft: ['m15 18-6-6 6-6'],
 	chevronDown: ['m6 9 6 6 6-6'],

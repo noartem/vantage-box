@@ -1,5 +1,5 @@
-// Зеркало моделей из Rust. Держим синхронно с src-tauri/src/settings.rs
-// и src-tauri/src/clash/models.rs.
+// Mirror of the Rust models. Kept in sync with src-tauri/src/settings.rs
+// and src-tauri/src/clash/models.rs.
 
 export type UpdatePolicy = 'off' | 'notify' | 'auto';
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
@@ -44,9 +44,9 @@ export interface SubscriptionSettings {
 	name: string;
 	url: string;
 	enabled: boolean;
-	/** Тег selector-группы, куда влить узлы. null — во все selector/urltest-группы. */
+	/** Tag of the selector group to pour nodes into. null — into all selector/urltest groups. */
 	targetGroup: string | null;
-	/** Как часто перетягивать подписку, часы. */
+	/** How often to pull the subscription, in hours. */
 	updateInterval: number;
 }
 
@@ -55,17 +55,17 @@ export interface FallbackSettings {
 	intervalSec: number;
 	timeoutMs: number;
 	maxDelayMs: number;
-	/** Теги групп для слежения. Пусто — все selector-группы. */
+	/** Tags of groups to track. Empty — all selector groups. */
 	groups: string[];
 }
 
-/** Сводка по одной подписке после обновления. */
+/** Summary of a single subscription after an update. */
 export interface SubUpdate {
 	id: string;
 	name: string;
-	/** Сколько узлов влито. */
+	/** How many nodes were poured in. */
 	nodeCount: number;
-	/** Unix-мс последнего обновления. */
+	/** Unix ms of the last update. */
 	lastUpdated: number;
 	lastError: string | null;
 }
@@ -76,7 +76,7 @@ export interface ApplyOutcome {
 	restarted: boolean;
 }
 
-/** Состояние одной подписки из sidecar-файла (для UI). */
+/** State of a single subscription from the sidecar file (for the UI). */
 export interface SubStateEntry {
 	lastUpdated: number;
 	nodeCount: number;
@@ -109,28 +109,28 @@ export interface Memory {
 
 export interface ConnectionMetadata {
 	network: string;
-	/** Тип инбаунда: `Mixed`, `Tun`, … */
+	/** Inbound type: `Mixed`, `Tun`, … */
 	type: string;
 	sourceIP: string;
 	sourcePort: string;
 	destinationIP: string;
 	destinationPort: string;
-	/** Целевой хост соединения. */
+	/** Destination host of the connection. */
 	host: string;
 	processPath: string;
 }
 
 export interface Connection {
 	id: string;
-	/** Цепочка outbound'ов: `[узел, группа]` снаружи внутрь. */
+	/** Chain of outbounds: `[node, group]` from the outside in. */
 	chains: string[];
 	rule: string;
 	rulePayload: string;
-	/** Сетевые атрибуты — подобъект `metadata` в ответе sing-box. */
+	/** Network attributes — the `metadata` sub-object in the sing-box response. */
 	metadata: ConnectionMetadata;
 	upload: number;
 	download: number;
-	/** ISO-время старта соединения. */
+	/** ISO time the connection started. */
 	start: string;
 }
 
@@ -142,7 +142,7 @@ export interface ConnectionsSnapshot {
 
 export interface LogEntry {
 	id: number;
-	/** Unix-время в миллисекундах. */
+	/** Unix time in milliseconds. */
 	time: number;
 	level: string;
 	message: string;
@@ -178,33 +178,33 @@ export type ServiceState =
 
 export interface ServiceInfo {
 	name: string;
-	/** Есть ли реализация ServiceController под текущую ОС. */
+	/** Whether a ServiceController implementation exists for the current OS. */
 	supported: boolean;
 	state: ServiceState;
-	/** Хватает ли прав на start/stop без UAC. */
+	/** Whether we have rights to start/stop without UAC. */
 	canControl: boolean;
 	detail: string | null;
 }
 
-/** Как запускается sing-box: сервисом (нужен для TUN) или обычным процессом. */
+/** How sing-box is started: as a service (needed for TUN) or as a regular process. */
 export type RunMode = 'service' | 'process';
 
 export interface RunStatus {
 	mode: RunMode;
-	/** Работает ли sing-box — неважно, сервисом или процессом. */
+	/** Whether sing-box is running — regardless of service or process. */
 	running: boolean;
 	service: ServiceInfo;
-	/** PID дочернего процесса, если запуск идёт мимо сервиса. */
+	/** PID of the child process, when running outside the service. */
 	processPid: number | null;
-	/** Конфигу нужен TUN, а значит — сервис и права администратора. */
+	/** The config needs TUN, which means a service and admin rights. */
 	tun: boolean;
-	/** Почему не удалось прочитать конфиг. */
+	/** Why the config could not be read. */
 	configProblem: string | null;
 }
 
 export interface BinaryInfo {
 	path: string;
-	/** Бинарник под управлением Vantage Box — можно обновлять автоматически. */
+	/** Binary is managed by Vantage Box — can be auto-updated. */
 	managed: boolean;
 	present: boolean;
 	version: string | null;
@@ -215,9 +215,9 @@ export interface BinaryInfo {
 
 export interface RestartOutcome {
 	status: RunStatus;
-	/** Строки вида «группа → узел». */
+	/** Lines of the form "group → node". */
 	restored: string[];
-	/** Что восстановить не удалось, с причиной. */
+	/** What could not be restored, with a reason. */
 	skipped: string[];
 	apiBack: boolean;
 }
@@ -226,20 +226,20 @@ export interface ReleaseInfo {
 	version: string;
 	prerelease: boolean;
 	compatibility: Compatibility;
-	/** null — сборки под текущую платформу в релизе нет. */
+	/** null — no build for the current platform in this release. */
 	asset: string | null;
 	assetUrl: string | null;
 	size: number;
-	/** Файл этой версии уже лежит на диске. */
+	/** This version's file is already on disk. */
 	downloaded: boolean;
-	/** Именно эта версия сейчас используется. */
+	/** This exact version is currently in use. */
 	active: boolean;
 }
 
 export interface ReleaseCatalog {
-	/** Когда список забирали с GitHub, unix-время в секундах. 0 — никогда. */
+	/** When the list was fetched from GitHub, unix time in seconds. 0 — never. */
 	fetchedAt: number;
-	/** Кэш пора обновить. */
+	/** The cache is due for a refresh. */
 	stale: boolean;
 	releases: ReleaseInfo[];
 }
@@ -251,7 +251,7 @@ export interface InstallOutcome {
 }
 
 export interface CheckResult {
-	/** Была ли выполнена проверка через `sing-box check`. */
+	/** Whether a `sing-box check` was performed. */
 	available: boolean;
 	ok: boolean;
 	output: string;

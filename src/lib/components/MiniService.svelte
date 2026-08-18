@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { api } from '$lib/api';
 	import { SERVICE_LABELS, runServiceAction } from '$lib/service-actions';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import Icon from './Icon.svelte';
 
@@ -11,7 +12,7 @@
 	const run = $derived(app.run);
 	const installed = $derived(run !== null && run.mode === 'service');
 	const running = $derived(run?.running === true);
-	/** Конфигу нужен TUN, а сервиса нет: запускать нечем, установка обязательна. */
+	/** The config needs TUN, but there is no service: nothing to start it with, installation is required. */
 	const serviceRequired = $derived(run !== null && !installed && run.tun);
 	const configMissing = $derived((app.settings?.singBox.configPath ?? '').trim() === '');
 
@@ -27,49 +28,49 @@
 
 <section class="section">
 	<div class="head">
-		<button class="title" title="Открыть вкладку «Сервис»" onclick={onopen}>
-			<span class="section-title">Сервис</span>
+		<button class="title" title={m.mini_open_service_tab()} onclick={onopen}>
+			<span class="section-title">{m.tabs_service()}</span>
 			<Icon name="external" size={11} />
 		</button>
 
 		<span class="chip" data-tone={running ? 'good' : undefined}>
-			{running ? 'работает' : 'остановлен'}
+			{running ? m.service_state_running() : m.service_state_stopped()}
 		</span>
 
 		<span class="spacer"></span>
 	</div>
 
 	{#if !run}
-		<p class="hint">Читаю состояние…</p>
+		<p class="hint">{m.common_reading_state()}</p>
 	{:else}
 		<div class="form">
-			<span class="lbl">Запуск</span>
+			<span class="lbl">{m.service_launch()}</span>
 			<span>
-				{installed ? 'системная служба' : 'дочерний процесс'}
+				{installed ? m.service_system_service() : m.service_child_process()}
 				{#if !installed && run.processPid !== null}
 					<span class="muted mono">PID {run.processPid}</span>
 				{/if}
 			</span>
 
 			{#if run.service.supported}
-				<span class="lbl">Служба</span>
-				<span>{SERVICE_LABELS[run.service.state]}</span>
+				<span class="lbl">{m.service_service_label()}</span>
+				<span>{SERVICE_LABELS[run.service.state]()}</span>
 			{/if}
 
-			<span class="lbl">TUN в конфиге</span>
-			<span class:warnish={serviceRequired}>{run.tun ? 'есть' : 'нет'}</span>
+			<span class="lbl">{m.service_tun_in_config()}</span>
+			<span class:warnish={serviceRequired}>{run.tun ? m.service_tun_present_short() : m.service_tun_absent()}</span>
 
-			<span class="lbl">Версия</span>
+			<span class="lbl">{m.common_version()}</span>
 			<span class="mono">
-				{app.binaryInfo?.version ?? (app.binaryInfo?.present ? 'не определена' : 'нет файла')}
+				{app.binaryInfo?.version ?? (app.binaryInfo?.present ? m.service_version_undefined() : m.service_no_file())}
 			</span>
 		</div>
 
 		{#if configMissing}
-			<div class="banner warn">Не задан путь к config sing-box — укажите его в настройках.</div>
+			<div class="banner warn">{m.mini_config_missing()}</div>
 		{:else if serviceRequired}
 			<div class="banner warn">
-				В конфиге есть TUN-инбаунд: без установленной службы sing-box не запустится.
+				{m.service_tun_requires_service()}
 			</div>
 		{/if}
 
@@ -79,16 +80,16 @@
 				disabled={busy !== null || running || serviceRequired || configMissing}
 				onclick={() => act('start', api.start)}
 			>
-				{busy === 'start' ? 'Запускаю…' : 'Запустить'}
+				{busy === 'start' ? m.service_starting() : m.service_start()}
 			</button>
 			<button disabled={busy !== null || !running} onclick={() => act('stop', api.stop)}>
-				{busy === 'stop' ? 'Останавливаю…' : 'Остановить'}
+				{busy === 'stop' ? m.service_stopping() : m.service_stop()}
 			</button>
 			<button
 				disabled={busy !== null || !running || configMissing}
 				onclick={() => act('restart', api.restart)}
 			>
-				{busy === 'restart' ? 'Перезапускаю…' : 'Перезапуск'}
+				{busy === 'restart' ? m.service_restarting() : m.service_restart()}
 			</button>
 		</div>
 	{/if}
@@ -101,7 +102,7 @@
 		gap: var(--sp-3);
 	}
 
-	/* Заголовок — кнопка перехода, но выглядеть должен подписью секции. */
+	/* The title is a navigation button but should look like a section label. */
 	.title {
 		display: flex;
 		align-items: center;

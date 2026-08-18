@@ -40,7 +40,7 @@
 	import SchemaLintWorker from '$lib/schema-lint-worker?worker';
 	import { autocompleteSchema, lintSchemaForVersion } from '$lib/singbox-schemas';
 
-	/** Одна диагностика из редактора, пересчитанная в строку/колонку для списка. */
+	/** One diagnostic from the editor, recomputed into line/column for the list. */
 	export type EditorDiagnostic = {
 		from: number;
 		to: number;
@@ -48,7 +48,7 @@
 		col: number;
 		message: string;
 		severity: 'error' | 'warning' | 'info';
-		/** Источник: 'sing-box' — схема, иначе — JSON5-линтер. */
+		/** Source: 'sing-box' — the schema, otherwise the JSON5 linter. */
 		source: string | undefined;
 	};
 
@@ -61,23 +61,23 @@
 	}: {
 		value: string;
 		onchange: (next: string) => void;
-		/** Ctrl+S внутри редактора — привычнее, чем тянуться к кнопке. */
+		/** Ctrl+S inside the editor — more familiar than reaching for a button. */
 		onsave?: () => void;
-		/** Список активных диагностиок, пересчитывается по мере правок и линта. */
+		/** List of active diagnostics, recomputed as edits and lint progress. */
 		ondiagnostics?: (diags: EditorDiagnostic[]) => void;
-		/** Версия запущенного sing-box — по ней выбираем схему для линтера. */
+		/** The running sing-box version — used to pick the linter schema. */
 		version?: string | null;
 	} = $props();
 
 	let container = $state<HTMLDivElement | null>(null);
 	let view: EditorView | null = null;
 
-	/** Текущая схема для линтера (меняется при смене версии). `null` — линтера нет. */
+	/** Current linter schema (changes when the version changes). `null` — no linter. */
 	let activeLintSchema: JSONSchema7 | null = null;
 
-	// Схемный линтер выполняется в Web-воркере (src/lib/schema-lint-worker.ts), чтобы
-	// разбор конфига и Draft07.validate не морозили набор на главном потоке. Воркер
-	// создаётся в onMount и уничтожается вместе с редактором.
+	// The schema linter runs in a Web worker (src/lib/schema-lint-worker.ts), so
+	// parsing the config and Draft07.validate do not freeze typing on the main
+	// thread. The worker is created in onMount and destroyed with the editor.
 	let lintWorker: Worker | null = null;
 	let lintReqId = 0;
 	const lintPending = new Map<number, (diags: Diagnostic[]) => void>();
@@ -95,7 +95,7 @@
 		});
 	}
 
-	// Цвета берём из тем приложения, чтобы редактор не выпадал из оформления.
+	// Colors are taken from the app themes, so the editor does not fall out of the look.
 	const highlight = HighlightStyle.define([
 		{ tag: tags.propertyName, color: 'var(--cm-key)' },
 		{ tag: tags.string, color: 'var(--cm-string)' },
@@ -118,9 +118,9 @@
 			color: 'var(--text-muted)',
 			border: 'none'
 		},
-		// Полупрозрачная активная строка: drawSelection рисует выделение ПОД линией,
-		// и непрозрачный фон .cm-activeLine его перекрывал — поэтому выделение в
-		// пределах одной строки не было видно. Пропускаем сквозь него слой выделения.
+		// Semi-transparent active line: drawSelection draws the selection BELOW the
+		// line, and an opaque .cm-activeLine background covered it — so the selection
+		// within a single line was not visible. Let the selection layer show through.
 		'.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--surface-alt) 45%, transparent)' },
 		'.cm-activeLineGutter': { backgroundColor: 'var(--surface-alt)' },
 		'.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
@@ -167,21 +167,22 @@
 					lintGutter(),
 					syntaxHighlighting(highlight),
 					theme,
-					// JSON5 — надмножество JSONC, поэтому режим разом даёт комментарии и
-					// висячие запятые (бэкенд их уже умеет — src-tauri/src/jsonc.rs).
+					// JSON5 is a superset of JSONC, so the mode gives comments and
+					// trailing commas at once (the backend already handles them — src-tauri/src/jsonc.rs).
 					json5(),
-					// Автокомплит и hover — всегда от официальной схемы 1.14: у неё русские
-					// подписи и union-трансформ, а подсказки по полям версионно-нейтральны.
+					// Autocomplete and hover — always from the official 1.14 schema: it has
+					// Russian descriptions and a union transform, and the field hints are
+					// version-neutral.
 					json5Language.data.of({ autocomplete: jsoncCompletion() }),
 					hoverTooltip(json5SchemaHover()),
 					stateExtensions(autocompleteSchema),
 					linter(json5ParseLinter()),
-					// Схемный линтер — асинхронный, валидация идёт в Web-воркере
-					// (schema-lint-worker.ts). Схему под версию sing-box шлём туда
-					// отдельным сообщением в $effect ниже. CodeMirror сам отбрасывает
-					// устаревшие результаты, если документ успел измениться за это время.
+					// The schema linter is asynchronous; validation runs in a Web worker
+					// (schema-lint-worker.ts). The schema for the sing-box version is sent
+					// there in a separate message in the $effect below. CodeMirror discards
+					// stale results itself if the document changed in the meantime.
 					linter(async (v) => lintAsync(v.state.doc.toString())),
-					// JSON5 позволяет больше, чем переварит serde на стороне Rust.
+					// JSON5 allows more than serde will digest on the Rust side.
 					jsoncLinter,
 					keymap.of([
 						{
@@ -203,8 +204,8 @@
 					]),
 					EditorView.updateListener.of((update) => {
 						if (update.docChanged) onchange(update.state.doc.toString());
-						// Пересчитываем список ошибок, когда поменялся документ или
-						// отработал линт (его результат приезжает отдельной транзакцией).
+						// Recompute the error list when the document changed or lint
+						// completed (its result arrives as a separate transaction).
 						const countChanged =
 							diagnosticCount(update.state) !== diagnosticCount(update.startState);
 						if (update.docChanged || countChanged) emitDiagnostics(update.state);
@@ -221,7 +222,7 @@
 		};
 	});
 
-	/** Текущие диагностики — для чипа и списка ошибок в ConfigView. */
+	/** Current diagnostics — for the chip and the error list in ConfigView. */
 	let lastDiagSig = '';
 	function emitDiagnostics(state: EditorState) {
 		if (!ondiagnostics) return;
@@ -238,8 +239,9 @@
 				source: d.source
 			});
 		});
-		// Сигнатура гасит лишние вызовы: курсорные шевеления не меняют ни состав, ни
-		// позиции диагностики, а значит родителю пересылать нечего.
+		// The signature suppresses redundant calls: cursor movement does not change
+		// either the set or the positions of diagnostics, so there is nothing to
+		// forward to the parent.
 		const first = diags[0]?.from ?? -1;
 		const last = diags[diags.length - 1]?.from ?? -1;
 		const sig = `${diags.length}:${first}:${last}:${state.doc.length}`;
@@ -248,7 +250,7 @@
 		ondiagnostics(diags);
 	}
 
-	/** Прыгнуть к диапазону и поставить туда курсор — вызывается из списка ошибок. */
+	/** Jump to a range and place the cursor there — called from the error list. */
 	export function jumpTo(from: number, to: number) {
 		if (!view) return;
 		view.dispatch({
@@ -259,8 +261,8 @@
 	}
 
 	$effect(() => {
-		// Внешнее обновление (перечитали файл с диска). Свои же правки сюда
-		// возвращаются без изменений, поэтому сравнение гасит цикл.
+		// External update (re-read the file from disk). Our own edits come back
+		// here unchanged, so the comparison breaks the loop.
 		const next = value;
 		if (view && next !== view.state.doc.toString()) {
 			view.dispatch({
@@ -270,14 +272,14 @@
 	});
 
 	$effect(() => {
-		// Смена версии sing-box → меняем схему линтера и принудительно перезапускаем
-		// линт, чтобы ошибки перевычислились против новой схемы.
+		// sing-box version change → swap the linter schema and force a re-lint so
+		// the errors recompute against the new schema.
 		version;
 		const next = lintSchemaForVersion(version);
 		if (next === activeLintSchema) return;
 		activeLintSchema = next;
-		// Сначала отправляем схему в воркер — postMessage сохраняет порядок, поэтому
-		// принудительный линт ниже застаёт воркер уже с новой схемой.
+		// Send the schema to the worker first — postMessage preserves order, so the
+		// forced lint below finds the worker already on the new schema.
 		setLintSchema(next);
 		if (view) forceLinting(view);
 	});

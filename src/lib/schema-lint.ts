@@ -3,25 +3,28 @@ import type { EditorState } from '@codemirror/state';
 import { Draft07, type JsonError } from 'json-schema-library';
 import { parseJSON5DocumentState } from 'codemirror-json-schema/json5';
 import type { JSONSchema7 } from 'json-schema';
+import { m } from '$lib/paraglide/messages.js';
 
 /**
- * Схемный линтер для редактора конфига sing-box.
+ * Schema linter for the sing-box config editor.
  *
- * Валидирует документ против **схемы, соответствующей запущенной версии** sing-box
- * (см. `singbox-schemas.ts`): 1.11/1.12/1.13 — сторонние BlackDuty, 1.14+ — официальная.
- * Фильтровать структурный шум не нужно — схема просто подходит к конфигу этой версии.
- * Когда подходящей схемы нет (1.10.x, неизвестная версия), передаём `null` — линтер
- * молчит: реальный гейт сохранения — `sing-box check`.
+ * Validates the document against **the schema matching the running sing-box version**
+ * (see `singbox-schemas.ts`): 1.11/1.12/1.13 — third-party BlackDuty, 1.14+ — official.
+ * No need to filter structural noise — the schema simply fits this version's config.
+ * When no matching schema exists (1.10.x, unknown version), we pass `null` and the
+ * linter stays silent: the real save gate is `sing-box check`.
  *
- * Draft07, а не Draft04: сторонние схемы собраны под draft 2020-12, и Draft04 на их
- * `oneOf`/`const` падает с `Cannot read properties of undefined`. Официальная 1.14
- * под Draft07 валидирует так же, как под Draft04 (см. verify-singbox-schema).
+ * Draft07, not Draft04: the third-party schemas are built for draft 2020-12, and
+ * Draft04 crashes on their `oneOf`/`const` with `Cannot read properties of undefined`.
+ * The official 1.14 schema validates identically under Draft07 and Draft04
+ * (see verify-singbox-schema).
  *
- * Геттер вместо готовой схемы — чтобы менять схему на лету при смене версии sing-box
- * без пересоздания редактора: CodeEditor обновляет переменную и вызывает `forceLinting`.
+ * A getter instead of a ready-made schema — so the schema can be swapped on the fly
+ * when the sing-box version changes, without recreating the editor: CodeEditor
+ * updates the variable and calls `forceLinting`.
  */
 
-/** Ошибки, указывающие на ключ свойства, а не на его значение. */
+/** Errors that point at a property's key rather than its value. */
 const KEY_ERRORS = new Set([
 	'NoAdditionalPropertiesError',
 	'RequiredPropertyError',
@@ -40,13 +43,13 @@ function errorPath(error: JsonError): string {
 function rewrite(error: JsonError): string {
 	if (error.code === 'type-error') {
 		const expected = error.data?.expected;
-		const exp = Array.isArray(expected) ? expected.join(' или ') : (expected ?? '');
+		const exp = Array.isArray(expected) ? expected.join(` ${m.schema_lint_or()} `) : (expected ?? '');
 		const got = error.data?.received ?? '';
-		return `Ожидался ${exp}, получен ${got}`.replace(/\s+$/, '');
+		return m.schema_lint_expected({ exp, got }).replace(/\s+$/, '');
 	}
 	if (error.code === 'one-of-error' || error.code === 'any-of-error') {
 		const pointer = error.data?.pointer ?? '';
-		return `Не соответствует ни одному варианту${pointer ? ` (${pointer})` : ''}`;
+		return m.schema_lint_no_match({ pointer: pointer ? ` (${pointer})` : '' });
 	}
 	return (error.message ?? '')
 		.replaceAll('in `#` ', '')
@@ -56,7 +59,7 @@ function rewrite(error: JsonError): string {
 		.trim();
 }
 
-// Драфт тяжёлый (схема сотни КБ), а линт бежит на каждый чих — кэшируем по схеме.
+// The draft is heavy (schema is hundreds of KB) and lint runs on every keystroke — cache by schema.
 const draftCache = new WeakMap<JSONSchema7, Draft07>();
 function getDraft(schema: JSONSchema7): Draft07 {
 	let draft = draftCache.get(schema);
@@ -68,8 +71,8 @@ function getDraft(schema: JSONSchema7): Draft07 {
 }
 
 /**
- * Чистая функция диагностики по EditorState — вынесена отдельно, чтобы проверять
- * без DOM (см. scripts/verify-singbox-schemas.mjs). `schema === null` — валидации нет.
+ * Pure diagnostics function over EditorState — extracted separately so it can be
+ * checked without a DOM (see scripts/verify-singbox-schemas.mjs). `schema === null` means no validation.
  */
 export function schemaDiagnostics(state: EditorState, schema: JSONSchema7 | null | undefined): Diagnostic[] {
 	if (!schema) return [];
@@ -83,8 +86,8 @@ export function schemaDiagnostics(state: EditorState, schema: JSONSchema7 | null
 	try {
 		errors = (getDraft(schema).validate(data) as JsonError[]) ?? [];
 	} catch {
-		// Сторонняя схема может содержать узлы, которые json-schema-library не
-		// переварит на конкретном конфиге — лучше тихо пропустить, чем уронить редактор.
+		// A third-party schema may contain nodes that json-schema-library cannot
+		// digest for a particular config — better to skip silently than crash the editor.
 		return [];
 	}
 
@@ -105,10 +108,10 @@ export function schemaDiagnostics(state: EditorState, schema: JSONSchema7 | null
 			| undefined;
 		if (pointer) {
 			const isKey = KEY_ERRORS.has(error.name);
-			// Значение-ошибка подчёркивает valueFrom/valueTo, но для ошибок на целом
-			// узле-объекте/массиве (AnyOfError на inbounds[0]) их нет — есть только
-			// keyFrom/keyTo, охватывающие весь узел. Падаем на них, иначе диагностика
-			// молча теряется. ?? , а не || : valueFrom может быть 0.
+			// A value error underlines valueFrom/valueTo, but for errors on a whole
+			// object/array node (AnyOfError on inbounds[0]) those do not exist — only
+			// keyFrom/keyTo, covering the whole node. Fall back to those, otherwise the
+			// diagnostic is silently lost. ?? , not || : valueFrom can be 0.
 			const from = isKey ? pointer.keyFrom : pointer.valueFrom ?? pointer.keyFrom;
 			const to = isKey ? pointer.keyTo : pointer.valueTo ?? pointer.keyTo;
 			if (from !== undefined && to !== undefined) {

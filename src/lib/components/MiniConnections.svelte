@@ -3,20 +3,21 @@
 	import { pushAlert } from '$lib/alerts.svelte';
 	import { destination, outbound, processName, source } from '$lib/connection';
 	import { formatBytes } from '$lib/format';
+	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import Icon from './Icon.svelte';
 
 	let { onopen, active = true }: { onopen: () => void; active?: boolean } = $props();
 
-	/** Столько же строк, сколько в мини-логах: панели стоят в одном ряду. */
+	/** Same number of rows as in mini-logs: the panels stand in one row. */
 	const ROWS = 12;
 
 	let busy = $state<string | null>(null);
 
-	/** Самые «тяжёлые» соединения: при сотне открытых сокетов интересны те,
-	 *  через которые реально идёт трафик, а не самые свежие. Сортировка всех
-	 *  соединений каждый кадр — основная цена панели, поэтому пока вкладка не
-	 *  активна, не платим; высоту блока держит .filled. */
+	/** The "heaviest" connections: with a hundred open sockets, the ones that
+	 *  actually carry traffic are interesting, not the freshest. Sorting all
+	 *  connections every frame is the main cost of the panel, so while the tab is
+	 *  inactive we do not pay it; the block's height is held by .filled. */
 	const top = $derived.by(() => {
 		if (!active) return [];
 		return [...app.connections].sort((a, b) => b.download - a.download).slice(0, ROWS);
@@ -26,7 +27,7 @@
 		busy = name;
 		try {
 			await call();
-			// Следующий кадр /connections приедет сам — обновлять вручную не нужно.
+			// The next /connections frame arrives on its own — no manual refresh needed.
 		} catch (e) {
 			pushAlert('error', errorText(e));
 		} finally {
@@ -37,8 +38,8 @@
 
 <section class="section">
 	<div class="head">
-		<button class="title" title="Открыть вкладку «Соединения»" onclick={onopen}>
-			<span class="section-title">Соединения</span>
+		<button class="title" title={m.mini_open_connections_tab()} onclick={onopen}>
+			<span class="section-title">{m.tabs_connections()}</span>
 			<Icon name="external" size={11} />
 		</button>
 
@@ -52,8 +53,8 @@
 
 		<button
 			class="icon-btn"
-			title="Закрыть все соединения"
-			aria-label="Закрыть все"
+			title={m.connections_close_all_title()}
+			aria-label={m.connections_close_all_short()}
 			disabled={busy !== null || app.connections.length === 0}
 			onclick={() => guard('all', api.closeAllConnections)}
 		>
@@ -61,29 +62,29 @@
 		</button>
 	</div>
 
-	<!-- Высота фиксируется только когда есть что показывать: пустой список не
-		 должен держать двенадцать строк белого места. filled зависит от наличия
-		 данных, а не от active — скрытый блок держит ту же высоту, что и видимый. -->
+	<!-- Height is fixed only when there is something to show: an empty list
+		 should not hold twelve rows of whitespace. filled depends on the presence
+		 of data, not on active — a hidden block keeps the same height as a visible one. -->
 	<div class="list" class:filled={app.connections.length > 0}>
 		{#if !active}
-			<!-- вкладка не активна: строки не рисуем, высоту держит .filled -->
+			<!-- tab inactive: do not render rows, height is held by .filled -->
 		{:else if app.status.state !== 'connected'}
-			<p class="hint">Нет связи с Clash API — sing-box не запущен.</p>
+			<p class="hint">{m.connections_no_api()}</p>
 		{:else if top.length === 0}
-			<p class="hint">Активных соединений нет.</p>
+			<p class="hint">{m.connections_none()}</p>
 		{:else}
 			{#each top as c (c.id)}
 				<div class="row">
-					<span class="ell" title="{destination(c)}&#10;источник {source(c)}">{destination(c)}</span>
-					<span class="ell muted" title={c.metadata.processPath || 'процесс неизвестен'}>
+					<span class="ell" title={`${destination(c)}\n${m.connections_source({ src: source(c) })}`}>{destination(c)}</span>
+					<span class="ell muted" title={c.metadata.processPath || m.connections_process_unknown()}>
 						{processName(c)}
 					</span>
 					<span class="ell mono" title={c.chains.join(' ← ')}>{outbound(c)}</span>
 					<span class="mono right">{formatBytes(c.download)}</span>
 					<button
 						class="icon-btn"
-						title="Закрыть соединение"
-						aria-label="Закрыть соединение"
+						title={m.connections_close_one_title()}
+						aria-label={m.connections_close_one_title()}
 						disabled={busy !== null}
 						onclick={() => guard(c.id, () => api.closeConnection(c.id))}
 					>
@@ -102,7 +103,7 @@
 		gap: var(--sp-3);
 	}
 
-	/* Заголовок — кнопка перехода, но выглядеть должен подписью секции. */
+	/* The title is a navigation button but should look like a section label. */
 	.title {
 		display: flex;
 		align-items: center;
@@ -130,8 +131,8 @@
 		font-size: var(--fs-sm);
 	}
 
-	/* Высота по числу строк: список то пустеет, то заполняется, и без этого
-	   соседние панели ряда прыгали бы вслед за ним. */
+	/* Height by row count: the list empties and fills, and without this the
+	   neighboring panels in the row would jump along with it. */
 	.list.filled {
 		height: calc(12 * var(--h-row));
 	}

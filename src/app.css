@@ -1,9 +1,9 @@
-/* Тема: data-theme на <html>. "system" и отсутствие атрибута идут за ОС,
-   явные "light"/"dark" перебивают её в обе стороны.
+/* Theme: data-theme on <html>. "system" and the absence of the attribute follow
+   the OS; explicit "light"/"dark" override it in both directions.
 
-   Размеры живут только в :root — темы переопределяют исключительно цвета.
-   Всякий отступ, шрифт и высота в компонентах берутся отсюда: поменять
-   плотность всего приложения должно быть можно правкой одного блока. */
+   Sizes live only in :root — themes redefine colors exclusively. Every spacing,
+   font and height in components is taken from here: changing the density of the
+   whole app should be doable by editing a single block. */
 
 :root {
 	--bg: #f6f7f9;
@@ -24,8 +24,8 @@
 	--cm-atom: #8b3fbf;
 	--cm-comment: #7b8494;
 
-	/* Шаг сетки. Промежуточных значений нет намеренно: любой отступ в проекте
-	   обязан быть одним из этих шести. */
+	/* Grid step. Intermediate values are intentionally absent: any spacing in
+	   the project must be one of these six. */
 	--sp-1: 2px;
 	--sp-2: 4px;
 	--sp-3: 6px;
@@ -33,14 +33,14 @@
 	--sp-5: 12px;
 	--sp-6: 16px;
 
-	/* Шрифт. База 12px — плотность десктопной утилиты, а не веб-страницы. */
+	/* Font. Base 12px — desktop-utility density, not a web page's. */
 	--fs-xs: 10px;
 	--fs-sm: 11px;
 	--fs-md: 12px;
 	--fs-lg: 14px;
 
-	/* Высоты — единственный источник вертикального ритма. Строка списка и
-	   контрол одинаковы, поэтому таблицы и формы стоят на одной сетке. */
+	/* Heights — the only source of vertical rhythm. A list row and a control are
+	   the same, so tables and forms stand on one grid. */
 	--h-ctl: 22px;
 	--h-row: 22px;
 	--h-title: 32px;
@@ -49,12 +49,12 @@
 	--h-alert: 24px;
 	--w-titlebar-btn: 46px;
 
-	/* Скругления: у 22px контрола 10px выглядели бы капсулой. */
+	/* Corner radii: on a 22px control 10px would look like a capsule. */
 	--radius-ctl: 5px;
 	--radius-card: 8px;
 	--radius: var(--radius-card);
 
-	/* Ширины полей. Числовому полю не нужны 500px — отсюда берётся `.num`. */
+	/* Field widths. A numeric field does not need 500px — `.num` comes from here. */
 	--w-num: 7ch;
 	--w-field: 380px;
 	--w-nav: 150px;
@@ -102,9 +102,9 @@
 
 * {
 	box-sizing: border-box;
-	/* Окно приложения — не веб-страница: «оттягивание» за край (rubber band,
-	   pull-to-refresh) выключено везде по умолчанию. Вложенный список, где
-	   этот эффект уместен, включает его себе классом .bounce. */
+	/* The app window is not a web page: edge "rubber-banding" (pull-to-refresh)
+	   is disabled everywhere by default. A nested list where the effect is
+	   appropriate re-enables it for itself with the .bounce class. */
 	overscroll-behavior: none;
 }
 
@@ -116,8 +116,8 @@ html,
 body {
 	height: 100%;
 	margin: 0;
-	/* Прокручиваются только внутренние области — сам документ не двигается,
-	   поэтому и оттягивать нечего. */
+	/* Only inner areas scroll — the document itself does not move, so there is
+	   nothing to pull. */
 	overflow: hidden;
 }
 
@@ -126,12 +126,12 @@ body {
 	color: var(--text);
 	font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
 	font-size: var(--fs-md);
-	/* Десктопное приложение: выделение текста только там, где оно осмысленно. */
+	/* Desktop app: text selection only where it makes sense. */
 	user-select: none;
 }
 
-/* Полосы прокрутки тонкие: при строках в 22px системные 17px съедали бы
-   заметную долю ширины таблицы. */
+/* Thin scrollbars: at 22px rows the system's 17px would eat a noticeable
+   share of the table width. */
 ::-webkit-scrollbar {
 	width: 8px;
 	height: 8px;
@@ -194,8 +194,8 @@ button.primary {
 	color: #fff;
 }
 
-/* Необратимое действие (удалить службу, стереть подписку) не должно выглядеть
-   как соседняя безобидная кнопка. */
+/* An irreversible action (delete a service, wipe a subscription) must not look
+   like a neighboring harmless button. */
 button.danger {
 	color: var(--poor);
 	border-color: color-mix(in srgb, var(--poor) 45%, var(--border));
@@ -206,8 +206,8 @@ button.danger:hover:not(:disabled) {
 	background: color-mix(in srgb, var(--poor) 12%, transparent);
 }
 
-/* Кнопка-иконка ровно в размер строки: 22×22 — минимальная цель, ниже которой
-   при этой плотности опускаться нельзя. */
+/* An icon button sized exactly to a row: 22x22 — the minimum target, below
+   which we must not go at this density. */
 .icon-btn {
 	width: var(--h-ctl);
 	height: var(--h-ctl);
@@ -242,8 +242,8 @@ select {
 	height: var(--h-ctl);
 	padding: 0 var(--sp-3);
 	user-select: text;
-	/* width: 100% намеренно НЕ задаётся: иначе поле под четыре цифры растягивается
-	   на всю колонку. Ширину назначают классы .num / .field / .grow. */
+	/* width: 100% is intentionally NOT set: otherwise a field for four digits
+	   stretches across the whole column. Width is assigned by .num / .field / .grow. */
 	min-width: 0;
 }
 
@@ -263,8 +263,8 @@ input[type='checkbox'] {
 	accent-color: var(--accent);
 }
 
-/* Стрелки счётчика съедают ~14px поля и не нужны там, где вводят таймаут в
-   миллисекундах: без них «5000» перестаёт обрезаться. */
+/* The counter arrows eat ~14px of padding and are not needed where a timeout
+   in milliseconds is entered: without them "5000" stops being clipped. */
 input[type='number'] {
 	appearance: textfield;
 }
@@ -275,7 +275,7 @@ input[type='number']::-webkit-inner-spin-button {
 	margin: 0;
 }
 
-/* Три калибра полей — больше в приложении не нужно. */
+/* Three field calibers — no more are needed in the app. */
 .num {
 	width: var(--w-num);
 	text-align: right;
@@ -298,8 +298,8 @@ input[type='number']::-webkit-inner-spin-button {
 	border-radius: var(--radius-card);
 }
 
-/* Карточка-секция: единственный блок группировки в приложении. Заменяет
-   `section { padding: 14px; gap: 10px }`, который был скопирован в четыре файла. */
+/* Section card: the only grouping block in the app. Replaces
+   `section { padding: 14px; gap: 10px }` that was copied into four files. */
 .section {
 	background: var(--surface);
 	border: 1px solid var(--border);
@@ -310,11 +310,12 @@ input[type='number']::-webkit-inner-spin-button {
 	align-content: start;
 }
 
-/* Плитка карточек без дыр. В гриде строка была высотой с самую высокую секцию,
-   и под короткой оставалась пустота до конца ряда; колонки CSS укладывают
-   секции подряд и балансируют высоту сами. Цена — порядок чтения идёт сверху
-   вниз по колонке, а не слева направо. Отступ снизу вместо gap: между колонками
-   работает column-gap, между карточками внутри колонки — только margin. */
+/* A card tile without holes. In a grid a row was as tall as the tallest section,
+   and under a short one there was empty space to the end of the row; CSS columns
+   lay sections out in sequence and balance the height themselves. The cost is
+   that reading order goes top to bottom by column, not left to right. Bottom
+   margin instead of gap: column-gap works between columns, while between cards
+   inside a column only margin does. */
 .masonry {
 	column-width: 380px;
 	column-gap: var(--sp-4);
@@ -325,8 +326,8 @@ input[type='number']::-webkit-inner-spin-button {
 	margin-bottom: var(--sp-4);
 }
 
-/* Заголовок секции — надпись, а не заголовок статьи. Стиль взят из ProxyPopup:
-   единственной поверхности, которая уже была плотной. */
+/* A section header is a label, not an article heading. The style is taken from
+   ProxyPopup: the only surface that was already dense. */
 .section > h2,
 .section > h3,
 .section-title {
@@ -337,9 +338,9 @@ input[type='number']::-webkit-inner-spin-button {
 	color: var(--text-muted);
 }
 
-/* Форма: колонка подписей по контенту, а не фиксированные 180px. Обёртка
-   <label> с display:contents оставляет связь подписи с полем, но выкладывает
-   их прямо в сетку — только так строки выравниваются между собой. */
+/* Form: a content-sized label column, not a fixed 180px. A <label> wrapper
+   with display:contents keeps the label-field association but lays them out
+   straight into the grid — only this way rows align with each other. */
 .form {
 	display: grid;
 	grid-template-columns: max-content 1fr;
@@ -347,7 +348,7 @@ input[type='number']::-webkit-inner-spin-button {
 	align-items: center;
 }
 
-/* Две пары «подпись + поле» в строку: короткие поля перестают тянуть колонку. */
+/* Two "label + field" pairs per row: short fields stop stretching the column. */
 .form.pairs {
 	grid-template-columns: max-content auto max-content auto;
 	justify-content: start;
@@ -358,9 +359,9 @@ input[type='number']::-webkit-inner-spin-button {
 	display: contents;
 }
 
-/* Контрол занимает столько, сколько ему нужно, а не всю колонку: без этого
-   <select> под слово «info» растягивался на всю ширину окна. Ширину, где она
-   осмысленна, назначают .field / .num / .grow. */
+/* A control takes as much as it needs, not the whole column: without this a
+   <select> sized to the word "info" stretched across the whole window width.
+   Width, where meaningful, is assigned by .field / .num / .grow. */
 .form > *,
 .form > label > * {
 	justify-self: start;
@@ -375,12 +376,12 @@ input[type='number']::-webkit-inner-spin-button {
 	white-space: nowrap;
 }
 
-/* Строка, занимающая обе колонки формы (подсказка, ряд кнопок). */
+/* A row spanning both form columns (a hint, a row of buttons). */
 .form > .wide {
 	grid-column: 1 / -1;
 }
 
-/* Панель действий над содержимым: полоса, а не карточка. */
+/* An action bar above the content: a strip, not a card. */
 .toolbar {
 	display: flex;
 	align-items: center;
@@ -394,8 +395,8 @@ input[type='number']::-webkit-inner-spin-button {
 	min-width: 0;
 }
 
-/* Таблица. grid-template-columns задаёт каждая вьюха у себя — здесь только
-   общий ритм строк, зебра и липкая шапка. */
+/* Table. Each view sets its own grid-template-columns — here only the common
+   row rhythm, zebra striping and sticky header. */
 .tbl {
 	display: grid;
 	align-content: start;
@@ -435,8 +436,8 @@ input[type='number']::-webkit-inner-spin-button {
 	background: var(--accent-soft);
 }
 
-/* Ячейка, которую нельзя разрывать: длинный хост или путь обрезается
-   многоточием, полное значение уходит в title. */
+/* A cell that must not wrap: a long host or path is truncated with an
+   ellipsis; the full value goes into title. */
 .ell {
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -471,7 +472,7 @@ code.inline {
 	user-select: text;
 }
 
-/* Метка типа/режима рядом с именем. */
+/* A type/mode tag next to a name. */
 .chip {
 	display: inline-flex;
 	align-items: center;
@@ -500,7 +501,7 @@ code.inline {
 	background: color-mix(in srgb, var(--poor) 15%, transparent);
 }
 
-/* Индикатор состояния. Был продублирован в StatusBar и ProxyPopup. */
+/* State indicator. Was duplicated in StatusBar and ProxyPopup. */
 .dot {
 	width: 8px;
 	height: 8px;
@@ -524,7 +525,7 @@ code.inline {
 	background: var(--poor);
 }
 
-/* Задержка узла. Тон считает delayTone() из lib/format.ts. */
+/* Node delay. The tone is computed by delayTone() from lib/format.ts. */
 .delay {
 	font-variant-numeric: tabular-nums;
 	font-size: var(--fs-sm);
@@ -563,11 +564,11 @@ code.inline {
 	background: color-mix(in srgb, var(--good) 12%, transparent);
 }
 
-/* Попап-подсказка. Живёт в <body> (см. use:tooltip в lib/tooltip.ts), поэтому
-   её не clips родитель с overflow:auto, и position:fixed считает координаты от
-   окна. Позицию задаёт action — здесь только внешний вид. pointer-events:none
-   на disabled-кнопке делает обёртку .tip единственной целью попадания курсора
-   — иначе hover на ней не сработал бы. */
+/* Tooltip popup. Lives in <body> (see use:tooltip in lib/tooltip.ts), so it is
+   not clipped by a parent with overflow:auto, and position:fixed computes
+   coordinates from the window. The action sets the position — here only the
+   appearance. pointer-events:none on a disabled button makes the .tip wrapper
+   the only hit target — otherwise hover on it would not fire. */
 .tip {
 	display: inline-flex;
 }
@@ -595,8 +596,8 @@ code.inline {
 	transition: opacity 0.12s ease;
 }
 
-/* Полоса сохранения внизу формы. Была скопирована в SettingsView и
-   SubscriptionsView байт в байт. */
+/* A save bar at the bottom of a form. Was copied byte for byte into
+   SettingsView and SubscriptionsView. */
 .sticky-footer {
 	position: sticky;
 	bottom: 0;

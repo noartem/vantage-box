@@ -1,8 +1,8 @@
-// Разовые сообщения об ошибках действий. Постоянные проблемы (сломанный
-// settings.json, недоступный API, несовместимая версия) выводятся не отсюда:
-// они выводятся из состояния `app` прямо в AlertStrip и исчезают сами, когда
-// причина уходит. Здесь живёт только то, у чего нет своего состояния —
-// например, «не удалось остановить sing-box».
+// One-off action-error messages. Persistent problems (broken settings.json,
+// unreachable API, incompatible version) are not surfaced from here: they come
+// from the `app` state straight into AlertStrip and disappear on their own once
+// the cause goes away. This holds only things that have no state of their own —
+// for example, "failed to stop sing-box".
 
 export type AlertSeverity = 'error' | 'warn' | 'ok';
 
@@ -18,8 +18,8 @@ class Transient {
 
 	push(severity: AlertSeverity, text: string): number {
 		const id = this.nextId++;
-		// Один и тот же текст подряд не копим: три одинаковых строки в счётчике
-		// «1/3» — это шум, а не информация.
+		// Do not stack the same text repeatedly: three identical lines in a "1/3"
+		// counter is noise, not information.
 		this.items = [...this.items.filter((a) => a.text !== text), { id, severity, text }];
 		return id;
 	}
