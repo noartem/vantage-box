@@ -163,6 +163,10 @@
 	"versions_now_used": "Версия {version} теперь используется.",
 	"versions_restarted_suffix": "sing-box был перезапущен.",
 	"versions_never": "никогда",
+	"versions_manual_banner": "Путь к sing-box задан вручную, поэтому Vantage Box не подменяет файл. Установка версии из списка ниже очистит это поле и переключит приложение на собственный бинарник — старый файл останется на диске, но перестанет использоваться.",
+	"versions_confirm_title": "Подтверждение установки версии",
+	"versions_confirm_banner": "Путь к sing-box задан вручную. Установка версии {version} очистит поле «Файл sing-box» и переключит Vantage Box на собственный бинарник. Старый файл останется на диске, но перестанет использоваться.",
+	"versions_install": "Установить {version}",
 
 	"config_check_failed": "Конфиг не прошёл проверку: {output}",
 	"config_changed_externally_dirty": "Файл изменён вне Vantage Box — несохранённые правки будут потеряны.",

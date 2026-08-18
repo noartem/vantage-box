@@ -163,6 +163,10 @@
 	"versions_now_used": "Version {version} is now in use.",
 	"versions_restarted_suffix": "sing-box was restarted.",
 	"versions_never": "never",
+	"versions_manual_banner": "The sing-box path is set manually, so Vantage Box does not replace the file. Installing a version from the list below will clear this field and switch the app to its own binary — the old file stays on disk but is no longer used.",
+	"versions_confirm_title": "Confirm version installation",
+	"versions_confirm_banner": "The sing-box path is set manually. Installing version {version} will clear the \"sing-box file\" field and switch Vantage Box to its own binary. The old file stays on disk but is no longer used.",
+	"versions_install": "Install {version}",
 
 	"config_check_failed": "Config failed validation: {output}",
 	"config_changed_externally_dirty": "The file changed outside Vantage Box — unsaved edits will be lost.",
