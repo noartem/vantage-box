@@ -55,11 +55,16 @@
 </script>
 
 <div class="page">
-	<TrafficChart history={app.trafficHistory} current={app.traffic} />
-
 	{#if error}
 		<div class="banner">{error}</div>
 	{/if}
+
+	<!-- Верхний ряд: управление сервисом рядом с графиками вход/выход. Высота
+		 секции сервиса больше полосы графика, поэтому ряд выравниваем по верху. -->
+	<div class="top">
+		<MiniService onopen={() => ongoto('service')} />
+		<TrafficChart history={app.trafficHistory} current={app.traffic} />
+	</div>
 
 	{#if groups.length > 0}
 		<!-- Groups flow in columns, not a single stack: in one column a card with
@@ -83,7 +88,6 @@
 	<div class="minis">
 		<MiniConnections {active} onopen={() => ongoto('connections')} />
 		<MiniLogs {active} onopen={() => ongoto('logs')} />
-		<MiniService onopen={() => ongoto('service')} />
 	</div>
 </div>
 
@@ -92,6 +96,14 @@
 		display: grid;
 		gap: var(--sp-4);
 		align-content: start;
+	}
+
+	/* Сервис и графики — две равные колонки; на узком окне сваливаемся в стопку. */
+	.top {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+		align-items: start;
+		gap: var(--sp-4);
 	}
 
 	.groups {
