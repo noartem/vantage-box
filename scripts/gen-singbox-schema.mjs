@@ -1,33 +1,33 @@
-// Генератор схемы конфига sing-box для редактора.
+// Generator of the sing-box config schema for the editor.
 //
-// Зачем вообще генератор:
-//   1. У sing-box есть официальная схема (с 1.14.0-beta.2), но в ней НОЛЬ описаний —
-//      4805 узлов, ни одного `description`. Автокомплит она даёт, подсказки — нет.
-//      Тексты приходится собирать из документации SagerNet (markdown, `#### поле`).
-//   2. Схема описывает inbounds/outbounds/route.rules как `oneOf` вариантов с
-//      дискриминатором `type`. json-schema-library (на ней работает codemirror-json-schema)
-//      на таком узле возвращает голый `oneOf` без `properties` — то есть ни автокомплита,
-//      ни подсказок ровно там, где они нужнее всего. Лечится union-трансформом ниже.
+// Why a generator at all:
+//   1. sing-box has an official schema (since 1.14.0-beta.2), but it has ZERO descriptions —
+//      4805 nodes, not a single `description`. It provides autocomplete, but no hints.
+//      Texts have to be assembled from the SagerNet docs (markdown, `#### field`).
+//   2. The schema describes inbounds/outbounds/route.rules as `oneOf` variants with a `type`
+//      discriminator. json-schema-library (which codemirror-json-schema builds on) returns a
+//      bare `oneOf` with no `properties` at such a node — i.e. no autocomplete and no hints
+//      exactly where they matter most. Fixed by the union transform below.
 //
-// Запуск: task schema:update  (или npm run schema:update)
-// Результат: src/lib/singbox-schema.generated.json — коммитится в репозиторий,
-// чтобы сборка не зависела от сети.
+// Run: task schema:update  (or npm run schema:update)
+// Output: src/lib/singbox-schema.generated.json — committed to the repo so the build
+// does not depend on the network.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ruOverlay } from './singbox-schema.ru.mjs';
+import { ruOverlay } from './singbox-schema-overlay.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'src', 'lib', 'singbox-schema.generated.json');
 
 const SCHEMA_URL = 'https://sing-box.sagernet.org/schema.json';
-// Ветка, в которой лежит документация под ту же версию, что и опубликованная схема.
+// The branch whose docs match the same version as the published schema.
 const DOCS_REF = 'dev-next-wip';
 const DOCS_PREFIX = 'docs/configuration/';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Загрузка
+// Loading
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchText(url) {
@@ -40,7 +40,7 @@ async function fetchDocs() {
 	const tree = JSON.parse(
 		await fetchText(`https://api.github.com/repos/SagerNet/sing-box/git/trees/${DOCS_REF}?recursive=1`)
 	);
-	if (!tree.tree) throw new Error(`не удалось получить дерево репозитория: ${JSON.stringify(tree).slice(0, 200)}`);
+	if (!tree.tree) throw new Error(`failed to fetch repo tree: ${JSON.stringify(tree).slice(0, 200)}`);
 
 	const files = tree.tree
 		.map((f) => f.path)
@@ -48,7 +48,7 @@ async function fetchDocs() {
 		.sort();
 
 	const docs = {};
-	// Небольшими пачками, чтобы не долбить raw.githubusercontent сотней параллельных запросов.
+	// In small batches so we don't hammer raw.githubusercontent with a hundred parallel requests.
 	for (let i = 0; i < files.length; i += 8) {
 		const batch = files.slice(i, i + 8);
 		const texts = await Promise.all(
@@ -62,15 +62,15 @@ async function fetchDocs() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Разбор документации: `#### имя_поля` → описание
+// Parsing the docs: `#### field_name` → description
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Достаёт из markdown-страницы карту «имя поля → описание».
- * Учитывает особенности разметки SagerNet:
- *   - `!!! question "Since sing-box 1.8.0"` → приписываем к описанию курсивом;
- *   - `==Required==` → это маркер, а не текст: снимаем в пометку и берём следующий абзац;
- *   - ссылки `[текст](url)` схлопываем в текст (в тултипе URL всё равно не кликнешь).
+ * Extracts a "field name → description" map from a markdown page.
+ * Accounts for SagerNet markup quirks:
+ *   - `!!! question "Since sing-box 1.8.0"` → append to the description in italics;
+ *   - `==Required==` → this is a marker, not text: record the flag and take the next paragraph;
+ *   - `[text](url)` links collapse to text (you can't click a URL inside a tooltip anyway).
  */
 export function parseDoc(md) {
 	const out = {};
@@ -94,7 +94,7 @@ export function parseDoc(md) {
 			field = heading[1];
 			continue;
 		}
-		// Любой другой заголовок закрывает текущее поле.
+		// Any other heading closes the current field.
 		if (/^#{1,6}\s/.test(line)) {
 			flush();
 			continue;
@@ -116,8 +116,8 @@ function buildDescription(buf) {
 			notes.push(admonition[1]);
 			continue;
 		}
-		if (/^\s{4}/.test(line)) continue; // тело admonition-а
-		if (/^===\s/.test(line)) continue; // переключатели вкладок
+		if (/^\s{4}/.test(line)) continue; // admonition body
+		if (/^===\s/.test(line)) continue; // tab switches
 		if (/^==.+==\s*$/.test(line.trim())) {
 			if (/required/i.test(line)) required = true;
 			continue;
@@ -125,7 +125,7 @@ function buildDescription(buf) {
 		text.push(line);
 	}
 
-	// Первый непустой абзац — это и есть описание.
+	// The first non-empty paragraph is the description.
 	const body = text
 		.join('\n')
 		.split(/\n\s*\n/)
@@ -133,31 +133,31 @@ function buildDescription(buf) {
 		.find((p) => p.length > 0);
 
 	let desc = (body ?? '')
-		.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // ссылки → текст
+		.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links → text
 		.replace(/\s*\n\s*/g, ' ')
 		.trim();
 
-	if (required) desc = desc ? `**Обязательное.** ${desc}` : '**Обязательное.**';
+	if (required) desc = desc ? `**Required.** ${desc}` : '**Required.**';
 	if (!desc && notes.length === 0) return null;
 	return [desc, ...notes.map((n) => `*${n}*`)].filter(Boolean).join('\n\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Раскладка описаний по схеме
+// Laying descriptions onto the schema
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Держатели tagged-union-ов. В официальной схеме общие опции слушателя и дайлера
-// НЕ вынесены в отдельный $def, а продублированы внутри каждого варианта (listen_port —
-// 37 объявлений, detour — 80). Поэтому страницы из shared/ раскладываем по этим узлам
-// целиком: applyDescriptions пройдёт по всем вариантам сам.
+// Tagged-union holders. In the official schema, the shared listener/dialer options are
+// NOT factored into a separate $def but duplicated inside every variant (listen_port —
+// 37 declarations, detour — 80). So we lay pages from shared/ onto these nodes whole:
+// applyDescriptions will walk all the variants itself.
 const UNION_HOLDERS = ['Inbound', 'Outbound', 'Endpoint', 'Service', 'DNSServer'];
 
-// Правила с action "route"/"resolve" принимают те же опции дайлера (bind_interface,
-// tcp_fast_open, connect_timeout и прочее) — в схеме они тоже продублированы внутрь.
+// Rules with action "route"/"resolve" accept the same dialer options (bind_interface,
+// tcp_fast_open, connect_timeout, etc.) — in the schema they are also duplicated inside.
 const ACTION_HOLDERS = ['Rule', 'NestedRule', 'RuleAction', 'DNSRule', 'NestedDNSRule', 'DNSRuleAction'];
 
-// Какой файл документации описывает какие $defs. Для inbound/outbound таблица не нужна:
-// имя файла совпадает со значением `type`, по нему и находим нужный вариант.
+// Which docs file describes which $defs. No table needed for inbound/outbound:
+// the file name matches the `type` value, so we find the right variant by it.
 const TARGETS = {
 	'log/index.md': ['LogOptions'],
 	'ntp/index.md': ['NTPOptions'],
@@ -195,7 +195,7 @@ const TARGETS = {
 	'shared/udp-over-tcp.md': ['DialerOptions', ...UNION_HOLDERS]
 };
 
-/** Свойства варианта с раскрытием allOf/$ref — та же логика, что и в union-трансформе. */
+/** Variant properties with allOf/$ref expanded — same logic as in the union transform. */
 function collectProps(defs, node, seen = new Set(), depth = 0) {
 	if (!node || typeof node !== 'object' || depth > 16) return {};
 	if (node.$ref) {
@@ -211,7 +211,7 @@ function collectProps(defs, node, seen = new Set(), depth = 0) {
 	return out;
 }
 
-/** Значения `type`, которые покрывает вариант tagged-union-а. */
+/** The `type` values a tagged-union variant covers. */
 function variantTypes(defs, variant) {
 	const props = collectProps(defs, variant);
 	const t = props.type;
@@ -222,8 +222,8 @@ function variantTypes(defs, variant) {
 }
 
 /**
- * Расставляет описания внутри поддерева. По $ref не ходим — чужие $defs описываются
- * своим файлом документации, иначе tun-овские тексты расползутся по всем inbound-ам.
+ * Places descriptions inside a subtree. Does not follow $refs — other $defs are described
+ * by their own docs file, otherwise tun's texts would leak across all inbounds.
  */
 function applyDescriptions(node, map, stats, depth = 0) {
 	if (!node || typeof node !== 'object' || depth > 24) return;
@@ -246,14 +246,14 @@ function applyDescriptions(node, map, stats, depth = 0) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Union-трансформ: то, ради чего всё затевалось
+// Union transform: the whole point of this exercise
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * У каждого `oneOf`-узла проставляет `properties` = объединение свойств всех вариантов.
- * Сам `oneOf` остаётся нетронутым, поэтому валидация не слабеет: `oneOf` по-прежнему
- * отсекает несуществующие комбинации, а `properties` даёт резолверу за что зацепиться
- * при автокомплите и hover-подсказках.
+ * For every `oneOf` node, sets `properties` = the union of all variants' properties.
+ * The `oneOf` itself stays untouched, so validation is not weakened: `oneOf` still
+ * rejects invalid combinations, and `properties` gives the resolver something to
+ * anchor autocomplete and hover hints to.
  */
 function addUnionProps(defs, node, stats) {
 	if (!node || typeof node !== 'object') return;
@@ -276,7 +276,7 @@ function addUnionProps(defs, node, stats) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Русский оверлей
+// Manual overlay
 // ─────────────────────────────────────────────────────────────────────────────
 
 function applyOverlay(schema, stats) {
@@ -306,7 +306,7 @@ function applyOverlay(schema, stats) {
 
 		let hit = false;
 		for (const target of targets) {
-			// Ищем свойство в самом узле и во всех его вариантах/частях.
+			// Look for the property in the node itself and in all its variants/parts.
 			for (const holder of propertyHolders(defs, target)) {
 				if (holder[field]) {
 					holder[field].description = text;
@@ -320,7 +320,7 @@ function applyOverlay(schema, stats) {
 	return missed;
 }
 
-/** Все объекты `properties`, в которых может лежать поле этого узла. */
+/** All `properties` objects where this node's field may live. */
 function propertyHolders(defs, node, seen = new Set(), depth = 0) {
 	const holders = [];
 	if (!node || typeof node !== 'object' || depth > 8) return holders;
@@ -338,24 +338,24 @@ function propertyHolders(defs, node, seen = new Set(), depth = 0) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Сборка
+// Build
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
-	console.log(`→ схема: ${SCHEMA_URL}`);
+	console.log(`→ schema: ${SCHEMA_URL}`);
 	const schema = JSON.parse(await fetchText(SCHEMA_URL));
 	const defs = schema.$defs ?? {};
 	console.log(`  $defs: ${Object.keys(defs).length}`);
 
-	console.log(`→ документация: SagerNet/sing-box@${DOCS_REF}`);
+	console.log(`→ docs: SagerNet/sing-box@${DOCS_REF}`);
 	const docs = await fetchDocs();
-	console.log(`  файлов: ${Object.keys(docs).length}`);
+	console.log(`  files: ${Object.keys(docs).length}`);
 
 	const stats = { applied: 0, unions: 0, overlay: 0 };
 	const unmapped = [];
 
-	// Страницы из shared/ идут последними: applyDescriptions не перетирает уже
-	// проставленное, поэтому специфичное описание поля всегда побеждает общее.
+	// Pages from shared/ go last: applyDescriptions does not overwrite already-set
+	// descriptions, so a field's specific description always wins over the shared one.
 	const ordered = Object.entries(docs).sort(
 		([a], [b]) => Number(a.startsWith('shared/')) - Number(b.startsWith('shared/'))
 	);
@@ -366,7 +366,7 @@ async function main() {
 
 		let targets = TARGETS[file];
 
-		// inbound/<type>.md и outbound/<type>.md → вариант с совпадающим `type`.
+		// inbound/<type>.md and outbound/<type>.md → the variant with a matching `type`.
 		const variantMatch = file.match(/^(inbound|outbound)\/([a-z0-9_]+)\.md$/);
 		if (!targets && variantMatch) {
 			const [, kind, type] = variantMatch;
@@ -391,35 +391,35 @@ async function main() {
 		}
 	}
 
-	// Описания расставляем до union-трансформа: он копирует ссылки на те же объекты,
-	// поэтому подписи попадают в объединение сами собой.
+	// Lay descriptions before the union transform: it copies references to the same
+	// objects, so signatures land in the union on their own.
 	addUnionProps(defs, schema, stats);
 
 	const missedOverlay = applyOverlay(schema, stats);
 
 	schema['x-vantage-box'] = {
-		note: 'Сгенерировано scripts/gen-singbox-schema.mjs. Руками не править.',
+		note: 'Generated by scripts/gen-singbox-schema.mjs. Do not edit by hand.',
 		generated: new Date().toISOString().slice(0, 10),
 		schemaSource: SCHEMA_URL,
 		docsSource: `SagerNet/sing-box@${DOCS_REF}:${DOCS_PREFIX}`,
-		// Схема отслеживает 1.14-dev, а приложение поддерживает 1.10.7–1.13.x
-		// (src-tauri/src/clash/client.rs). Поэтому ошибки схемы в редакторе —
-		// подсказка, а не запрет: сохранение гейтится только `sing-box check`.
+		// The schema tracks 1.14-dev, while the app supports 1.10.7–1.13.x
+		// (src-tauri/src/clash/client.rs). So schema errors in the editor are a
+		// hint, not a block: saving is gated only by `sing-box check`.
 		appliesToNewerThanSupported: true
 	};
 
 	fs.writeFileSync(OUT, JSON.stringify(schema));
 	const kb = (fs.statSync(OUT).size / 1024).toFixed(0);
 
-	console.log(`\n✓ ${path.relative(ROOT, OUT)} — ${kb} КБ`);
-	console.log(`  описаний из документации: ${stats.applied}`);
-	console.log(`  русских переопределений:  ${stats.overlay} из ${Object.keys(ruOverlay).length}`);
-	console.log(`  oneOf-узлов расширено:    ${stats.unions}`);
-	if (unmapped.length) console.log(`  без таблицы (пропущено):  ${unmapped.join(', ')}`);
-	if (missedOverlay.length) console.log(`  ⚠ оверлей не лёг:        ${missedOverlay.join(', ')}`);
+	console.log(`\n✓ ${path.relative(ROOT, OUT)} — ${kb} KB`);
+	console.log(`  descriptions from docs:     ${stats.applied}`);
+	console.log(`  manual overrides applied:    ${stats.overlay} of ${Object.keys(ruOverlay).length}`);
+	console.log(`  oneOf nodes expanded:        ${stats.unions}`);
+	if (unmapped.length) console.log(`  no table (skipped):           ${unmapped.join(', ')}`);
+	if (missedOverlay.length) console.log(`  ⚠ overlay missed:            ${missedOverlay.join(', ')}`);
 }
 
-// Позволяем импортировать parseDoc из проверочного скрипта, не запуская генерацию.
+// Allow importing parseDoc from the verification script without running the generator.
 if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
 	main().catch((err) => {
 		console.error('✗', err.message);

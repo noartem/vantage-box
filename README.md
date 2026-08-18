@@ -1,70 +1,71 @@
 # Vantage Box
 
-Минималистичный десктопный GUI для [sing-box](https://github.com/SagerNet/sing-box). Берёт
-существующий `config.json`, рулит рантаймом через Clash API — без своего формата конфига.
+A minimal desktop GUI for [sing-box](https://github.com/SagerNet/sing-box). It takes
+your existing `config.json` and drives the runtime through the Clash API — no config format
+of its own.
 
-План разработки и решения по требованиям — в [PLAN.md](PLAN.md).
+The development plan and requirements decisions are in [PLAN.md](PLAN.md).
 
-## Состояние
+## Status
 
-**M0 — скелет** и большая часть **M1 — ядро MVP**:
+**M0 — skeleton** and most of **M1 — MVP core**:
 
 - Tauri 2 + SvelteKit (SPA, adapter-static) + TypeScript.
-- `settings.json` в стандартной директории ОС: чтение JSONC, атомарная запись, live-reload
-  через file watcher, JSON Schema для автокомплита в редакторах.
-- `ClashApiClient`: HTTP (`/version`, `/proxies`, `/group/{name}/delay`, `/configs`) и три
-  WebSocket-потока (`/traffic`, `/logs`, `/memory`) с переподключением.
-- Два режима запуска. Конфиг с TUN требует прав администратора — для него sing-box
-  регистрируется сервисом (один UAC-запрос, дальше start/stop без прав: они выдаются
-  учётной записи через SDDL). Конфиг без TUN запускается обычным дочерним процессом,
-  ставить сервис не нужно.
-- Рантайм-копия конфига с одноразовым secret'ом. Пользовательский `config.json` не меняется,
-  а копия отличается от него минимально: порядок ключей сохраняется, наш блок дописывается
-  в конец или подменяет уже существующее значение.
-- Встроенный редактор конфига: CodeMirror 6, JSON Schema, `sing-box check` перед записью,
-  резервная копия `.bak`, слежение за внешними правками файла.
-- Менеджер версий sing-box: каталог релизов с GitHub кэшируется на диск и показывается
-  из кэша, каждая версия хранится отдельным файлом, переключение проверяет конфиг новой
-  версией и перезапускает sing-box.
-- Мягкий перезапуск: выбор selector-групп снимается до остановки и накатывается обратно.
-- UI: дашборд, конфиг, логи, сервис, настройки.
+- `settings.json` in the standard OS config directory: JSONC reading, atomic writes,
+  live-reload via a file watcher, JSON Schema for editor autocomplete.
+- `ClashApiClient`: HTTP (`/version`, `/proxies`, `/group/{name}/delay`, `/configs`) and three
+  WebSocket streams (`/traffic`, `/logs`, `/memory`) with reconnection.
+- Two launch modes. A config with TUN requires administrator privileges — for it, sing-box is
+  registered as a service (a single UAC prompt, then start/stop needs no privileges: they are
+  granted to the account via SDDL). A config without TUN runs as an ordinary child process; no
+  service installation is needed.
+- A runtime copy of the config with a one-time secret. The user's `config.json` is never modified;
+  the copy differs from it minimally: key order is preserved, our block is appended at the end or
+  replaces an existing value.
+- Built-in config editor: CodeMirror 6, JSON Schema, `sing-box check` before saving, a `.bak`
+  backup, and watching for external edits.
+- sing-box version manager: the GitHub release catalog is cached to disk and shown from cache,
+  each version is stored as a separate file, switching validates the config against the new
+  version and restarts sing-box.
+- Soft restart: selector-group selections are dropped before stopping and restored afterwards.
+- UI: dashboard, config, logs, service, settings.
 
-**M2 — трей и хоткеи**:
+**M2 — tray and hotkeys**:
 
-- Иконка в трее: цвет отражает состояние (работает — обычная, иначе серая и полупрозрачная),
-  меню с selector-группами, запуском/остановкой, мягким перезапуском и выходом.
-- Глобальные хоткеи из `settings.json`, перерегистрация на лету. Занятые комбинации
-  показываются в настройках, а не проваливаются молча.
-- Попап выбора прокси у курсора: отдельное окно без декораций, закрывается по Esc и по
-  потере фокуса.
-- Автозапуск, single instance (второй запуск разворачивает уже открытое окно), сворачивание
-  в трей при закрытии окна, запуск свёрнутым.
+- Tray icon: color reflects state (running — normal, otherwise grey and semi-transparent), a menu
+  with selector groups, start/stop, soft restart, and quit.
+- Global hotkeys from `settings.json`, re-registered on the fly. Conflicting combinations are
+  shown in settings instead of failing silently.
+- A proxy-selection popup at the cursor: a separate frameless window, closes on Esc and on focus
+  loss.
+- Autostart, single instance (a second launch brings the already-open window to the front),
+  minimizing to the tray on window close, starting minimized.
 
-**M3 — CI и автообновление** и **M4 — соединения, подписки, fallback**:
+**M3 — CI and auto-update** and **M4 — connections, subscriptions, fallback**:
 
-- NSIS-инсталлер (Tauri, `installMode: currentUser`); бинарник sing-box в инсталлер не кладётся —
-  приложение докачивает свой или пользователь указывает свой путь.
-- Автообновление приложения через `tauri-plugin-updater`: проверка подписи, режимы
-  «не проверять / уведомлять / ставить автоматически» в `settings.json` (`guiUpdate.policy`).
-- Сборка через GitHub Actions: `ci.yml` (check + test + build на каждый пуш), `release.yml`
-  (NSIS + `.sig` + `latest.json` + portable zip по тегу `v*`). Windows-only.
-- Таблица активных соединений с фильтром и закрытием поштучно и всех разом (WS `/connections`).
-- Подписки: URL отдаёт sing-box JSON или base64-список URI
-  (`ss`/`vmess`/`vless`/`trojan`/`hysteria2`/`tuic`). Узлы вливаются в `config.json` под тегами
-  `sub:<id>:`, дописываются в selector/urltest-группы, применяются мягким перезапуском. Обновление
-  по интервалу или вручную; лишний перезапуск исключён подписью набора.
-- Fallback: периодический пинг активного узла selector-группы и автопереключение на резерв при
-  отказе или превышении задержки. `urltest`-группы не затрагиваются.
+- NSIS installer (Tauri, `installMode: currentUser`); the sing-box binary is not bundled into the
+  installer — the app downloads its own or the user provides a path.
+- App auto-update via `tauri-plugin-updater`: signature verification, "don't check / notify /
+  install automatically" modes in `settings.json` (`guiUpdate.policy`).
+- Builds via GitHub Actions: `ci.yml` (check + test + build on every push), `release.yml`
+  (NSIS + `.sig` + `latest.json` + portable zip on the `v*` tag). Windows-only.
+- Active connections table with filtering and closing one-by-one or all at once (WS `/connections`).
+- Subscriptions: a URL returns sing-box JSON or a base64 list of URIs
+  (`ss`/`vmess`/`vless`/`trojan`/`hysteria2`/`tuic`). Nodes are injected into `config.json` under
+  `sub:<id>:` tags, appended to selector/urltest groups, and applied via a soft restart. Updates
+  run on an interval or manually; redundant restarts are avoided by signing the node set.
+- Fallback: periodic pinging of the active node of a selector group and automatic switching to a
+  backup on failure or latency threshold breach. `urltest` groups are not affected.
 
-Ещё не сделано: Linux/macOS-сборка в CI (runtime-control сервиса там заглушен).
+Not done yet: Linux/macOS builds in CI (the runtime service control there is stubbed out).
 
-## Требования
+## Requirements
 
-- Rust (stable) и системные зависимости Tauri 2.
+- Rust (stable) and the Tauri 2 system dependencies.
 - Node.js 20+.
-- Запущенный sing-box с включённым `experimental.clash_api`.
+- A running sing-box with `experimental.clash_api` enabled.
 
-Минимальный кусок конфига sing-box, который нужен приложению:
+The minimal sing-box config snippet the app needs:
 
 ```json
 {
@@ -77,14 +78,14 @@
 }
 ```
 
-Если `secret` задан — впишите его в настройках Vantage Box. Пустой secret означает, что
-Vantage Box сгенерирует свой на каждый запуск.
+If `secret` is set — enter it in Vantage Box settings. An empty secret means Vantage Box will
+generate its own on each launch.
 
-Порт по умолчанию — 9797, а не общий для всех клиентов Clash 9090: на 9090 приложение имеет
-все шансы подключиться не к тому sing-box, который запустило само. Адрес `…:9090` в
-`settings.json` при чтении заменяется на свой.
+The default port is 9797, not the Clash-common 9090: on 9090 the app is very likely to connect to
+a sing-box it did not start itself. An `…:9090` address in `settings.json` is rewritten to the
+app's own on read.
 
-## Разработка
+## Development
 
 ```bash
 npm install
@@ -94,7 +95,7 @@ npm install
 npm run tauri dev
 ```
 
-Проверки:
+Checks:
 
 ```bash
 npm run check
@@ -104,117 +105,117 @@ npm run check
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-### Интеграционный тест с настоящим sing-box
+### Integration test against a real sing-box
 
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/integration-test.ps1
 ```
 
-Тест поднимает **отдельный** процесс sing-box и не трогает уже работающий: другие порты
-(19090/19080), конфиг без TUN (значит, без прав администратора и без вмешательства в сетевой
-стек), всё состояние — во временной папке через `VANTAGE_BOX_CONFIG_DIR`. Убивается только
-собственный дочерний процесс. Скрипт сам находит бинарник (в том числе разыменовывает
-scoop-шим) и складывает вывод в `test-results/`.
+The test starts a **separate** sing-box process and never touches an already-running one: different
+ports (19090/19080), a config without TUN (so no admin privileges and no network-stack
+interference), all state kept in a temp folder via `VANTAGE_BOX_CONFIG_DIR`. Only its own child
+process is killed. The script finds the binary on its own (including resolving scoop shims) and
+writes output to `test-results/`.
 
-Проверяются: определение версии, сборка рантайм-конфига, неизменность пользовательского
-файла, `sing-box check`, `/version`, `/proxies`, переключение selector'а, потоки `/traffic`
-и `/logs`.
+What is checked: version detection, runtime config build, immutability of the user's file,
+`sing-box check`, `/version`, `/proxies`, selector switching, and the `/traffic` and `/logs`
+streams.
 
-Без переменных окружения обычный `cargo test` этот тест пропускает.
+Without the environment variable, a plain `cargo test` skips this test.
 
-### Smoke-тест приложения
+### App smoke test
 
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke-test.ps1
 ```
 
-Проверяет то, что не видно снаружи: поднялась ли иконка в трее, удалось ли занять
-глобальные хоткеи, прочитались ли настройки и открывается ли попап. Приложение печатает
-строку вида
+This checks what is invisible from the outside: whether the tray icon came up, whether global
+hotkeys could be claimed, whether settings were read, and whether the popup opens. The app prints
+a line like
 
 ```
 vantage-box startup tray=ok hotkeys=ok window=shown settings=ok
 ```
 
-а флаг `--self-test` заставляет его открыть попап, дождаться сигнала от загрузившегося
-webview и выйти. Debug-сборка берёт фронтенд с dev-сервера Vite — скрипт поднимает его сам.
-Для проверки release-сборки со встроенным фронтендом: `-Release`.
+and the `--self-test` flag makes it open the popup, wait for a signal from the loaded webview, and
+exit. A debug build pulls the frontend from the Vite dev server — the script starts it on its own.
+To check a release build with the bundled frontend: `-Release`.
 
-### Матрица совместимости с версиями sing-box
+### sing-box compatibility matrix
 
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/compat-matrix.ps1
 ```
 
-Качает последние релизы sing-box (по одному на минорную ветку), прогоняет по каждому тот же
-набор проб, что и интеграционный тест, и пишет `test-results/compat-matrix.md` и
-`compat-matrix.json`. В конце печатает диапазон версий, выведенный **из измерений**, — его и
-стоит записать в `SINGBOX_MIN` / `SINGBOX_MAX_EXCLUSIVE`.
+Downloads the latest sing-box releases (one per minor branch), runs the same probe set as the
+integration test against each, and writes `test-results/compat-matrix.md` and `compat-matrix.json`.
+At the end it prints the version range derived **from the measurements** — that is what should go
+into `SINGBOX_MIN` / `SINGBOX_MAX_EXCLUSIVE`.
 
-Каждая версия проверяется в своей песочнице, бинарники кэшируются. Конкретный список версий:
+Each version is checked in its own sandbox; binaries are cached. A specific list of versions:
 `-Versions 1.11.15,1.12.9,1.13.16`.
 
-## Релиз
+## Release
 
-Релизы собираются GitHub Actions (Windows-only) по тегу `v*` — см.
-[release.yml](.github/workflows/release.yml). `tauri-action` собирает NSIS-инсталлер, подписывает
-его и грузит в релиз инсталлер + `.sig` + `latest.json` (для автообновления); дополнительным шагом
-собирается portable zip. CI на каждый пуш/PR — [ci.yml](.github/workflows/ci.yml).
+Releases are built by GitHub Actions (Windows-only) on the `v*` tag — see
+[release.yml](.github/workflows/release.yml). `tauri-action` builds the NSIS installer, signs it,
+and uploads the installer + `.sig` + `latest.json` (for auto-update) to the release; a separate
+step builds the portable zip. CI on every push/PR — [ci.yml](.github/workflows/ci.yml).
 
-### Ключ подписи обновлений
+### Update signing key
 
-Автообновление проверяет подпись пакета по публичному ключу, вшитому в
-[tauri.conf.json](src-tauri/tauri.conf.json) → `plugins.updater.pubkey`. Парный приватный ключ —
-секрет, в репо его быть не должно.
+Auto-update verifies the package signature against the public key embedded in
+[tauri.conf.json](src-tauri/tauri.conf.json) → `plugins.updater.pubkey`. The paired private key is
+a secret and must not be in the repo.
 
-Чтобы подписать релизы, в настройки репозитория (`noartem/vantage-box` → Secrets and variables →
-Actions) нужно добавить два секрета:
+To sign releases, add two secrets to the repository settings (`noartem/vantage-box` → Secrets and
+variables → Actions):
 
-- `TAURI_SIGNING_PRIVATE_KEY` — содержимое приватного ключа (файл
-  `~/.tauri/vantage-box.key`, сгенерирован `tauri signer generate`).
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — пароль ключа. Текущий ключ сгенерирован без пароля,
-  поэтому секрет оставляем пустым.
+- `TAURI_SIGNING_PRIVATE_KEY` — the private key contents (the file
+  `~/.tauri/vantage-box.key`, generated by `tauri signer generate`).
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the key password. The current key was generated without a
+  password, so the secret is left empty.
 
-Сгенерировать новую пару (например, со сменой пароля) можно локально:
+You can generate a new pair locally (e.g. when changing the password):
 
 ```bash
-npx tauri signer generate --ci -w ~/.tauri/vantage-box.key --password "ваш-пароль"
+npx tauri signer generate --ci -w ~/.tauri/vantage-box.key --password "your-password"
 ```
 
-Публичный ключ из `.key.pub` впишите в `tauri.conf.json`. Внимание: смена ключа означает, что
-копии, установленные со старым ключом, перестанут обновляться.
+Put the public key from `.key.pub` into `tauri.conf.json`. Note: rotating the key means copies
+installed with the old key will no longer update.
 
-## Настройки
+## Settings
 
-Файл — единственный источник правды. UI и ручные правки в редакторе равноправны: изменения
-подхватываются на лету.
+The file is the single source of truth. The UI and manual edits in the editor are equal: changes
+are picked up on the fly.
 
 - Windows: `%APPDATA%\vantage-box\settings.json`
 - Linux: `~/.config/vantage-box/settings.json`
 - macOS: `~/Library/Application Support/vantage-box/settings.json`
 
-Схема лежит рядом (`settings.schema.json`) и подключена через `$schema`, так что автокомплит
-работает офлайн. Комментарии и висячие запятые в файле допустимы.
+The schema lives next to it (`settings.schema.json`) and is wired up via `$schema`, so autocomplete
+works offline. Comments and trailing commas are allowed in the file.
 
-## Совместимость с sing-box
+## sing-box compatibility
 
-Релиз декларирует диапазон протестированных версий sing-box
-(`SINGBOX_MIN` / `SINGBOX_MAX_EXCLUSIVE` в
-[client.rs](src-tauri/src/clash/client.rs)). Вне диапазона приложение продолжает работать, но
-показывает предупреждение, а автообновление бинарника за границы диапазона не выходит.
+A release declares the tested sing-box version range
+(`SINGBOX_MIN` / `SINGBOX_MAX_EXCLUSIVE` in
+[client.rs](src-tauri/src/clash/client.rs)). Outside the range the app keeps working but shows a
+warning, and binary auto-update never crosses the range boundaries.
 
-Диапазон не назначается на глаз: его даёт `scripts/compat-matrix.ps1` (см. выше). Пробы
-для матрицы и для интеграционного теста — одни и те же, они лежат в
-[compat.rs](src-tauri/src/compat.rs), поэтому разъехаться не могут.
+The range is not picked by eye: it comes from `scripts/compat-matrix.ps1` (see above). The probes
+for the matrix and for the integration test are the same and live in
+[compat.rs](src-tauri/src/compat.rs), so they cannot drift apart.
 
-Последний прогон (7 августа 2026) — все 10 проб прошли на каждой версии:
+Last run (August 7, 2026) — all 10 probes passed on every version:
 
-| версия | итог |
+| version | result |
 |---|---|
 | 1.10.7 | OK |
 | 1.11.15 | OK |
 | 1.12.25 | OK |
 | 1.13.16 | OK |
 
-Нижняя граница — самая старая **проверенная** версия, а не самая старая работающая:
-что не измеряли, того не обещаем.
+The lower bound is the oldest **verified** version, not the oldest working one: we don't promise
+what we haven't measured.

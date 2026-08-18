@@ -1,16 +1,17 @@
 name: Build
 
-# Сборка инсталлятора (NSIS) и портативной версии.
+# Build the installer (NSIS) and the portable version.
 #
-# - Релизы (тег v*): запускается автоматически. Версия берётся из тега и
-#   прописывается во все манифесты, инсталлер подписывается, создаётся
-#   draft-релиз с инсталлером, .sig и latest.json для автообновления; туда же
-#   грузится портативный zip.
-# - Не релизы: запускается вручную (workflow_dispatch). Собирает инсталлер и
-#   портативку без публикации в релиз — оба доступны как артефакты прогона.
+# - Releases (tag v*): runs automatically. The version is taken from the tag and
+#   written into all manifests, the installer is signed, a draft release is created
+#   with the installer, .sig and latest.json for auto-update; the portable zip is
+#   uploaded there too.
+# - Non-releases: runs manually (workflow_dispatch). Builds the installer and
+#   portable zip without publishing to a release — both are available as run
+#   artifacts.
 #
-# Автопроверки (svelte-check, cargo test) идут здесь же: на тег-релиз ci.yml не
-# срабатывает, поэтому сборка страхует сама себя.
+# Self-checks (svelte-check, cargo test) run here as well: on a release tag ci.yml
+# does not trigger, so the build insures itself.
 
 on:
   workflow_dispatch:
@@ -20,7 +21,7 @@ on:
 permissions:
   contents: write
 
-# Релизную сборку не отменяем автоматом — пусть доработает до конца.
+# Don't auto-cancel a release build — let it run to completion.
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: false
@@ -52,12 +53,12 @@ jobs:
         run: npm run check
 
       - name: cargo test
-        # live_singbox — env-gated: без VANTAGE_BOX_TEST_SINGBOX тест ранним return'ом проходит впустую.
+        # live_singbox — env-gated: without VANTAGE_BOX_TEST_SINGBOX the test early-returns and passes vacuously.
         run: cargo test --manifest-path src-tauri/Cargo.toml --no-fail-fast
 
-      # На релизном теге синхронизируем версию во всех манифестах, чтобы NSIS,
-      # метаданные exe и latest.json автообновления несли версию тега (а не
-      # застывший 0.1.0 из tauri.conf.json). Regex-замена сохраняет форматирование.
+      # On a release tag, sync the version across all manifests so that NSIS,
+      # the exe metadata and the auto-update latest.json carry the tag version (not
+      # the frozen 0.1.0 from tauri.conf.json). The regex replacement preserves formatting.
       - name: Sync version from tag
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -70,14 +71,14 @@ jobs:
           (Get-Content package.json -Raw) `
             -replace '"version"\s*:\s*"[^"]*"', """version"": ""$ver""" `
             | Set-Content -NoNewline package.json
-          # В Cargo.toml ^version = "..." ловит только [package] — версии
-          # зависимостей идут внутри строк `crate = { version = "..." }`.
+          # In Cargo.toml ^version = "..." matches only [package] — dependency
+          # versions live inside `crate = { version = "..." }` lines.
           (Get-Content src-tauri/Cargo.toml -Raw) `
             -replace '(?m)^version = "[^"]*"', "version = `"$ver`"" `
             | Set-Content -NoNewline src-tauri/Cargo.toml
 
-      # Релиз: tauri-action собирает NSIS, подписывает (секреты), создаёт
-      # draft-релиз с инсталлером, .sig и latest.json для автообновления.
+      # Release: tauri-action builds NSIS, signs it (secrets), creates a draft
+      # release with the installer, .sig and latest.json for auto-update.
       - name: Build & publish (tauri-action)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: tauri-apps/tauri-action@v0
@@ -92,8 +93,8 @@ jobs:
           prerelease: false
           updaterJsonPreferNsis: true
 
-      # Вручную (не тег): просто собираем бандл, без публикации и без latest.json.
-      # Подпись накладывается, если задан TAURI_SIGNING_PRIVATE_KEY.
+      # Manual (no tag): just build the bundle, no publishing and no latest.json.
+      # Signing is applied if TAURI_SIGNING_PRIVATE_KEY is set.
       - name: Build (manual, no release)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: npm run tauri build
@@ -104,11 +105,11 @@ jobs:
         run: |
           $exe = Get-ChildItem -Path src-tauri/target/release -Filter 'vantage-box.exe' -File |
             Select-Object -First 1
-          if (-not $exe) { throw "vantage-box.exe не найден в src-tauri/target/release" }
-          Write-Host "Portable из $($exe.FullName)"
+          if (-not $exe) { throw "vantage-box.exe not found in src-tauri/target/release" }
+          Write-Host "Portable from $($exe.FullName)"
           "path=$($exe.FullName)" >> $env:GITHUB_OUTPUT
 
-      # Инсталлер всегда доступен как артефакт прогона — и на релизе, и при ручном запуске.
+      # The installer is always available as a run artifact — both on a release and on a manual run.
       - name: Upload NSIS installer artifact
         uses: actions/upload-artifact@v4
         with:
@@ -127,7 +128,7 @@ jobs:
           Compress-Archive -Path ${{ steps.exe.outputs.path }} -DestinationPath $zip
           "zip=$zip" >> $env:GITHUB_OUTPUT
 
-      # Релиз: портативка догружается в тот же draft-релиз.
+      # Release: the portable zip is uploaded to the same draft release.
       - name: Upload portable zip to release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -135,8 +136,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload ${{ github.ref_name }} ${{ steps.portable.outputs.zip }} --clobber
 
-      # Всё загружено и проверки прошли — публикуем релиз (снимаем draft),
-      # чтобы latest.json автообновления стал «живым» для пользователей.
+      # Everything is uploaded and checks passed — publish the release (drop the draft),
+      # so the auto-update latest.json becomes "live" for users.
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -144,12 +145,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit ${{ github.ref_name }} --draft=false
 
-      # Релиз снят с draft'а и виден в GitHub API — теперь дёргаем Scoop-бакет,
-      # чтобы Excavator обновил манифест vantage-box через checkver/autoupdate.
-      # Dispatch шлём именно после публикации, а не после tauri-action: пока
-      # релиз был draft, checkver через GitHub API тег/релиз не увидит.
-      # shell: bash — на windows-latest дефолтный pwsh делает `curl` алиасом
-      # Invoke-WebRequest, который эти флаги не понимает.
+      # The release is no longer a draft and is visible in the GitHub API — now poke the
+      # Scoop bucket so Excavator updates the vantage-box manifest via checkver/autoupdate.
+      # The dispatch is sent after publishing, not after tauri-action: while the release
+      # was a draft, checkver via the GitHub API couldn't see the tag/release.
+      # shell: bash — on windows-latest the default pwsh makes `curl` an alias for
+      # Invoke-WebRequest, which doesn't understand these flags.
       - name: Notify scoop bucket
         if: startsWith(github.ref, 'refs/tags/v') && success()
         shell: bash
@@ -163,7 +164,7 @@ jobs:
             https://api.github.com/repos/noartem/bucket/dispatches \
             -d '{"event_type":"new-release","client_payload":{"app":"vantage-box"}}'
 
-      # Ручной запуск: портативка — как артефакт прогона.
+      # Manual run: the portable zip is a run artifact.
       - name: Upload portable zip artifact
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v4

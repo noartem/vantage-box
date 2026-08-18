@@ -2,55 +2,55 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://vantage-box.dev/schema/settings.schema.json",
   "title": "Vantage Box settings",
-  "description": "Настройки Vantage Box. Файл читается как JSONC — комментарии и висячие запятые допустимы.",
+  "description": "Vantage Box settings. The file is read as JSONC — comments and trailing commas are allowed.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "$schema": {
       "type": "string",
-      "description": "Ссылка на эту схему — включает автокомплит в редакторе."
+      "description": "Reference to this schema — enables editor autocomplete."
     },
     "singBox": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Всё, что относится к самому sing-box.",
+      "description": "Everything related to sing-box itself.",
       "properties": {
         "configPath": {
           "type": "string",
-          "description": "Путь к config.json sing-box. Vantage Box его не переписывает: для запуска создаётся рантайм-копия."
+          "description": "Path to the sing-box config.json. Vantage Box never overwrites it: a runtime copy is created for launch."
         },
         "binaryPath": {
           "type": "string",
-          "description": "Путь к файлу sing-box. Пусто — используется файл под управлением Vantage Box."
+          "description": "Path to the sing-box binary. Empty — the file managed by Vantage Box is used."
         },
         "updatePolicy": {
           "type": "string",
           "enum": ["off", "notify", "auto"],
           "default": "notify",
-          "description": "Автообновление sing-box. Для своего binaryPath обновления никогда не ставятся, только уведомления."
+          "description": "sing-box auto-update. With a custom binaryPath, updates are never applied — only notifications."
         }
       }
     },
     "clashApi": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Подключение к Clash API sing-box (experimental.clash_api).",
+      "description": "Connection to the sing-box Clash API (experimental.clash_api).",
       "properties": {
         "url": {
           "type": "string",
           "format": "uri",
           "default": "http://127.0.0.1:9797",
-          "description": "Базовый адрес Clash API. Должен быть loopback."
+          "description": "Base address of the Clash API. Must be loopback."
         },
         "secret": {
           "type": "string",
-          "description": "Secret из конфига sing-box. Пусто, если API открыт без авторизации."
+          "description": "Secret from the sing-box config. Empty if the API is open without authorization."
         },
         "logLevel": {
           "type": "string",
           "enum": ["trace", "debug", "info", "warn", "error"],
           "default": "info",
-          "description": "Уровень, на котором Vantage Box подписывается на поток /logs."
+          "description": "Level at which Vantage Box subscribes to the /logs stream."
         }
       }
     },
@@ -67,14 +67,14 @@
           "type": "string",
           "format": "uri",
           "default": "http://www.gstatic.com/generate_204",
-          "description": "URL для замера задержки outbound'ов."
+          "description": "URL for measuring outbound latency."
         },
         "latencyTestTimeout": {
           "type": "integer",
           "minimum": 100,
           "maximum": 60000,
           "default": 5000,
-          "description": "Таймаут latency-теста в миллисекундах."
+          "description": "Latency test timeout in milliseconds."
         }
       }
     },
@@ -86,7 +86,7 @@
         "closeToTray": {
           "type": "boolean",
           "default": true,
-          "description": "Закрытие окна сворачивает в трей вместо выхода из приложения."
+          "description": "Closing the window minimizes to the tray instead of exiting the app."
         },
         "startMinimized": { "type": "boolean", "default": false }
       }
@@ -94,7 +94,7 @@
     "hotkeys": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Глобальные хоткеи в формате tauri-plugin-global-shortcut, например \"Ctrl+Alt+P\".",
+      "description": "Global hotkeys in tauri-plugin-global-shortcut format, e.g. \"Ctrl+Alt+P\".",
       "properties": {
         "proxyPopup": { "type": "string", "default": "Ctrl+Alt+P" },
         "toggle": { "type": "string", "default": "Ctrl+Alt+O" }
@@ -103,42 +103,42 @@
     "autostart": {
       "type": "boolean",
       "default": false,
-      "description": "Запускать Vantage Box при входе в систему."
+      "description": "Launch Vantage Box at system login."
     },
     "guiUpdate": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Автообновление GUI Vantage Box (не sing-box).",
+      "description": "Vantage Box GUI auto-update (not sing-box).",
       "properties": {
         "policy": {
           "type": "string",
           "enum": ["off", "notify", "auto"],
           "default": "notify",
-          "description": "off — не проверять; notify — уведомлять о наличии; auto — ставить автоматически."
+          "description": "off — do not check; notify — notify when available; auto — install automatically."
         }
       }
     },
     "subscriptions": {
       "type": "array",
       "default": [],
-      "description": "Подписки на списки прокси. Узлы вливаются в config.json sing-box и применяются мягким перезапуском.",
+      "description": "Proxy-list subscriptions. Nodes are merged into the sing-box config.json and applied with a soft restart.",
       "items": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "id": { "type": "string", "description": "Стабильный идентификатор подписки." },
-          "name": { "type": "string", "description": "Человекочитаемое имя." },
-          "url": { "type": "string", "format": "uri", "description": "URL подписки." },
+          "id": { "type": "string", "description": "Stable subscription identifier." },
+          "name": { "type": "string", "description": "Human-readable name." },
+          "url": { "type": "string", "format": "uri", "description": "Subscription URL." },
           "enabled": { "type": "boolean", "default": true },
           "targetGroup": {
             "type": ["string", "null"],
-            "description": "Тег selector-группы, куда влить узлы. null — во все selector/urltest-группы."
+            "description": "Selector-group tag to merge nodes into. null — into all selector/urltest groups."
           },
           "updateInterval": {
             "type": "integer",
             "minimum": 0,
             "default": 24,
-            "description": "Как часто перетягивать подписку, часы."
+            "description": "How often to re-pull the subscription, in hours."
           }
         }
       }
@@ -146,13 +146,13 @@
     "fallback": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Автопереключение selector-групп на резервный узел при падении активного.",
+      "description": "Auto-switch selector groups to a backup node when the active one goes down.",
       "properties": {
         "enabled": { "type": "boolean", "default": false },
-        "intervalSec": { "type": "integer", "minimum": 5, "default": 60, "description": "Как часто пингуем активный узел, секунды." },
-        "timeoutMs": { "type": "integer", "minimum": 100, "default": 5000, "description": "Таймаут пинга, мс." },
-        "maxDelayMs": { "type": "integer", "minimum": 0, "default": 0, "description": "Задержка выше этой считается плохой. 0 — только полная недоступность." },
-        "groups": { "type": "array", "default": [], "items": { "type": "string" }, "description": "Теги групп для слежения. Пусто — все selector-группы." }
+        "intervalSec": { "type": "integer", "minimum": 5, "default": 60, "description": "How often the active node is pinged, in seconds." },
+        "timeoutMs": { "type": "integer", "minimum": 100, "default": 5000, "description": "Ping timeout, in ms." },
+        "maxDelayMs": { "type": "integer", "minimum": 0, "default": 0, "description": "Latency above this is considered bad. 0 — only total unavailability." },
+        "groups": { "type": "array", "default": [], "items": { "type": "string" }, "description": "Group tags to monitor. Empty — all selector groups." }
       }
     }
   }

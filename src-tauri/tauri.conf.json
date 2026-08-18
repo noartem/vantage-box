@@ -42,8 +42,8 @@
     "active": true,
     "targets": ["nsis"],
     "publisher": "Vantage Box",
-    "shortDescription": "GUI для sing-box",
-    "longDescription": "Минималистичный десктопный интерфейс для sing-box: управление рантаймом через Clash API, переключение selector-групп, логи и редактор конфига.",
+    "shortDescription": "GUI for sing-box",
+    "longDescription": "A minimalist desktop interface for sing-box: runtime control via Clash API, selector-group switching, logs, and a config editor.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -54,7 +54,7 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["Russian", "English"],
+        "languages": ["English", "Russian"],
         "displayLanguageSelector": false
       }
     }

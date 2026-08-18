@@ -9,7 +9,7 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Машинно-локальный override target-dir (у каждого свой диск)
+# Machine-local override for target-dir (each machine has its own disk)
 /src-tauri/.cargo/config.toml
-# Результаты интеграционных прогонов
+# Integration test run results
 /test-results

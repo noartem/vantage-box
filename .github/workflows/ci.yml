@@ -1,15 +1,15 @@
 name: CI
 
-# Быстрые проверки на каждом пуш/PR: svelte-check и cargo test.
-# Сборка инсталлятора и портативки — в build.yml (вручную для не-релизов,
-# автоматически для тегов v*).
+# Fast checks on every push/PR: svelte-check and cargo test.
+# Building the installer and portable zip is in build.yml (manual for non-releases,
+# automatic for v* tags).
 
 on:
   push:
     branches: [main]
   pull_request:
 
-# Отменяем прошлые запуски того же пуша — сборка тяжёлая, гонять их впустую ни к чему.
+# Cancel previous runs of the same push — the build is heavy, no point running them in vain.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -41,9 +41,9 @@ jobs:
         run: npm run check
 
       - name: cargo test
-        # live_singbox — env-gated: без VANTAGE_BOX_TEST_SINGBOX тест ранним return'ом проходит впустую.
+        # live_singbox — env-gated: without VANTAGE_BOX_TEST_SINGBOX the test early-returns and passes vacuously.
         run: cargo test --manifest-path src-tauri/Cargo.toml --no-fail-fast
 
-      # Сама сборка инсталлятора и портативки вынесена в build.yml: для не-релизов
-      # она запускается вручную (workflow_dispatch), для релизов (тег v*) — всегда.
-      # Здесь только быстрые проверки, ловящие регрессии на каждом пуш/PR.
+      # The installer and portable zip build itself lives in build.yml: for non-releases
+      # it runs manually (workflow_dispatch), for releases (tag v*) — always.
+      # Here only the fast checks that catch regressions on every push/PR.

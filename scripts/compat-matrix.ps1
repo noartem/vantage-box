@@ -1,30 +1,30 @@
 <#
 .SYNOPSIS
-    Строит матрицу совместимости Vantage Box с версиями sing-box.
+    Builds a compatibility matrix of Vantage Box across sing-box versions.
 
 .DESCRIPTION
-    Скачивает несколько релизов sing-box с GitHub, прогоняет по каждому
-    одинаковый набор проб и складывает результат в test-results/:
-    compat-matrix.json и compat-matrix.md. В конце печатает диапазон версий,
-    выведенный из измерений, — его и стоит записать в SINGBOX_MIN /
+    Downloads several sing-box releases from GitHub, runs the same probe set
+    against each, and writes the result to test-results/: compat-matrix.json
+    and compat-matrix.md. At the end it prints the version range derived from
+    the measurements — that is what should be written to SINGBOX_MIN /
     SINGBOX_MAX_EXCLUSIVE (src-tauri/src/clash/client.rs).
 
-    Каждая версия проверяется изолированно: отдельный процесс sing-box,
-    нестандартные порты (19090/19080), конфиг без TUN — то есть без прав
-    администратора и без вмешательства в сетевой стек. Скрипт ничего не
-    останавливает: уже работающий sing-box продолжает работать.
+    Each version is checked in isolation: a separate sing-box process,
+    non-standard ports (19090/19080), a config without TUN — i.e. no admin
+    privileges and no network-stack interference. The script stops nothing: an
+    already-running sing-box keeps running.
 
-    Скачанные бинарники кэшируются, повторный прогон быстрее.
+    Downloaded binaries are cached, so a repeat run is faster.
 
 .PARAMETER Minors
-    Сколько последних минорных веток проверять. По умолчанию 6.
+    How many latest minor branches to check. Default 6.
 
 .PARAMETER Versions
-    Явный список версий через запятую вместо выбора по минорам.
+    An explicit comma-separated list of versions instead of selecting by minor.
 
 .PARAMETER Cache
-    Куда складывать скачанные бинарники. По умолчанию во временную папку.
-    Полезно указать другой диск, если на системном мало места.
+    Where to put the downloaded binaries. Default is a temp folder.
+    Useful to point at another drive if the system one is low on space.
 
 .EXAMPLE
     ./scripts/compat-matrix.ps1
@@ -57,13 +57,13 @@ if ($Versions) {
 }
 
 Push-Location (Join-Path $repo 'src-tauri')
-# cargo пишет прогресс в stderr; при ErrorActionPreference=Stop Windows
-# PowerShell счёл бы это фатальной ошибкой.
+# cargo writes progress to stderr; with ErrorActionPreference=Stop Windows
+# PowerShell would treat that as a fatal error.
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 try {
-    # Именно example, а не bin: лишний бинарник в пакете сбивает бандлер Tauri,
-    # и в инсталлятор попадает не то приложение.
+    # An example, not a bin: an extra binary in the package trips the Tauri
+    # bundler, and the wrong app ends up in the installer.
     & cargo run --release --example compat-probe -- @probeArgs 2>&1 |
         ForEach-Object { $_.ToString() } |
         Tee-Object -FilePath $log
@@ -74,6 +74,6 @@ try {
 }
 
 Write-Host ''
-Write-Host "Лог:      $log"
-Write-Host "Матрица:  $(Join-Path $resultsDir 'compat-matrix.md')"
+Write-Host "Log:      $log"
+Write-Host "Matrix:   $(Join-Path $resultsDir 'compat-matrix.md')"
 exit $code

@@ -1,112 +1,158 @@
-# Vantage Box — план разработки
+# Vantage Box — development plan
 
-> Минималистичный десктопный GUI для sing-box: берёт существующий `config.json`, рулит рантаймом через Clash API (`experimental.clash_api`, `127.0.0.1:9090`). Без своего формата конфига, без магии.
+> A minimal desktop GUI for sing-box: takes your existing `config.json` and drives the runtime through the Clash API (`experimental.clash_api`, `127.0.0.1:9090`). No config format of its own, no magic.
 
-## Стек
+## Stack
 
-- **Tauri 2** (Rust backend + webview frontend) — бинарник ~5–10 МБ, минимум памяти, официальные плагины под всё нужное: `tauri-plugin-global-shortcut`, tray API, `tauri-plugin-autostart`, `tauri-plugin-single-instance`, `tauri-plugin-updater`.
-- **Frontend**: Svelte + TypeScript + Vite (минимальный рантайм; React/Vue тоже ок, но Svelte легче). Стили — plain CSS или UnoCSS.
-- **Rust-крейты**: `tokio` (async), `reqwest` (HTTP к Clash API), `tokio-tungstenite` (WebSocket для `/traffic`, `/logs`, `/connections`), `serde_json`, `notify` (watch файла настроек).
+- **Tauri 2** (Rust backend + webview frontend) — binary ~5–10 MB, minimal memory, official plugins for everything needed: `tauri-plugin-global-shortcut`, tray API, `tauri-plugin-autostart`, `tauri-plugin-single-instance`, `tauri-plugin-updater`.
+- **Frontend**: Svelte + TypeScript + Vite (minimal runtime; React/Vue are fine too, but Svelte is lighter). Styles — plain CSS or UnoCSS.
+- **Rust crates**: `tokio` (async), `reqwest` (HTTP to the Clash API), `tokio-tungstenite` (WebSocket for `/traffic`, `/logs`, `/connections`), `serde_json`, `notify` (settings file watcher).
 
-## Архитектура
+## Architecture
 
 ```
 ┌─────────────────────────────────────────┐
-│ Tauri app (user-level, без админа)      │
-│  ├─ UI (webview): дашборд, логи,        │
-│  │   selector'ы, редактор конфига       │
+│ Tauri app (user-level, no admin)        │
+│  ├─ UI (webview): dashboard, logs,      │
+│  │   selectors, config editor           │
 │  ├─ Rust core:                          │
 │  │   ├─ ClashApiClient (HTTP+WS 9090)   │
 │  │   ├─ ServiceController (start/stop)  │
 │  │   ├─ Settings (settings.json+watch)  │
 │  │   └─ Hotkeys, Tray                   │
 └──────────────┬──────────────────────────┘
-               │ управление процессом
+               │ process control
 ┌──────────────▼──────────────────────────┐
-│ sing-box (системный сервис, elevated)   │
-│  └─ Clash API на 127.0.0.1:9090         │
+│ sing-box (system service, elevated)    │
+│  └─ Clash API on 127.0.0.1:9090         │
 └─────────────────────────────────────────┘
 ```
 
-Ключевое разделение: **GUI всегда работает без прав админа**, привилегии нужны только процессу sing-box (TUN-интерфейс). Всё управление рантаймом идёт по localhost API — прав не требует.
+The key separation: **the GUI always runs without admin privileges**; privileges are only needed by
+the sing-box process (the TUN interface). All runtime control goes over the localhost API — it
+needs no privileges.
 
-## Решения по требованиям
+## Requirements decisions
 
-### Админ-права без постоянных UAC-запросов
+### Admin privileges without constant UAC prompts
 
-Ставим sing-box как **системный сервис**, elevation нужен один раз — при установке/регистрации сервиса.
+Install sing-box as a **system service**; elevation is needed once — when installing/registering
+the service.
 
-- **Windows**: Windows Service (`sc create` или крейт `windows-service`). Установка сервиса — единственный UAC-запрос. Дальше GUI стартует/стопит сервис через Service Control Manager: даём пользователю право управления конкретным сервисом (`sc sdset` с SDDL при установке) — тогда start/stop без UAC вообще.
-- **Linux**: systemd unit (system-level). Управление через `systemctl` + polkit-правило, разрешающее группе пользователя start/stop юнита без пароля. Альтернатива проще: `setcap cap_net_admin+ep` на бинарник sing-box и запуск как user-процесс.
-- **macOS**: launchd daemon (`/Library/LaunchDaemons`), регистрация через `SMAppService` или один запрос пароля при установке plist. Управление — `launchctl kickstart/kill`.
+- **Windows**: Windows Service (`sc create` or the `windows-service` crate). Service installation is
+  the single UAC prompt. After that, the GUI starts/stops the service via the Service Control
+  Manager: we grant the user the right to control that specific service (`sc sdset` with SDDL at
+  install time) — then start/stop needs no UAC at all.
+- **Linux**: a systemd unit (system-level). Control via `systemctl` + a polkit rule allowing the
+  user's group to start/stop the unit without a password. A simpler alternative: `setcap
+  cap_net_admin+ep` on the sing-box binary and run it as a user process.
+- **macOS**: a launchd daemon (`/Library/LaunchDaemons`), registered via `SMAppService` or with a
+  single password prompt when installing the plist. Control — `launchctl kickstart/kill`.
 
-Fallback-режим без TUN (только локальный прокси-порт) — вообще без привилегий, полезно для первого запуска.
+A fallback mode without TUN (a local proxy port only) needs no privileges at all — useful for a
+first launch.
 
-### Простая установка
+### Simple installation
 
-- **Windows** (приоритет): NSIS-инсталлер из коробки Tauri. Инсталлер: ставит приложение, скачивает/кладёт бинарник sing-box, регистрирует сервис (тот самый один UAC). Плюс portable zip. Позже — winget.
-- **Linux**: AppImage + .deb; AUR позже.
-- **macOS**: .dmg; brew cask позже.
-- Автообновления GUI через `tauri-plugin-updater`.
+- **Windows** (priority): an NSIS installer from the Tauri toolchain. The installer: installs the
+  app, downloads/places the sing-box binary, registers the service (the one UAC prompt). Plus a
+  portable zip. Later — winget.
+- **Linux**: AppImage + .deb; AUR later.
+- **macOS**: .dmg; brew cask later.
+- GUI auto-updates via `tauri-plugin-updater`.
 
-### Управление бинарником sing-box
+### Managing the sing-box binary
 
-- Бинарник качаем с GitHub releases (проверка sha256), обновляем отдельно от GUI: ручная кнопка «обновить» + опциональное автообновление (в `settings.json`: `off` / `notify` / `auto`). Обновление = скачать → `sing-box check` на текущем конфиге → остановить сервис → заменить → запустить.
-- Если в `settings.json` указан свой путь к бинарнику — используем его, автообновление для него не трогаем (только уведомления).
-- **Матрица совместимости**: каждый релиз Vantage Box декларирует поддерживаемый диапазон версий sing-box (semver, напр. vantage-box 0.0.1 → `~1.1.1`). Версию определяем через `sing-box version`. Вне диапазона (напр. `>1.2.0`) — работаем, но показываем предупреждение в UI; автообновление никогда не ставит версию вне диапазона.
+- The binary is downloaded from GitHub releases (sha256 verification) and updated independently of
+  the GUI: a manual "update" button + optional auto-update (in `settings.json`: `off` / `notify` /
+  `auto`). An update = download → `sing-box check` on the current config → stop the service →
+  replace → start.
+- If `settings.json` specifies a custom binary path, we use it and leave its auto-update alone
+  (notifications only).
+- **Compatibility matrix**: each Vantage Box release declares a supported sing-box version range
+  (semver, e.g. vantage-box 0.0.1 → `~1.1.1`). The version is detected via `sing-box version`.
+  Outside the range (e.g. `>1.2.0`) — we keep working but show a warning in the UI; auto-update
+  never installs a version outside the range.
 
-### Настройки как у VS Code (dot-files-friendly)
+### Settings like VS Code (dot-files-friendly)
 
-Один читаемый `settings.json` в стандартной директории конфигов:
+One readable `settings.json` in the standard config directory:
 
 - Windows: `%APPDATA%/vantage-box/settings.json`
 - Linux: `~/.config/vantage-box/settings.json`
 - macOS: `~/Library/Application Support/vantage-box/settings.json`
 
-Содержимое: путь к `config.json` sing-box, путь к бинарнику sing-box (вручную; если не задан — управляемый Vantage Box бинарник), адрес API, хоткеи, автозапуск, тема, поведение трея, политика автообновления бинарника. Файл — единственный источник правды: UI настроек редактирует его, ручные правки подхватываются на лету через `notify` (file watcher). Комментарии — поддержать JSONC. Схема — публикуем JSON Schema для автокомплита в редакторах.
+Contents: path to the sing-box `config.json`, path to the sing-box binary (manual; if not set — the
+Vantage Box-managed binary), the API address, hotkeys, autostart, theme, tray behavior, binary
+auto-update policy. The file is the single source of truth: the settings UI edits it, manual edits
+are picked up on the fly via `notify` (file watcher). Comments — support JSONC. The schema —
+publish a JSON Schema for editor autocomplete.
 
-### Редактирование конфига
+### Editing the config
 
-Сразу в MVP: встроенный редактор — Monaco/CodeMirror с JSON Schema sing-box (автокомплит, валидация), проверка `sing-box check` перед применением. Плюс кнопка «открыть config.json в системном редакторе» и watch файла → предложение мягкого перезапуска.
+Right in the MVP: a built-in editor — Monaco/CodeMirror with the sing-box JSON Schema
+(autocomplete, validation), a `sing-box check` run before applying. Plus an "open config.json in
+the system editor" button and file watching → offer a soft restart.
 
-### Управление и selector'ы
+### Control and selectors
 
-- Стоп/старт/рестарт сервиса (ServiceController, см. выше).
-- Мягкий перезапуск: перед рестартом снять текущие выборы selector'ов (`GET /proxies`), после старта восстановить (`POST /proxies/{tag}`). Учесть, что sing-box сам умеет кэшировать выбор через `cache_file` — использовать как первый уровень, восстановление поверх как страховка.
-- Selector'ы: карточки групп, переключение одним кликом, мгновенно, без перезапуска. Latency-тест группы (`GET /group/{name}/delay`).
+- Stop/start/restart of the service (ServiceController, see above).
+- Soft restart: before the restart, drop the current selector selections (`GET /proxies`), and
+  after start, restore them (`POST /proxies/{tag}`). Account for sing-box caching selections via
+  `cache_file` — use it as the first level, with restore on top as a safety net.
+- Selectors: group cards, one-click switching, instant, no restart. Group latency test
+  (`GET /group/{name}/delay`).
 
-### Логи и статистика
+### Logs and stats
 
-- Отдельный экран логов в UI: реалтайм-лента (`/logs`, WS), фильтр по уровню (errors only), пауза, поиск, копирование/экспорт, ring-buffer в памяти (не жрём RAM).
-- `/traffic` (WS) — график скорости + счётчики.
-- `/connections` (WS) — таблица активных соединений: домен/IP, outbound, скорость; позже `DELETE /connections/{id}`.
+- A separate logs screen in the UI: a realtime tape (`/logs`, WS), level filter (errors only),
+  pause, search, copy/export, an in-memory ring-buffer (doesn't eat RAM).
+- `/traffic` (WS) — a speed chart + counters.
+- `/connections` (WS) — an active connections table: domain/IP, outbound, speed; later
+  `DELETE /connections/{id}`.
 
-### Глобальные хоткеи и трей
+### Global hotkeys and tray
 
-- `tauri-plugin-global-shortcut`: работает на всех трёх ОС. Дефолт `Ctrl+Alt+P` — попап-меню выбора прокси у трея; ещё хоткей на toggle on/off. Все биндинги — в `settings.json`.
-- Трей: иконка меняет цвет/бейдж по состоянию (off / запущен / какой outbound активен). Меню: selector'ы, toggle, restart, open logs. Закрытие окна — сворачивание в трей.
+- `tauri-plugin-global-shortcut`: works on all three OSes. Default `Ctrl+Alt+P` — a proxy-selection
+  popup menu at the tray; another hotkey for toggle on/off. All bindings live in `settings.json`.
+- Tray: the icon changes color/badge by state (off / running / which outbound is active). Menu:
+  selectors, toggle, restart, open logs. Closing the window — minimize to the tray.
 
-## Этапы
+## Stages
 
-**M0 — скелет (1 нед.)**
-Tauri 2 + Svelte, `settings.json` (чтение/watch/schema), ClashApiClient (HTTP+WS), подключение к уже запущенному sing-box.
+**M0 — skeleton (1 week)**
+Tauri 2 + Svelte, `settings.json` (read/watch/schema), ClashApiClient (HTTP+WS), connect to an
+already-running sing-box.
 
-**M1 — ядро MVP (3–4 нед.)**
-Дашборд: статус, selector'ы, traffic. Экран логов realtime с фильтром. Встроенный редактор конфига (Monaco + JSON Schema + `sing-box check`). ServiceController для Windows (сервис + SDDL, один UAC при установке). Мягкий перезапуск с сохранением выбора. Генерация secret на лету (рантайм-копия конфига). Менеджер бинарника sing-box: свой путь / скачивание, обновление, матрица совместимости. NSIS-инсталлер.
+**M1 — MVP core (3–4 weeks)**
+Dashboard: status, selectors, traffic. Realtime logs screen with a filter. Built-in config editor
+(Monaco + JSON Schema + `sing-box check`). ServiceController for Windows (service + SDDL, one UAC
+at install). Soft restart preserving selections. On-the-fly secret generation (runtime config
+copy). sing-box binary manager: custom path / download, update, compatibility matrix. NSIS
+installer.
 
-**M2 — трей и хоткеи (1–2 нед.)**
-Трей с динамической иконкой и меню, глобальные хоткеи, попап выбора прокси, автозапуск, single instance.
+**M2 — tray and hotkeys (1–2 weeks)**
+Tray with a dynamic icon and menu, global hotkeys, proxy-selection popup, autostart, single
+instance.
 
-**M3 — кроссплатформа (2 нед.)**
-Linux (systemd/setcap, AppImage/deb), macOS (launchd, dmg). CI: GitHub Actions матрица сборки, автообновления.
+**M3 — cross-platform (2 weeks)**
+Linux (systemd/setcap, AppImage/deb), macOS (launchd, dmg). CI: a GitHub Actions build matrix,
+auto-updates.
 
-**M4 — потом**
-Таблица соединений с kill (`DELETE /connections/{id}`), свой fallback поверх selector (пинг активного outbound → автопереключение на резервный), подписки.
+**M4 — later**
+Connections table with kill (`DELETE /connections/{id}`), a custom fallback on top of selectors
+(ping the active outbound → auto-switch to a backup), subscriptions.
 
-## Риски и заметки
+## Risks and notes
 
-- Clash API: слушать строго `127.0.0.1`. Secret не храним в настройках пользователя — генерируем на лету при каждом запуске сервиса: GUI создаёт рантайм-копию конфига с подставленным `experimental.clash_api.secret` (пользовательский `config.json` не трогаем), sing-box запускается с ней. Если пользователь сам задал secret в конфиге — уважаем его.
-- Права на управление сервисом Windows (SDDL) — самая хитрая часть; fallback: elevation-запрос только на start/stop через отдельный маленький helper.
-- Endpoint'ы `/logs`, `/traffic`, `/connections` — WebSocket, не polling.
-- WebView2 на Windows предустановлен с Win10+, но инсталлер должен уметь докачать (Tauri это делает сам).
-- Не хранить состояние в GUI: источник правды — sing-box API + `settings.json`. GUI можно убить/перезапустить в любой момент.
+- Clash API: bind strictly to `127.0.0.1`. The secret is not stored in user settings — it is
+  generated on the fly at each service start: the GUI creates a runtime copy of the config with the
+  `experimental.clash_api.secret` injected (the user's `config.json` is untouched), and sing-box is
+  started with it. If the user set a secret in the config themselves — we respect it.
+- Windows service control rights (SDDL) — the trickiest part; fallback: an elevation prompt only
+  for start/stop via a small separate helper.
+- The `/logs`, `/traffic`, `/connections` endpoints — WebSocket, not polling.
+- WebView2 on Windows is preinstalled on Win10+, but the installer must be able to download it
+  (Tauri does this itself).
+- Keep no state in the GUI: the source of truth is the sing-box API + `settings.json`. The GUI can
+  be killed/restarted at any moment.

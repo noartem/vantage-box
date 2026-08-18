@@ -1,11 +1,11 @@
-// Запускалка проверок редактора конфига.
+// Runner for the config editor checks.
 //
-// Проверки импортируют и код приложения (.ts), и codemirror-*. Напрямую через node это
-// не заводится: пакеты собраны с относительными импортами без расширений и с CJS/ESM
-// вперемешку — сборщику всё равно, node такое не резолвит. Поэтому прогоняем их через
-// esbuild ровно так же, как это делает Vite при сборке приложения, и запускаем результат.
+// The checks import both app code (.ts) and codemirror-*. Running them directly through
+// node doesn't work: the packages are built with relative imports without extensions and
+// a mix of CJS/ESM — the bundler doesn't care, but node can't resolve it. So we bundle
+// them through esbuild exactly the way Vite does when building the app, and run the result.
 //
-// Запуск: npm run verify:editor  (или task schema:verify)
+// Run: npm run verify:editor  (or task schema:verify)
 
 import { build } from 'esbuild';
 import { spawnSync } from 'node:child_process';
@@ -17,10 +17,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const SUITES = [
-	['scripts/verify-singbox-schema.mjs', 'схема 1.14: автокомплит, подписи, валидация'],
-	['scripts/verify-singbox-schemas.mjs', 'per-version схемы 1.11–1.13 + маппинг по версии'],
-	['scripts/verify-jsonc-lint.mjs', 'JSONC-режим редактора'],
-	['scripts/verify-completion.mjs', 'автокомплит через реальный источник CodeMirror']
+	['scripts/verify-singbox-schema.mjs', '1.14 schema: autocomplete, signatures, validation'],
+	['scripts/verify-singbox-schemas.mjs', 'per-version 1.11–1.13 schemas + version-based mapping'],
+	['scripts/verify-jsonc-lint.mjs', 'editor JSONC mode'],
+	['scripts/verify-completion.mjs', 'autocomplete via the real CodeMirror source']
 ];
 
 const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vb-verify-'));
@@ -38,8 +38,8 @@ try {
 			format: 'esm',
 			target: 'node22',
 			loader: { '.json': 'json' },
-			// Часть зависимостей (yaml внутри codemirror-json-schema) остаётся CJS и
-			// динамически требует встроенные модули — в ESM-выводе им нужен свой require.
+			// Some dependencies (yaml inside codemirror-json-schema) stay CJS and
+			// dynamically require built-in modules — in ESM output they need their own require.
 			banner: {
 				js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);"
 			},
@@ -53,7 +53,7 @@ try {
 }
 
 if (failed) {
-	console.error(`\n✗ провалено наборов: ${failed} из ${SUITES.length}\n`);
+	console.error(`\n✗ suites failed: ${failed} of ${SUITES.length}\n`);
 	process.exit(1);
 }
-console.log(`\n✓ все проверки редактора прошли (${SUITES.length} набора)\n`);
+console.log(`\n✓ all editor checks passed (${SUITES.length} suites)\n`);

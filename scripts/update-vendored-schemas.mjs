@@ -1,15 +1,15 @@
-// Обновляет вендорные per-version схемы sing-box (1.11–1.13).
+// Updates the vendored per-version sing-box schemas (1.11–1.13).
 //
-// Официальной JSON-схемы для sing-box < 1.14 не существует, поэтому для миноров
-// 1.11/1.12/1.13 мы тянем сторонние схемы из BlackDuty/sing-box-schema (Zod →
-// JSON-schema, draft 2020-12). Здесь они скачиваются под зафиксированными тегами
-// и кладутся в src/lib/schemas/, чтобы приложение и проверки не зависели от сети.
+// No official JSON schema exists for sing-box < 1.14, so for the 1.11/1.12/1.13
+// minors we pull third-party schemas from BlackDuty/sing-box-schema (Zod →
+// JSON-schema, draft 2020-12). Here they are downloaded at pinned tags and
+// placed in src/lib/schemas/ so the app and checks don't depend on the network.
 //
-// Теги выбраны вручную как последние стабильные миноры. При выходе новой минорной
-// версии sing-box добавьте запись в VERSIONS ниже и повторно запустите скрипт.
+// The tags are picked manually as the latest stable minors. When a new sing-box
+// minor version is released, add an entry to VERSIONS below and re-run the script.
 //
-// Запуск: node scripts/update-vendored-schemas.mjs
-// Проверка afterwards: npm run verify:editor
+// Run: node scripts/update-vendored-schemas.mjs
+// Check afterwards: npm run verify:editor
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,8 +18,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = path.join(ROOT, 'src', 'lib', 'schemas');
 
-// Тег репозитория BlackDuty/sing-box-schema → имя файла в src/lib/schemas/.
-// Имя файла должно совпадать с импортом в src/lib/singbox-schemas.ts.
+// BlackDuty/sing-box-schema repo tag → file name in src/lib/schemas/.
+// The file name must match the import in src/lib/singbox-schemas.ts.
 const VERSIONS = [
 	{ tag: 'v1.11.1', file: 'singbox-1.11.1.json' },
 	{ tag: 'v1.12.22', file: 'singbox-1.12.22.json' },
@@ -45,27 +45,27 @@ for (const { tag, file } of VERSIONS) {
 	try {
 		parsed = JSON.parse(text);
 	} catch (e) {
-		console.error(`✗ ${tag}: не JSON (${e.message})`);
+		console.error(`✗ ${tag}: not JSON (${e.message})`);
 		failed++;
 		continue;
 	}
 	if (!parsed || typeof parsed !== 'object' || !parsed.$defs) {
-		console.error(`✗ ${tag}: выглядит не как схема sing-box (нет $defs)`);
+		console.error(`✗ ${tag}: doesn't look like a sing-box schema (no $defs)`);
 		failed++;
 		continue;
 	}
 
 	const before = fs.existsSync(dest) ? fs.readFileSync(dest, 'utf8') : '';
 	if (before === text) {
-		console.log(`= ${tag}: без изменений → ${file}`);
+		console.log(`= ${tag}: unchanged → ${file}`);
 		continue;
 	}
 	fs.writeFileSync(dest, text, 'utf8');
-	console.log(`✓ ${tag}: обновлено → src/lib/schemas/${file}`);
+	console.log(`✓ ${tag}: updated → src/lib/schemas/${file}`);
 }
 
 if (failed) {
-	console.error(`\n✗ провалено: ${failed} из ${VERSIONS.length}\n`);
+	console.error(`\n✗ failed: ${failed} of ${VERSIONS.length}\n`);
 	process.exit(1);
 }
-console.log(`\n✓ вендорные схемы в порядке (${VERSIONS.length}). Проверь: npm run verify:editor\n`);
+console.log(`\n✓ vendored schemas are fine (${VERSIONS.length}). Check: npm run verify:editor\n`);

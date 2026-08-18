@@ -1,31 +1,31 @@
 #!/usr/bin/env node
 /**
- * Генератор иконок приложения из Figma-экспорта.
+ * App icon generator from a Figma export.
  *
- * Источник — zip-архив (или папка) с SVG по матрице bg/<empty> × on/off:
- *   - без bg — дефолтный стиль, прозрачный фон. off — дефолт, on — активное
- *              состояние туннеля. off идёт на иконку приложения (bundle: ico/icns,
- *              32/64/128/128@2, Square*Logo, StoreLogo — установщик, окно,
- *              таскбар, список программ), в трей и на favicon. На виндовом
- *              таскбаре без подложки смотрится чище, чем залитый квадрат.
- *   - «bg»   — версии с заливкой и чётко квадратной формой. В бандл не идут
- *              (оставлены в архиве как опция для платформ, требующих opaque-плитку).
+ * Source — a zip archive (or folder) of SVGs along the bg/<empty> × on/off matrix:
+ *   - no bg — default style, transparent background. off — the default, on — the
+ *             active tunnel state. off goes to the app icon (bundle: ico/icns,
+ *             32/64/128/128@2, Square*Logo, StoreLogo — installer, window,
+ *             taskbar, program list), the tray, and the favicon. On the Windows
+ *             taskbar the no-bg version looks cleaner than a filled square.
+ *   - "bg"  — versions with a fill and a strictly square shape. Not bundled
+ *             (left in the archive as an option for platforms that need an opaque tile).
  *
- * Что делает скрипт:
- *   1. Из «off» (без подложки) через `tauri icon` — полный набор для бандла
- *      (ico/icns, 32/64/128/128@2, Square*Logo, StoreLogo) в дефолтном виде.
- *   2. Из «off» и «on» — растеризованные tray-off.png / tray-on.png (128px,
- *      crisply downscaled) для динамического состояния трея (src-tauri/src/tray.rs).
- *   3. Из «off» — static/favicon.png (64px), из «off»/«on» — static/logo-off.svg
- *      и logo-on.svg: логотип слева от названия в TitleBar, переключается по
- *      состоянию туннеля (как иконка трея).
+ * What the script does:
+ *   1. From "off" (no bg) via `tauri icon` — the full bundle set
+ *      (ico/icns, 32/64/128/128@2, Square*Logo, StoreLogo) in the default style.
+ *   2. From "off" and "on" — rasterized tray-off.png / tray-on.png (128px,
+ *      crisply downscaled) for the dynamic tray state (src-tauri/src/tray.rs).
+ *   3. From "off" — static/favicon.png (64px); from "off"/"on" — static/logo-off.svg
+ *      and logo-on.svg: the logo to the left of the title in TitleBar, toggled by
+ *      tunnel state (like the tray icon).
  *
- * Запуск:
- *   npm run icons                          # берёт ./vantage-box-icons.zip
+ * Run:
+ *   npm run icons                          # uses ./vantage-box-icons.zip
  *   npm run icons -- path/to/export.zip
  *   npm run icons -- --src-dir path/to/svg-folder
  *
- * Идемпотентен: безопасно перезапускать после нового экспорта из Figma.
+ * Idempotent: safe to re-run after a fresh export from Figma.
  */
 
 import { execFileSync } from "node:child_process";
@@ -38,7 +38,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ICONS_DIR = join(ROOT, "src-tauri", "icons");
 const STATIC_DIR = join(ROOT, "static");
 
-// ── аргументы ────────────────────────────────────────────────────────────
+// ── args ───────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 let srcDir = null;
 let zipPath = null;
@@ -49,18 +49,18 @@ for (let i = 0; i < args.length; i++) {
 }
 if (!srcDir && !zipPath) zipPath = resolve(ROOT, "vantage-box-icons.zip");
 
-// ── утилиты ──────────────────────────────────────────────────────────────
+// ── utilities ──────────────────────────────────────────────────────────────
 const log = (m) => console.log(`  • ${m}`);
 
-/** Запуск внешней программы с массивом аргументов (без shell-инъекций). */
+/** Run an external program with an args array (no shell injection). */
 function run(bin, args, opts = {}) {
   execFileSync(bin, args, { stdio: opts.silent ? "pipe" : "inherit", ...opts });
 }
 
-/** Растеризация SVG в PNG заданного размера через ImageMagick. */
+/** Rasterize an SVG to a PNG of the given size via ImageMagick. */
 function rasterize(svg, outPng, px) {
-  // density = px * 96 / viewBoxUnits (viewBox = 32), затем -resize даёт
-  // точный размер. Прозрачный фон, чтобы углы скруглённой плитки не залило.
+  // density = px * 96 / viewBoxUnits (viewBox = 32), then -resize gives the
+  // exact size. Transparent background so the rounded tile corners aren't filled.
   const density = String(Math.round((px * 96) / 32));
   run("magick", [
     "-background", "none",
@@ -73,9 +73,9 @@ function rasterize(svg, outPng, px) {
 }
 
 /**
- * Найти SVG в каталоге по матрице меток: имя должно содержать все `includes`
- * и ни одного из `excludes`. Метки — bg/on/off (нижний регистр).
- * Матрица 2×2: bg×<empty>, on×off → четыре варианта, выбираем точно.
+ * Find an SVG in a directory by a label matrix: the name must contain all
+ * `includes` and none of `excludes`. Labels — bg/on/off (lowercase).
+ * A 2×2 matrix: bg×<empty>, on×off → four variants, picked precisely.
  */
 function findSvg(dir, includes, excludes = []) {
   const hits = readdirSync(dir)
@@ -86,27 +86,27 @@ function findSvg(dir, includes, excludes = []) {
   return join(dir, hits.sort((a, b) => a.length - b.length)[0]);
 }
 
-// ── 0. подготовка источника ──────────────────────────────────────────────
+// ── 0. prepare the source ──────────────────────────────────────────────────
 const work = mkdtempSync(join(tmpdir(), "vb-icons-"));
 let svgDir;
 if (srcDir) {
-  if (!existsSync(srcDir)) throw new Error(`Папка не найдена: ${srcDir}`);
+  if (!existsSync(srcDir)) throw new Error(`Folder not found: ${srcDir}`);
   svgDir = srcDir;
-  console.log(`Источник (папка): ${srcDir}`);
+  console.log(`Source (folder): ${srcDir}`);
 } else {
   if (!existsSync(zipPath)) {
     throw new Error(
-      `Файл не найден: ${zipPath}\n` +
-      `Передайте путь к zip-экспорту из Figma: npm run icons -- path/to/icons.zip`,
+      `File not found: ${zipPath}\n` +
+      `Pass the path to a Figma zip export: npm run icons -- path/to/icons.zip`,
     );
   }
-  console.log(`Источник (zip): ${zipPath}`);
-  // Expand-Archive — штатный распаковщик Windows; не путается в буквах диска.
+  console.log(`Source (zip): ${zipPath}`);
+  // Expand-Archive — the built-in Windows unzipper; doesn't get confused by drive letters.
   run("powershell", [
     "-NoProfile", "-NonInteractive", "-Command",
     `Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${work}' -Force`,
   ], { silent: true });
-  // Если в архиве была папка-обёртка — проваливаемся в неё.
+  // If the archive had a wrapper folder — descend into it.
   const entries = readdirSync(work);
   if (entries.length === 1 && statSync(join(work, entries[0])).isDirectory()) {
     svgDir = join(work, entries[0]);
@@ -115,49 +115,49 @@ if (srcDir) {
   }
 }
 
-// Матрица bg/<empty> × on/off. off без bg — дефолт: иконка приложения + трей +
-// favicon. bg-варианты в бандл не идут (opaque-плитка на виндовом таскбаре
-// выглядит хуже прозрачного). on без bg — активное состояние трея.
+// The bg/<empty> × on/off matrix. off without bg — the default: app icon + tray +
+// favicon. bg variants are not bundled (an opaque tile looks worse on the Windows
+// taskbar than a transparent one). on without bg — the active tray state.
 const offSvg = findSvg(svgDir, ["off"], ["bg"]) ?? findSvg(svgDir, ["default"]);
 const onSvg = findSvg(svgDir, ["on"], ["bg"]);
-if (!offSvg) throw new Error("Не найден SVG «off» (имя содержит 'off', но не 'bg').");
-if (!onSvg) throw new Error("Не найден SVG «on» (имя содержит 'on', но не 'bg').");
+if (!offSvg) throw new Error("SVG \"off\" not found (name contains 'off' but not 'bg').");
+if (!onSvg) throw new Error("SVG \"on\" not found (name contains 'on' but not 'bg').");
 log(`off → ${offSvg.replace(work + "\\", "") || offSvg}`);
 log(`on  → ${onSvg.replace(work + "\\", "") || onSvg}`);
 
-// ── 1. полный набор бандла из «off» (без подложки, дефолт) ─────────────────
-console.log("\n[1/3] Tauri bundle (off, без подложки):");
+// ── 1. full bundle set from "off" (no bg, default) ───────────────────────────
+console.log("\n[1/3] Tauri bundle (off, no bg):");
 const bundleTmp = mkdtempSync(join(tmpdir(), "vb-bundle-"));
 run("npx", ["--no-install", "tauri", "icon", offSvg, "-o", bundleTmp]);
 mkdirSync(ICONS_DIR, { recursive: true });
-// Копируем всё, кроме мобильных платформ (бандл тут только NSIS/Windows).
+// Copy everything except mobile platforms (the bundle here is NSIS/Windows only).
 for (const name of readdirSync(bundleTmp)) {
   if (name === "android" || name === "ios") continue;
   cpSync(join(bundleTmp, name), join(ICONS_DIR, name), { recursive: true });
   log(`${name}${statSync(join(bundleTmp, name)).isDirectory() ? "/" : ""}`);
 }
 
-// ── 2. иконки трея (off = дефолт без bg, on = активное состояние) ──────────
-console.log("\n[2/3] Tray (off + on, без подложки, 128px):");
+// ── 2. tray icons (off = default no bg, on = active state) ───────────────────
+console.log("\n[2/3] Tray (off + on, no bg, 128px):");
 rasterize(offSvg, join(ICONS_DIR, "tray-off.png"), 128);
 rasterize(onSvg, join(ICONS_DIR, "tray-on.png"), 128);
 
-// ── 3. favicon + логотип в окне (off, без подложки) ────────────────────────
-// favicon — растровый (браузеры стабильно берут .png). Логотип слева от
-// названия приложения в TitleBar — те же off/on SVG: чётко на любом DPI и
-// переключаются по состоянию туннеля, как иконка трея.
-console.log("\n[3/3] Favicon + in-app logo (off/on, без подложки):");
+// ── 3. favicon + in-app logo (off, no bg) ───────────────────────────────────
+// favicon — raster (browsers reliably pick up .png). The logo to the left of the
+// app name in TitleBar — the same off/on SVG: crisp at any DPI and toggled by
+// tunnel state, like the tray icon.
+console.log("\n[3/3] Favicon + in-app logo (off/on, no bg):");
 mkdirSync(STATIC_DIR, { recursive: true });
 rasterize(offSvg, join(STATIC_DIR, "favicon.png"), 64);
 cpSync(offSvg, join(STATIC_DIR, "logo-off.svg"));
 cpSync(onSvg, join(STATIC_DIR, "logo-on.svg"));
 log("logo-off.svg + logo-on.svg → static/");
 
-// ── уборка ───────────────────────────────────────────────────────────────
+// ── cleanup ───────────────────────────────────────────────────────────────
 rmSync(work, { recursive: true, force: true });
 rmSync(bundleTmp, { recursive: true, force: true });
 
-console.log("\n✓ Иконки сгенерированы:");
-console.log(`    ${ICONS_DIR.replace(ROOT + "\\", "")}  — бандл + tray-off/tray-on`);
+console.log("\n✓ Icons generated:");
+console.log(`    ${ICONS_DIR.replace(ROOT + "\\", "")}  — bundle + tray-off/tray-on`);
 console.log(`    ${STATIC_DIR.replace(ROOT + "\\", "")}\\favicon.png + logo-off/on.svg`);
-console.log("\n  Трей переключает tray-off ⇄ tray-on в src-tauri/src/tray.rs.");
+console.log("\n  The tray swaps tray-off ⇄ tray-on in src-tauri/src/tray.rs.");
