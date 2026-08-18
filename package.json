@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "i18n:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy globalVariable baseLocale --emit-ts-declarations",
-    "check": "npm run i18n:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check": "npm run i18n:compile && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json && node scripts/check-i18n.mjs",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "schema:update": "node scripts/gen-singbox-schema.mjs && node scripts/run-verify.mjs",
     "verify:editor": "node scripts/run-verify.mjs",
