@@ -1,9 +1,9 @@
-//! Управление процессом sing-box как системным сервисом.
+//! Managing the sing-box process as a system service.
 //!
-//! Ключевая идея: GUI работает без прав администратора. Elevation нужен ровно
-//! один раз — при регистрации сервиса, и там же мы выдаём текущему пользователю
-//! право стартовать и останавливать именно этот сервис. Дальше start/stop идут
-//! без единого UAC-запроса.
+//! Key idea: the GUI runs without administrator rights. Elevation is needed
+//! exactly once — when registering the service — and at that point we also
+//! grant the current user the right to start and stop exactly this service.
+//! After that, start/stop go through without a single UAC prompt.
 
 use serde::Serialize;
 
@@ -15,8 +15,9 @@ mod windows;
 #[cfg(windows)]
 use windows as platform;
 
-/// Обёртка-сервис для SCM: `sing-box run` сам по себе не сервис-aware, поэтому
-/// сервисом регистрируем себя и проксируем lifecycle ребёнку.
+/// The wrapper service for SCM: `sing-box run` is not service-aware on its
+/// own, so we register ourselves as the service and proxy the lifecycle to the
+/// child process.
 #[cfg(windows)]
 pub mod scm;
 
@@ -25,14 +26,14 @@ mod unsupported;
 #[cfg(not(windows))]
 use unsupported as platform;
 
-/// Имя сервиса. ASCII и без пробелов: его приходится передавать в `sc.exe`.
+/// The service name. ASCII and no spaces: it has to be passed to `sc.exe`.
 pub const SERVICE_NAME: &str = "VantageBoxSingBox";
 pub const SERVICE_DISPLAY_NAME: &str = "Vantage Box (sing-box)";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ServiceState {
-    /// Сервис ещё не зарегистрирован — нужен один UAC-запрос.
+    /// The service is not registered yet — one UAC prompt is needed.
     NotInstalled,
     Stopped,
     StartPending,
@@ -45,12 +46,12 @@ pub enum ServiceState {
 #[serde(rename_all = "camelCase")]
 pub struct ServiceInfo {
     pub name: String,
-    /// Есть ли реализация под текущую ОС.
+    /// Whether there is an implementation for the current OS.
     pub supported: bool,
     pub state: ServiceState,
-    /// Хватает ли прав стартовать и останавливать сервис без elevation.
+    /// Whether we have the rights to start and stop the service without elevation.
     pub can_control: bool,
-    /// Пояснение к состоянию — показываем пользователю как есть.
+    /// A note about the state — shown to the user as-is.
     pub detail: Option<String>,
 }
 
@@ -60,17 +61,17 @@ impl ServiceInfo {
     }
 }
 
-/// Текущее состояние сервиса. Прав не требует.
+/// The current state of the service. Does not require rights.
 pub fn status() -> Result<ServiceInfo> {
     platform::status()
 }
 
-/// Регистрирует (или пересоздаёт) сервис. Единственная операция с UAC.
+/// Registers (or recreates) the service. The only operation that needs UAC.
 pub fn install(settings: &Settings) -> Result<()> {
     platform::install(settings)
 }
 
-/// Удаляет сервис. Тоже требует elevation.
+/// Removes the service. Also requires elevation.
 pub fn uninstall() -> Result<()> {
     platform::uninstall()
 }

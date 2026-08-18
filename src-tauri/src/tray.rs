@@ -1,7 +1,7 @@
-//! Иконка в трее: состояние одним взглядом и управление без открытия окна.
+//! Tray icon: state at a glance and control without opening the window.
 //!
-//! Меню собирается заново только когда изменилось его содержимое — иначе
-//! фоновое обновление раз в несколько секунд заставляло бы меню моргать.
+//! The menu is rebuilt only when its content changes — otherwise the
+//! background refresh every few seconds would make the menu flicker.
 
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -20,35 +20,35 @@ use crate::window;
 
 const TRAY_ID: &str = "vantage-box";
 
-/// Как часто подтягиваем состояние в трей.
+/// How often we pull state into the tray.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(5);
 
-/// Сколько узлов показываем в подменю группы. Меню в трее на сотню элементов
-/// нечитаемо, а длинные списки — это работа для окна.
+/// How many nodes we show in a group's submenu. A tray menu with a hundred
+/// items is unreadable, and long lists are a job for the window.
 const MAX_NODES_PER_GROUP: usize = 24;
 
-// Идентификаторы пунктов меню.
+// Menu item identifiers.
 const ID_TOGGLE: &str = "toggle";
 const ID_RESTART: &str = "restart";
 const ID_SHOW: &str = "show";
 const ID_QUIT: &str = "quit";
-/// Пункты выбора прокси нумеруем: теги sing-box могут содержать что угодно,
-/// включая разделители, поэтому имя группы в id не кодируем.
+/// Proxy selection items are numbered: sing-box tags can contain anything,
+/// including separators, so we do not encode the group name in the id.
 const ID_SELECT_PREFIX: &str = "select:";
 
-/// Что трей показывает сейчас. Нужно, чтобы не пересобирать меню впустую.
+/// What the tray is currently showing. Needed to avoid rebuilding the menu in vain.
 #[derive(Default)]
 pub struct TrayRegistry {
-    /// id пункта → (группа, узел).
+    /// item id → (group, node).
     selections: Mutex<HashMap<String, (String, String)>>,
-    /// Отпечаток последнего собранного меню.
+    /// Fingerprint of the last built menu.
     signature: Mutex<Option<String>>,
 }
 
-/// Создаёт иконку в трее. Меню наполняется первым же `refresh`.
+/// Creates the tray icon. The menu is populated by the first `refresh`.
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
-    // Повторный вызов управляемого состояния паникует, поэтому setup
-    // предполагается однократным — он и вызывается один раз при старте.
+    // A second call to manage state panics, so setup is meant to be called
+    // once — and it is only called once at startup.
     app.manage(TrayRegistry::default());
 
     TrayIconBuilder::with_id(TRAY_ID)
@@ -57,7 +57,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(handle_menu_event)
         .on_tray_icon_event(|tray, event| {
-            // Левый клик открывает окно, правый — меню (его рисует система).
+            // Left click opens the window, right click shows the menu (drawn by the OS).
             if let TrayIconEvent::Click {
                 button: tauri::tray::MouseButton::Left,
                 button_state: tauri::tray::MouseButtonState::Up,
@@ -72,7 +72,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Фоновое обновление трея. Живёт столько же, сколько приложение.
+/// Background tray refresh. Lives as long as the application.
 pub fn spawn_refresher(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {
@@ -82,7 +82,7 @@ pub fn spawn_refresher(app: AppHandle) {
     });
 }
 
-/// Пересобирает иконку, подсказку и меню под текущее состояние.
+/// Rebuilds the icon, tooltip, and menu to match the current state.
 pub async fn refresh(app: &AppHandle) {
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return;
@@ -94,8 +94,8 @@ pub async fn refresh(app: &AppHandle) {
     let connection = app.state::<AppState>().streams.status();
     let connected = connection.state == ConnectionState::Connected;
 
-    // Группы спрашиваем только при живом API: иначе это гарантированный таймаут
-    // каждые несколько секунд.
+    // Only query groups when the API is alive: otherwise it is a guaranteed
+    // timeout every few seconds.
     let groups = if connected {
         app.state::<AppState>()
             .client()
@@ -122,20 +122,20 @@ pub async fn refresh(app: &AppHandle) {
     }
 
     if let Err(e) = rebuild_menu(app, &tray, run, connected, &groups) {
-        eprintln!("не удалось обновить меню трея: {e}");
+        eprintln!("failed to update tray menu: {e}");
     }
 }
 
 // ---------------------------------------------------------------------------
-// Меню
+// Menu
 // ---------------------------------------------------------------------------
 
-/// Группа selector'ов в том виде, в котором её показывает трей.
+/// A selector group as the tray shows it.
 struct TrayGroup {
     name: String,
     now: Option<String>,
     nodes: Vec<String>,
-    /// Сколько узлов не поместилось.
+    /// How many nodes did not fit.
     hidden: usize,
 }
 
@@ -159,22 +159,22 @@ fn collect_groups(
         })
         .collect();
 
-    // Источник — HashMap, поэтому без сортировки порядок пунктов менялся бы
-    // от обновления к обновлению.
+    // The source is a HashMap, so without sorting the item order would change
+    // from one refresh to the next.
     groups.sort_by(|a, b| a.name.cmp(&b.name));
     groups
 }
 
-/// Всё, что трею нужно знать о состоянии sing-box. Копия, а не ссылка на
-/// `RunStatus`: она должна оставаться `Copy`, её таскают по всем подписям.
+/// Everything the tray needs to know about sing-box state. A copy, not a
+/// reference to `RunStatus`: it must stay `Copy` — it is passed around every closure.
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct RunSummary {
     running: bool,
-    /// Состояние вообще удалось прочитать.
+    /// Whether the state could be read at all.
     known: bool,
-    /// Запуск возможен: либо сервис установлен, либо конфигу не нужен TUN.
+    /// Start is possible: either the service is installed, or the config does not need TUN.
     can_start: bool,
-    /// Идёт переход между состояниями — управлять сейчас нечем.
+    /// A transition between states is in progress — nothing to control right now.
     pending: bool,
 }
 
@@ -220,8 +220,8 @@ fn rebuild_menu(
 
     let mut menu = MenuBuilder::new(app).item(&header).separator();
 
-    // Подменю групп. Держим их живыми до вызова build(): SubmenuBuilder
-    // возвращает значения, на которые мы дальше ссылаемся.
+    // Group submenus. Keep them alive until build() is called: SubmenuBuilder
+    // returns values we reference further down.
     let mut submenus = Vec::new();
     for (group_index, group) in groups.iter().enumerate() {
         let mut items: Vec<Box<dyn IsMenuItem<_>>> = Vec::new();
@@ -243,7 +243,7 @@ fn rebuild_menu(
             items.push(Box::new(MenuItem::with_id(
                 app,
                 format!("more:{group_index}"),
-                format!("…ещё {} — откройте окно", group.hidden),
+                format!("…{} more — open the window", group.hidden),
                 false,
                 None::<&str>,
             )?));
@@ -264,9 +264,9 @@ fn rebuild_menu(
         menu = menu.separator();
     }
 
-    let toggle_text = if run.running { "Остановить" } else { "Запустить" };
-    // Пока идёт переход, команда всё равно не выполнится. Запуск без сервиса
-    // невозможен только для конфига с TUN — остановка доступна всегда.
+    let toggle_text = if run.running { "Stop" } else { "Start" };
+    // While a transition is in progress, the command would not run anyway. Starting without
+    // a service is only impossible for a config with TUN — stopping is always available.
     let controllable = run.known && !run.pending && (run.running || run.can_start);
 
     let menu = menu
@@ -280,7 +280,7 @@ fn rebuild_menu(
         .item(&MenuItem::with_id(
             app,
             ID_RESTART,
-            "Мягкий перезапуск",
+            "Soft restart",
             run.running && !run.pending,
             None::<&str>,
         )?)
@@ -288,12 +288,12 @@ fn rebuild_menu(
         .item(&MenuItem::with_id(
             app,
             ID_SHOW,
-            "Открыть Vantage Box",
+            "Open Vantage Box",
             true,
             None::<&str>,
         )?)
         .separator()
-        .item(&MenuItem::with_id(app, ID_QUIT, "Выход", true, None::<&str>)?)
+        .item(&MenuItem::with_id(app, ID_QUIT, "Quit", true, None::<&str>)?)
         .build()?;
 
     *registry.selections.lock().expect("tray selections lock") = selections;
@@ -333,7 +333,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                     .cloned();
                 match target {
                     Some((group, node)) => actions::select_proxy(&app, &group, &node).await,
-                    // Меню могло устареть между отрисовкой и кликом.
+                    // The menu could have gone stale between rendering and the click.
                     None => Ok(()),
                 }
             }
@@ -341,36 +341,36 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         };
 
         if let Err(e) = result {
-            eprintln!("действие из трея не выполнено: {e}");
+            eprintln!("tray action failed: {e}");
         }
         refresh(&app).await;
     });
 }
 
 // ---------------------------------------------------------------------------
-// Подписи и иконки
+// Labels and icons
 // ---------------------------------------------------------------------------
 
 fn state_label(run: RunSummary, connected: bool) -> &'static str {
     if !run.known {
-        return "состояние неизвестно";
+        return "state unknown";
     }
     match run {
-        RunSummary { running: true, .. } if connected => "работает",
-        RunSummary { running: true, .. } => "запущен, нет связи с API",
-        RunSummary { pending: true, .. } => "переключается",
+        RunSummary { running: true, .. } if connected => "running",
+        RunSummary { running: true, .. } => "started, no API connection",
+        RunSummary { pending: true, .. } => "switching",
         RunSummary {
             can_start: false, ..
-        } => "конфигу нужен TUN — установите сервис",
-        _ => "остановлен",
+        } => "config needs TUN — install the service",
+        _ => "stopped",
     }
 }
 
 fn tooltip(run: RunSummary, connected: bool, groups: &[TrayGroup]) -> String {
     let mut text = format!("Vantage Box — {}", state_label(run, connected));
 
-    // В подсказку выносим только активный outbound первой группы: тултип
-    // Windows обрезает длинный текст, и список туда всё равно не влезет.
+    // Only the active outbound of the first group goes into the tooltip: the
+    // Windows tooltip truncates long text, and the full list would not fit anyway.
     if let Some(group) = groups.first() {
         if let Some(now) = &group.now {
             text.push_str(&format!("\n{}: {now}", group.name));
@@ -379,7 +379,7 @@ fn tooltip(run: RunSummary, connected: bool, groups: &[TrayGroup]) -> String {
     text
 }
 
-/// Отпечаток содержимого меню: если он не изменился, пересобирать нечего.
+/// Fingerprint of the menu contents: if unchanged, nothing to rebuild.
 fn signature(run: RunSummary, connected: bool, groups: &[TrayGroup]) -> String {
     let mut parts = vec![format!(
         "{}{}{}{}/{connected}",
@@ -396,10 +396,10 @@ fn signature(run: RunSummary, connected: bool, groups: &[TrayGroup]) -> String {
     parts.join(";")
 }
 
-/// Иконка трея в одном из двух состояний, декодированная один раз.
-/// `active = false` — дефолтная («выкл»), `active = true` — «вкл».
-/// Иконки генерируются из Figma-экспорта скриптом `npm run icons`
-/// (scripts/generate-icons.mjs): tray-off.png / tray-on.png в src-tauri/icons.
+/// The tray icon in one of two states, decoded once.
+/// `active = false` — default ("off"), `active = true` — "on".
+/// Icons are generated from a Figma export by the `npm run icons` script
+/// (scripts/generate-icons.mjs): tray-off.png / tray-on.png in src-tauri/icons.
 fn tray_icon(active: bool) -> Option<&'static (Vec<u8>, u32, u32)> {
     static OFF: OnceLock<Option<(Vec<u8>, u32, u32)>> = OnceLock::new();
     static ON: OnceLock<Option<(Vec<u8>, u32, u32)>> = OnceLock::new();
@@ -417,15 +417,14 @@ fn tray_icon(active: bool) -> Option<&'static (Vec<u8>, u32, u32)> {
         .as_ref()
 }
 
-/// Активное состояние — иконка «вкл», неактивное — дефолтная «выкл».
-/// Пользователю не приходится наводить курсор, чтобы понять, работает ли
-/// туннель.
+/// Active state → the "on" icon, inactive → the default "off" icon.
+/// The user does not have to hover to tell whether the tunnel is working.
 fn icon_for(active: bool) -> Image<'static> {
     if let Some((rgba, width, height)) = tray_icon(active) {
         return Image::new_owned(rgba.clone(), *width, *height);
     }
-    // До иконки не добрались — рисуем однотонный квадрат, чтобы в трее
-    // хоть что-то было видно. Цвета повторяют акценты исходных иконок.
+    // Icon not available — draw a solid square so at least something is
+    // visible in the tray. Colors match the accents of the original icons.
     let fill = if active { [0x4d, 0xbf, 0x45, 0xff] } else { [0x7b, 0x84, 0x94, 0xb0] };
     Image::new_owned(fill.repeat(16 * 16), 16, 16)
 }

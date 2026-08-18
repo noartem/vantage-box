@@ -1,4 +1,4 @@
-// Модули публичные: на них опирается интеграционный тест в `tests/`.
+// Public modules: the integration test in `tests/` relies on them.
 pub mod binary;
 pub mod clash;
 pub mod compat;
@@ -29,23 +29,24 @@ use state::{AppState, EVENT_CONFIG_CHANGED, EVENT_SETTINGS_ERROR};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // SCM мог стартовать этот же бинарник как сервис (`--scm`). В этом режиме
-    // Tauri не нужен: мы лишь докладываем SCM о состоянии и держим sing-box
-    // дочерним процессом. Ветку проверяем до `tauri::Builder` — иначе под
-    // LocalSystem окно всё равно не появится, а обёртка не успеет ответить SCM.
+    // SCM may have started this same binary as a service (`--scm`). In this
+    // mode Tauri is not needed: we only report state to SCM and keep sing-box
+    // as a child process. We check this branch before `tauri::Builder` —
+    // otherwise under LocalSystem the window would not appear anyway, and the
+    // wrapper would not have time to answer SCM.
     #[cfg(windows)]
     if service::scm::is_invocation() {
-        // Подключаемся к SCM и блокируемся, пока сервис не остановится. На
-        // отдельном потоке SCM запустит service_main — оттуда регистрируем
-        // обработчик и поднимаем sing-box. Tauri в этом режиме не нужен.
+        // Connect to SCM and block until the service stops. On a separate
+        // thread SCM will run service_main — from there we register the
+        // handler and bring up sing-box. Tauri is not needed in this mode.
         service::scm::dispatch();
         return;
     }
 
     let mut builder = tauri::Builder::default();
 
-    // Плагин single-instance должен идти первым: он решает, жить второму
-    // процессу или сразу отдать управление уже запущенному.
+    // The single-instance plugin must go first: it decides whether a second
+    // process lives or hands control to the already running one.
     #[cfg(desktop)]
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -66,8 +67,8 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            // Битый settings.json не должен мешать запуску: поднимаемся на
-            // дефолтах и показываем ошибку в UI, чтобы её можно было починить.
+            // A broken settings.json must not block startup: we come up on
+            // defaults and show the error in the UI so it can be fixed.
             let (initial, load_error) = match settings::load_or_create() {
                 Ok(s) => (s, None),
                 Err(e) => (Settings::default(), Some(e.to_string())),
@@ -85,15 +86,15 @@ pub fn run() {
                 AppState::new(Arc::clone(&store), client, Arc::clone(&streams), config_tx);
             app_state.rearm_config_watcher(&initial.sing_box.config_path);
 
-            // Следим за файлом: правки руками в редакторе должны подхватываться
-            // без перезапуска приложения.
+            // Watch the file: manual edits in an editor must be picked up
+            // without restarting the app.
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
             match settings::spawn_watcher(&path, tx) {
                 Ok(watcher) => {
                     *app_state.watcher.lock().expect("watcher lock") = Some(watcher);
                 }
                 Err(e) => {
-                    eprintln!("watcher настроек не запущен: {e}");
+                    eprintln!("settings watcher not started: {e}");
                 }
             }
 
@@ -109,8 +110,8 @@ pub fn run() {
                         true
                     }
                     Err(e) => {
-                        // Без трея приложение остаётся рабочим, поэтому не падаем.
-                        eprintln!("не удалось создать иконку в трее: {e}");
+                        // Without the tray the app still works, so do not crash.
+                        eprintln!("failed to create tray icon: {e}");
                         false
                     }
                 }
@@ -127,8 +128,8 @@ pub fn run() {
                 while rx.recv().await.is_some() {
                     let state = watch_handle.state::<AppState>();
                     match state.settings.reload() {
-                        // Файл изменился, но содержимое то же — например, это
-                        // была наша собственная запись.
+                        // The file changed but the contents are the same — for
+                        // example, it was our own write.
                         Ok(None) => {}
                         Ok(Some(next)) => {
                             if let Err(e) =
@@ -145,8 +146,8 @@ pub fn run() {
                 }
             });
 
-            // Правки config.json снаружи: сообщаем UI, чтобы он предложил
-            // перечитать файл и мягко перезапустить sing-box.
+            // External edits to config.json: tell the UI so it can offer to
+            // re-read the file and softly restart sing-box.
             let config_handle = handle.clone();
             tauri::async_runtime::spawn(async move {
                 while config_rx.recv().await.is_some() {
@@ -165,20 +166,20 @@ pub fn run() {
                 let _ = handle.emit(EVENT_SETTINGS_ERROR, message);
             }
 
-            // Каталог релизов sing-box подтягиваем в фоне: в UI он всегда
-            // приезжает из кэша, и открытие вкладки не должно ждать GitHub.
+            // Pull the sing-box release catalog in the background: in the UI
+            // it always comes from cache, and opening the tab must not wait on GitHub.
             if binary::catalog_is_stale() {
                 tauri::async_runtime::spawn(async {
                     if let Err(e) = binary::refresh_catalog(None).await {
-                        eprintln!("каталог релизов sing-box не обновлён: {e}");
+                        eprintln!("sing-box release catalog not updated: {e}");
                     }
                 });
             }
 
-            // Подписки: вливаем узлы при старте и периодически освежаем.
+            // Subscriptions: inject nodes at startup and refresh periodically.
             subscription::spawn_refresher(handle.clone());
 
-            // Fallback-монитор: автопереключение selector-групп на резерв.
+            // Fallback monitor: auto-switch selector groups to a backup.
             fallback::spawn(handle.clone());
 
             if selftest::requested() {
@@ -226,12 +227,13 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// Одна строка о том, что поднялось при старте, а что нет.
+/// One line on what came up at startup and what did not.
 ///
-/// Иконку в трее и глобальные хоткеи не видно из логов приложения и не проверить
-/// снаружи: если комбинация занята другой программой, единственный симптом —
-/// «хоткей не работает». Эта строка делает такие отказы видимыми и позволяет
-/// проверять запуск автоматически (см. `scripts/smoke-test.ps1`).
+/// The tray icon and global hotkeys are not visible from app logs and cannot
+/// be checked from the outside: if a combination is taken by another program,
+/// the only symptom is "the hotkey does not work". This line makes such
+/// failures visible and lets startup be checked automatically
+/// (see `scripts/smoke-test.ps1`).
 fn report_startup(
     settings: &Settings,
     tray_ready: bool,
@@ -261,17 +263,17 @@ fn report_startup(
     }
 }
 
-/// Главное окно создаётся скрытым (см. `tauri.conf.json`), чтобы при запуске
-/// свёрнутым оно не успевало мигнуть на экране.
+/// The main window is created hidden (see `tauri.conf.json`), so that when
+/// starting minimized it does not flash on screen.
 ///
-/// Возвращает `true`, если окно показано.
+/// Returns `true` if the window was shown.
 fn setup_main_window(handle: &tauri::AppHandle, settings: &Settings) -> bool {
     let Some(main) = handle.get_webview_window(window::MAIN) else {
         return false;
     };
 
-    // Прятаться при старте имеет смысл только если есть трей: иначе приложение
-    // окажется запущенным без единого способа его открыть.
+    // Hiding at startup only makes sense if the tray exists: otherwise the
+    // app would be running with no way to open it.
     let start_hidden = settings.tray.enabled && settings.tray.start_minimized;
     if !start_hidden {
         let _ = main.show();

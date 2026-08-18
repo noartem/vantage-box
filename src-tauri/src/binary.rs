@@ -1,9 +1,9 @@
-//! Бинарник sing-box: где он лежит, какой он версии, как его обновить.
+//! The sing-box binary: where it lives, what version it is, how to update it.
 //!
-//! Два режима. Если в настройках задан `singBox.binaryPath` — это выбор
-//! пользователя, мы его только читаем и в крайнем случае предупреждаем об
-//! устаревшей версии. Иначе бинарником управляет Vantage Box: он лежит в
-//! конфиг-директории и обновляется отсюда.
+//! Two modes. If `singBox.binaryPath` is set in settings — that is the user's
+//! choice, we only read it and, if needed, warn about an outdated version.
+//! Otherwise Vantage Box manages the binary: it lives in the config directory
+//! and is updated from here.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -20,24 +20,24 @@ const EXE_NAME: &str = "sing-box.exe";
 #[cfg(not(windows))]
 const EXE_NAME: &str = "sing-box";
 
-/// Рабочая директория sing-box: туда лягут `cache_file` и прочее состояние.
-/// Без неё сервис писал бы в системную директорию, откуда его запустили.
+/// The sing-box working directory: where `cache_file` and other state land.
+/// Without it the service would write to the system directory it was started from.
 pub fn data_dir() -> Result<PathBuf> {
     Ok(config_dir()?.join("sing-box-data"))
 }
 
-/// Путь к активному файлу sing-box под управлением Vantage Box.
+/// Path to the active sing-box file managed by Vantage Box.
 ///
-/// Путь стабильный: на него ссылается зарегистрированный сервис. Смена версии
-/// — это подмена файла по этому пути, а не новый путь, иначе каждое
-/// переключение требовало бы переустановки сервиса с UAC-запросом.
+/// The path is stable: the registered service points to it. Switching versions
+/// is a file swap at this path, not a new path — otherwise every switch would
+/// require reinstalling the service with a UAC prompt.
 pub fn managed_path() -> Result<PathBuf> {
     Ok(config_dir()?.join("bin").join(EXE_NAME))
 }
 
-/// Директория со скачанными версиями. Каждая лежит отдельным файлом и
-/// остаётся на диске, пока её не удалят руками: откатиться на предыдущую
-/// версию не должно означать «скачай её заново».
+/// Directory with downloaded versions. Each one is a separate file and stays
+/// on disk until removed by hand: rolling back to a previous version must not
+/// mean "download it again".
 pub fn versions_dir() -> Result<PathBuf> {
     Ok(config_dir()?.join("bin").join("versions"))
 }
@@ -47,7 +47,7 @@ pub fn version_path(version: &str) -> Result<PathBuf> {
     Ok(versions_dir()?.join(format!("sing-box-{version}{suffix}")))
 }
 
-/// Версии, которые уже скачаны.
+/// Versions that are already downloaded.
 pub fn downloaded_versions() -> Vec<String> {
     let Ok(dir) = versions_dir() else {
         return Vec::new();
@@ -64,8 +64,8 @@ pub fn downloaded_versions() -> Vec<String> {
             let name = name.strip_suffix(".exe").unwrap_or(&name).to_string();
             name.strip_prefix("sing-box-").map(str::to_string)
         })
-        // Недокачанный архив или чужой файл рядом не должен превратиться в
-        // «версию», которую UI предложит выбрать.
+        // An unfinished download or a stray foreign file must not turn into a
+        // "version" the UI would offer to pick.
         .filter(|version| parse_version(version).is_some())
         .collect();
 
@@ -73,13 +73,13 @@ pub fn downloaded_versions() -> Vec<String> {
     versions
 }
 
-/// Ключ для сортировки версий по убыванию: строковое сравнение поставило бы
-/// 1.9.0 выше 1.11.0.
+/// Sort key for versions in descending order: a string compare would put
+/// 1.9.0 above 1.11.0.
 fn version_key(version: &str) -> (u32, u32, u32) {
     parse_version(version).unwrap_or((0, 0, 0))
 }
 
-/// Какой бинарник использовать по текущим настройкам.
+/// Which binary to use given the current settings.
 pub fn resolve(settings: &Settings) -> Result<BinaryChoice> {
     let custom = settings.sing_box.binary_path.trim();
     if custom.is_empty() {
@@ -98,11 +98,11 @@ pub fn resolve(settings: &Settings) -> Result<BinaryChoice> {
 #[derive(Debug, Clone)]
 pub struct BinaryChoice {
     pub path: PathBuf,
-    /// `true` — бинарник наш, можно обновлять автоматически.
+    /// `true` — the binary is ours, can be auto-updated.
     pub managed: bool,
 }
 
-/// Сведения о бинарнике для UI.
+/// Details about the binary for the UI.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BinaryInfo {
@@ -111,9 +111,9 @@ pub struct BinaryInfo {
     pub present: bool,
     pub version: Option<String>,
     pub compatibility: Compatibility,
-    /// Почему не удалось определить версию, если не удалось.
+    /// Why the version could not be detected, if it could not.
     pub problem: Option<String>,
-    /// Поддерживаемый диапазон — показываем рядом с предупреждением.
+    /// The supported range — shown next to the warning.
     pub supported_range: String,
 }
 
@@ -150,26 +150,26 @@ pub fn supported_range() -> String {
     format!(">= {a}.{b}.{c}, < {x}.{y}.{z}")
 }
 
-/// `sing-box version` печатает несколько строк; версия — в первой,
-/// вида `sing-box version 1.11.4`.
+/// `sing-box version` prints several lines; the version is in the first one,
+/// like `sing-box version 1.11.4`.
 pub fn detect_version(path: &Path) -> Result<String> {
     let output = run(path, &["version"])?;
     output
         .split_whitespace()
         .find_map(|token| parse_version(token).map(|_| token.trim_start_matches('v').to_string()))
-        .ok_or_else(|| Error::Other(format!("не удалось разобрать вывод `sing-box version`: {output}")))
+        .ok_or_else(|| Error::Other(format!("could not parse `sing-box version` output: {output}")))
 }
 
-/// `sing-box check -c <config>` — синтаксическая и семантическая проверка.
-/// Отсутствие бинарника не ошибка: тогда проверка просто недоступна, и об
-/// этом надо сказать прямо, а не выдавать это за проваленную валидацию.
+/// `sing-box check -c <config>` — syntactic and semantic validation.
+/// A missing binary is not an error: then the check is simply unavailable,
+/// and we should say so directly rather than pass it off as a failed validation.
 pub fn check_config(binary: &Path, config: &Path) -> Result<CheckResult> {
     if !binary.is_file() {
         return Ok(CheckResult {
             available: false,
             ok: false,
             output: format!(
-                "файл sing-box не найден ({}), поэтому проверена только синтаксическая корректность JSON",
+                "sing-box file not found ({}), so only JSON syntactic validity was checked",
                 binary.display()
             ),
         });
@@ -194,18 +194,18 @@ pub fn check_config(binary: &Path, config: &Path) -> Result<CheckResult> {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CheckResult {
-    /// Была ли проверка вообще выполнена.
+    /// Whether the check was performed at all.
     pub available: bool,
     pub ok: bool,
     pub output: String,
 }
 
-/// Запускает бинарник и отдаёт stdout+stderr. Ненулевой код возврата — это
-/// `Error::Other` с текстом вывода: для `check` он и есть сообщение об ошибке.
+/// Runs the binary and returns stdout+stderr. A non-zero exit code is an
+/// `Error::Other` with the output text: for `check` that is the error message.
 fn run(path: &Path, args: &[&str]) -> Result<String> {
     if !path.is_file() {
         return Err(Error::Other(format!(
-            "файл sing-box не найден: {}",
+            "sing-box file not found: {}",
             path.display()
         )));
     }
@@ -232,30 +232,30 @@ fn run(path: &Path, args: &[&str]) -> Result<String> {
 }
 
 // ---------------------------------------------------------------------------
-// Релизы на GitHub
+// Releases on GitHub
 // ---------------------------------------------------------------------------
 
 const RELEASES_URL: &str = "https://api.github.com/repos/SagerNet/sing-box/releases";
-/// GitHub API отклоняет запросы без User-Agent.
+/// The GitHub API rejects requests without a User-Agent.
 const USER_AGENT: &str = "vantage-box";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ReleaseInfo {
-    /// Версия без префикса `v`.
+    /// Version without the `v` prefix.
     pub version: String,
     pub prerelease: bool,
-    /// Попадает ли в протестированный диапазон.
+    /// Whether it falls in the tested range.
     pub compatibility: Compatibility,
-    /// Имя ассета под текущую платформу. `None` — сборки под неё нет.
+    /// Asset name for the current platform. `None` — no build for it.
     pub asset: Option<String>,
     pub asset_url: Option<String>,
     pub size: u64,
-    /// Файл этой версии уже лежит на диске. Считается заново при каждом
-    /// чтении каталога, в кэше не хранится.
+    /// The file for this version is already on disk. Recomputed on every
+    /// catalog read, not stored in the cache.
     #[serde(skip_deserializing)]
     pub downloaded: bool,
-    /// Именно эта версия сейчас используется.
+    /// This exact version is currently in use.
     #[serde(skip_deserializing)]
     pub active: bool,
 }
@@ -292,17 +292,17 @@ struct GithubAsset {
     size: u64,
 }
 
-/// Сколько релизов просим за один запрос (максимум, разрешённый GitHub).
+/// How many releases we request per page (the maximum GitHub allows).
 const RELEASES_PER_PAGE: usize = 100;
-/// Потолок на число страниц — чтобы не уткнуться в лимит запросов к API.
+/// Cap on the number of pages — so we do not hit the API request limit.
 const MAX_RELEASE_PAGES: usize = 5;
 
-/// Список последних релизов sing-box. Предрелизы отсеиваем: обновляться на
-/// beta без явного запроса — не то, чего ждёт пользователь.
+/// List of recent sing-box releases. We filter out prereleases: updating to a
+/// beta without an explicit request is not what the user expects.
 ///
-/// Ходим по страницам, пока не наберём `limit` стабильных релизов: между
-/// стабильными версиями бывают десятки alpha и beta, и на одной странице
-/// нужного количества может просто не оказаться.
+/// We walk pages until we collect `limit` stable releases: between stable
+/// versions there can be dozens of alpha and beta, and a single page may
+/// simply not have enough of them.
 pub async fn fetch_releases(limit: usize) -> Result<Vec<ReleaseInfo>> {
     let http = reqwest::Client::builder()
         .user_agent(USER_AGENT)
@@ -323,7 +323,7 @@ pub async fn fetch_releases(limit: usize) -> Result<Vec<ReleaseInfo>> {
 
         if !response.status().is_success() {
             return Err(Error::Other(format!(
-                "GitHub ответил {} при запросе списка релизов",
+                "GitHub responded {} when requesting the release list",
                 response.status()
             )));
         }
@@ -360,26 +360,26 @@ fn to_info(release: GithubRelease) -> ReleaseInfo {
 }
 
 // ---------------------------------------------------------------------------
-// Кэш каталога релизов
+// Release catalog cache
 //
-// Список релизов нужен часто (проверка обновлений, выбор версии), а меняется
-// он раз в несколько недель. Поэтому в UI он всегда приезжает из кэша, а поход
-// на GitHub — это либо фоновое обновление на старте, либо явная кнопка.
+// The release list is needed often (update checks, version selection) but
+// changes once every few weeks. So in the UI it always comes from cache, and
+// a trip to GitHub is either a background refresh at startup or an explicit button.
 // ---------------------------------------------------------------------------
 
 const CATALOG_FILE: &str = "releases.json";
-/// Сколько кэш считается свежим. Дольше — обновляем в фоне при старте.
+/// How long the cache is considered fresh. Longer — refresh in the background at startup.
 const CATALOG_TTL_SECS: u64 = 12 * 60 * 60;
-/// Сколько стабильных релизов держим в каталоге.
+/// How many stable releases we keep in the catalog.
 pub const CATALOG_SIZE: usize = 15;
 
-/// Каталог релизов в том виде, в котором его видит UI.
+/// The release catalog as the UI sees it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseCatalog {
-    /// Когда список забирали с GitHub, unix-время в секундах. 0 — никогда.
+    /// When the list was fetched from GitHub, unix time in seconds. 0 — never.
     pub fetched_at: u64,
-    /// Кэш пора обновить.
+    /// The cache needs a refresh.
     pub stale: bool,
     pub releases: Vec<ReleaseInfo>,
 }
@@ -422,12 +422,12 @@ fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
-/// Каталог из кэша. Сеть не трогает.
+/// Catalog from cache. Does not touch the network.
 pub fn cached_catalog(active_version: Option<&str>) -> ReleaseCatalog {
     finish(read_cache(), active_version)
 }
 
-/// Обновляет кэш из GitHub и отдаёт свежий каталог.
+/// Refreshes the cache from GitHub and returns the fresh catalog.
 pub async fn refresh_catalog(active_version: Option<&str>) -> Result<ReleaseCatalog> {
     let releases = fetch_releases(CATALOG_SIZE).await?;
     let cache = CachedCatalog {
@@ -438,17 +438,17 @@ pub async fn refresh_catalog(active_version: Option<&str>) -> Result<ReleaseCata
     Ok(finish(cache, active_version))
 }
 
-/// Пора ли обновить кэш в фоне.
+/// Whether the cache should be refreshed in the background.
 pub fn catalog_is_stale() -> bool {
     let cache = read_cache();
     cache.releases.is_empty() || now_secs().saturating_sub(cache.fetched_at) > CATALOG_TTL_SECS
 }
 
-/// Достраивает каталог локальными фактами: что скачано и что активно.
+/// Completes the catalog with local facts: what is downloaded and what is active.
 ///
-/// Скачанные версии, которых нет в списке с GitHub (например, релиз уехал из
-/// первых `CATALOG_SIZE`), всё равно попадают в каталог — иначе установленную
-/// версию стало бы нечем удалить.
+/// Downloaded versions that are not in the GitHub list (for example, a release
+/// that fell out of the first `CATALOG_SIZE`) still make it into the catalog —
+/// otherwise the installed version could not be deleted.
 fn finish(cache: CachedCatalog, active_version: Option<&str>) -> ReleaseCatalog {
     let downloaded = downloaded_versions();
     let mut releases = cache.releases;
@@ -482,10 +482,10 @@ fn finish(cache: CachedCatalog, active_version: Option<&str>) -> ReleaseCatalog 
     }
 }
 
-/// Имя ассета под текущую ОС и архитектуру.
+/// Asset name for the current OS and architecture.
 ///
-/// Пока умеем только Windows: там ассеты — zip, и распаковщик у нас zip'овый.
-/// Linux и macOS отдают tar.gz, их поддержка приедет вместе с M3.
+/// For now we only support Windows: there assets are zips, and our unpacker is
+/// the zip one. Linux and macOS ship tar.gz; their support arrives with M3.
 pub fn asset_name(version: &str) -> Option<String> {
     let arch = match std::env::consts::ARCH {
         "x86_64" => "amd64",
@@ -501,11 +501,11 @@ pub fn asset_name(version: &str) -> Option<String> {
     }
 }
 
-/// Скачивает ассет, считая sha256 на лету.
+/// Downloads an asset, computing sha256 on the fly.
 ///
-/// Апстрим не публикует контрольные суммы, поэтому сверять хеш не с чем:
-/// целостность обеспечивает TLS до GitHub. Посчитанное значение показываем
-/// пользователю — его можно сверить вручную.
+/// Upstream does not publish checksums, so there is nothing to check the hash
+/// against: integrity is provided by TLS to GitHub. The computed value is
+/// shown to the user — it can be verified by hand.
 pub async fn download(url: &str, dest: &Path) -> Result<String> {
     use futures_util::StreamExt;
     use sha2::{Digest, Sha256};
@@ -523,7 +523,7 @@ pub async fn download(url: &str, dest: &Path) -> Result<String> {
     let response = http.get(url).send().await?;
     if !response.status().is_success() {
         return Err(Error::Other(format!(
-            "не удалось скачать {url}: {}",
+            "failed to download {url}: {}",
             response.status()
         )));
     }
@@ -547,7 +547,7 @@ pub async fn download(url: &str, dest: &Path) -> Result<String> {
         .collect())
 }
 
-/// Удаляет скачанную версию. Отсутствие файла — не ошибка.
+/// Deletes a downloaded version. A missing file is not an error.
 pub fn remove_version(version: &str) -> Result<()> {
     let path = version_path(version)?;
     if !path.exists() {
@@ -556,18 +556,18 @@ pub fn remove_version(version: &str) -> Result<()> {
     std::fs::remove_file(&path).map_err(|e| Error::io(path.display().to_string(), e))
 }
 
-/// Достаёт бинарник sing-box из скачанного архива. Внутри он лежит в папке
-/// вида `sing-box-1.13.16-windows-amd64/`, поэтому ищем по имени файла.
+/// Extracts the sing-box binary from a downloaded archive. Inside it lives in
+/// a folder like `sing-box-1.13.16-windows-amd64/`, so we look it up by file name.
 pub fn extract(archive_path: &Path, dest: &Path) -> Result<()> {
     let file = std::fs::File::open(archive_path)
         .map_err(|e| Error::io(archive_path.display().to_string(), e))?;
     let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| Error::Other(format!("не удалось прочитать архив: {e}")))?;
+        .map_err(|e| Error::Other(format!("could not read archive: {e}")))?;
 
     for index in 0..archive.len() {
         let mut entry = archive
             .by_index(index)
-            .map_err(|e| Error::Other(format!("не удалось прочитать запись архива: {e}")))?;
+            .map_err(|e| Error::Other(format!("could not read archive entry: {e}")))?;
 
         let is_target = Path::new(entry.name())
             .file_name()
@@ -595,11 +595,11 @@ pub fn extract(archive_path: &Path, dest: &Path) -> Result<()> {
     }
 
     Err(Error::Other(format!(
-        "в архиве нет файла {EXE_NAME}"
+        "no {EXE_NAME} file in the archive"
     )))
 }
 
-/// На Windows дочерний процесс иначе мигал бы окном консоли.
+/// On Windows a child process would otherwise flash a console window.
 #[cfg(windows)]
 fn hide_console(command: &mut Command) {
     use std::os::windows::process::CommandExt;

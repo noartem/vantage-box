@@ -1,7 +1,7 @@
-//! Операции над сервисом и прокси, общие для UI и трея.
+//! Operations on the service and proxies, shared between the UI and the tray.
 //!
-//! Трей и окно должны вести себя одинаково, поэтому логика живёт здесь, а
-//! `commands.rs` и `tray.rs` — только тонкие обёртки над ней.
+//! The tray and the window must behave the same, so the logic lives here, and
+//! `commands.rs` and `tray.rs` are only thin wrappers over it.
 
 use std::time::{Duration, Instant};
 
@@ -16,15 +16,15 @@ use crate::settings::Settings;
 use crate::state::{self, AppState};
 use crate::runtime;
 
-/// Событие для UI: состояние sing-box изменилось (в том числе из трея).
+/// Event for the UI: sing-box state changed (including from the tray).
 pub const EVENT_SERVICE: &str = "service://changed";
-/// Событие для UI: выбор в selector-группе изменился (в том числе из трея).
+/// Event for the UI: the selection in a selector group changed (including from the tray).
 pub const EVENT_PROXIES: &str = "proxies://changed";
 
-/// Сколько ждём Clash API после перезапуска sing-box.
+/// How long we wait for the Clash API after restarting sing-box.
 const API_TIMEOUT: Duration = Duration::from_secs(20);
 
-/// Блокирующая работа (SCM, запуск процессов) — не на потоках async-рантайма.
+/// Blocking work (SCM, spawning processes) — not on async-runtime threads.
 pub async fn blocking<T, F>(work: F) -> Result<T>
 where
     F: FnOnce() -> Result<T> + Send + 'static,
@@ -32,37 +32,37 @@ where
 {
     tauri::async_runtime::spawn_blocking(work)
         .await
-        .map_err(|e| Error::Other(format!("фоновая задача прервана: {e}")))?
+        .map_err(|e| Error::Other(format!("background task aborted: {e}")))?
 }
 
-/// Как именно запускается sing-box.
+/// How exactly sing-box is started.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RunMode {
-    /// Через системный сервис — единственный способ поднять TUN.
+    /// Via the system service — the only way to bring up TUN.
     Service,
-    /// Обычным дочерним процессом от имени пользователя.
+    /// As a regular child process under the user.
     Process,
 }
 
-/// Полное состояние sing-box для UI и трея.
+/// Full sing-box state for the UI and the tray.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunStatus {
     pub mode: RunMode,
-    /// Работает ли sing-box — неважно, сервисом или процессом.
+    /// Whether sing-box is running — service or process, does not matter.
     pub running: bool,
     pub service: ServiceInfo,
-    /// PID дочернего процесса, если запуск идёт мимо сервиса.
+    /// PID of the child process, if started outside the service.
     pub process_pid: Option<u32>,
-    /// Конфигу нужен TUN, а значит — сервис и права администратора.
+    /// The config needs TUN, and therefore a service and admin rights.
     pub tun: bool,
-    /// Почему не удалось прочитать конфиг. Тогда `tun` считаем ложным.
+    /// Why the config could not be read. When set, `tun` is treated as false.
     pub config_problem: Option<String>,
 }
 
 impl RunStatus {
-    /// Можно ли запустить прямо сейчас: без сервиса TUN не поднять.
+    /// Whether it can be started right now: without a service, TUN cannot be brought up.
     pub fn can_start(&self) -> bool {
         self.mode == RunMode::Service || !self.tun
     }
@@ -98,12 +98,12 @@ fn build_status(settings: &Settings) -> Result<RunStatus> {
     })
 }
 
-/// Запуск: пересобираем рантайм-конфиг (secret на каждый запуск новый) и
-/// сразу переподключаемся с ним.
+/// Start: rebuild the runtime config (a fresh secret on every start) and
+/// reconnect to it immediately.
 ///
-/// Зарегистрированный сервис имеет приоритет: раз пользователь его поставил,
-/// именно он и должен управлять sing-box. Без сервиса запускаем процессом —
-/// но только если конфигу не нужен TUN.
+/// A registered service takes priority: since the user installed it, it is
+/// the one that should manage sing-box. Without a service we start as a
+/// process — but only if the config does not need TUN.
 pub async fn start(app: &AppHandle) -> Result<RunStatus> {
     let settings = app.state::<AppState>().settings.get();
 
@@ -117,8 +117,8 @@ pub async fn start(app: &AppHandle) -> Result<RunStatus> {
 
         if status.tun {
             return Err(Error::Other(
-                "конфигу нужен TUN — для него требуются права администратора. \
-                 Установите сервис на вкладке «Сервис»."
+                "the config needs TUN — that requires administrator rights. \
+                 Install the service on the \"Service\" tab."
                     .into(),
             ));
         }
@@ -131,8 +131,8 @@ pub async fn start(app: &AppHandle) -> Result<RunStatus> {
     announce(app).await
 }
 
-/// Останавливаем и то, и другое: сервис мог быть установлен уже после того,
-/// как мы подняли процесс, — тогда «остановить» обязано убрать оба.
+/// Stop both: the service may have been installed after we started the
+/// process — then "stop" must take down both.
 pub async fn stop(app: &AppHandle) -> Result<RunStatus> {
     blocking(|| {
         process::stop()?;
@@ -146,7 +146,7 @@ pub async fn stop(app: &AppHandle) -> Result<RunStatus> {
     announce(app).await
 }
 
-/// Запустить, если стоит; остановить, если работает. Для трея и хоткея.
+/// Start if installed; stop if running. For the tray and the hotkey.
 pub async fn toggle(app: &AppHandle) -> Result<RunStatus> {
     let current = run_status(app).await?;
     if current.running {
@@ -159,13 +159,13 @@ pub async fn toggle(app: &AppHandle) -> Result<RunStatus> {
 pub async fn install(app: &AppHandle) -> Result<RunStatus> {
     let settings = app.state::<AppState>().settings.get();
     blocking(move || {
-        // Переустановка работающего сервиса рвёт VPN: скрипт установки
-        // сначала останавливает и удаляет старую службу. Первая установка
-        // (сервиса ещё нет) под запрет не попадает — она sing-box не трогает.
+        // Reinstalling a running service breaks the VPN: the install script
+        // first stops and deletes the old service. The first install (no
+        // service yet) is not affected — it does not touch sing-box.
         let service = service::status()?;
         if service.is_running() {
             return Err(Error::Other(
-                "sing-box запущен как служба — остановите его перед переустановкой.".into(),
+                "sing-box is running as a service — stop it before reinstalling.".into(),
             ));
         }
         service::install(&settings)
@@ -174,15 +174,15 @@ pub async fn install(app: &AppHandle) -> Result<RunStatus> {
     announce(app).await
 }
 
-/// Удаление работающего сервиса рвёт VPN, поэтому пока он запущен — отказываем:
-/// пусть сначала остановят. Раньше uninstall сам молча останавливал службу,
-/// теперь это ответственность пользователя.
+/// Removing a running service breaks the VPN, so while it is running we refuse:
+/// let the user stop it first. Previously uninstall silently stopped the
+/// service itself; now that is the user's responsibility.
 pub async fn uninstall(app: &AppHandle) -> Result<RunStatus> {
     blocking(|| {
         let service = service::status()?;
         if service.is_running() {
             return Err(Error::Other(
-                "sing-box запущен как служба — остановите его перед удалением.".into(),
+                "sing-box is running as a service — stop it before removing.".into(),
             ));
         }
         service::uninstall()
@@ -191,29 +191,29 @@ pub async fn uninstall(app: &AppHandle) -> Result<RunStatus> {
     announce(app).await
 }
 
-/// Что удалось сохранить при мягком перезапуске.
+/// What could be preserved during a soft restart.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RestartOutcome {
     pub status: RunStatus,
-    /// Группы, чей выбор восстановлен: `["группа → узел", …]`.
+    /// Groups whose selection was restored: `["group → node", …]`.
     pub restored: Vec<String>,
-    /// Группы, выбор которых восстановить не вышло, с причиной.
+    /// Groups whose selection could not be restored, with a reason.
     pub skipped: Vec<String>,
-    /// Успел ли Clash API подняться до истечения ожидания.
+    /// Whether the Clash API came up before the wait elapsed.
     pub api_back: bool,
 }
 
-/// Мягкий перезапуск: снимаем текущие выборы selector'ов, перезапускаем
-/// сервис и накатываем выборы обратно.
+/// Soft restart: take a snapshot of the current selector selections, restart
+/// the service, and reapply the selections.
 ///
-/// sing-box и сам умеет помнить выбор через `experimental.cache_file` — это
-/// первый уровень. Восстановление поверх работает независимо от того,
-/// включён ли кэш, и чинит случай, когда он выключен.
+/// sing-box can already remember the selection via `experimental.cache_file` —
+/// that is the first level. Restoring on top works regardless of whether the
+/// cache is enabled, and fixes the case when it is off.
 pub async fn restart(app: &AppHandle) -> Result<RestartOutcome> {
     let settings = app.state::<AppState>().settings.get();
 
-    // Снимок делаем до остановки — после неё спрашивать будет некого.
+    // Take the snapshot before stopping — after that there is no one to ask.
     let snapshot = snapshot_selection(&app.state::<AppState>().client()).await;
 
     blocking(move || {
@@ -227,8 +227,8 @@ pub async fn restart(app: &AppHandle) -> Result<RestartOutcome> {
 
         if status.tun {
             return Err(Error::Other(
-                "конфигу нужен TUN — для него требуются права администратора. \
-                 Установите сервис на вкладке «Сервис»."
+                "the config needs TUN — that requires administrator rights. \
+                 Install the service on the \"Service\" tab."
                     .into(),
             ));
         }
@@ -238,8 +238,8 @@ pub async fn restart(app: &AppHandle) -> Result<RestartOutcome> {
     })
     .await?;
 
-    // Secret на новом запуске другой, поэтому клиента надо пересобрать
-    // раньше, чем мы начнём стучаться в API.
+    // The secret is different on the new run, so the client must be rebuilt
+    // before we start hitting the API.
     state::reconnect(&app.state::<AppState>())?;
 
     let client = app.state::<AppState>().client();
@@ -251,7 +251,7 @@ pub async fn restart(app: &AppHandle) -> Result<RestartOutcome> {
         (
             Vec::new(),
             vec![format!(
-                "Clash API не поднялся за {} с — выбор не восстановлен",
+                "Clash API did not come up within {} s — selection not restored",
                 API_TIMEOUT.as_secs()
             )],
         )
@@ -274,15 +274,15 @@ pub async fn select_proxy(app: &AppHandle, group: &str, name: &str) -> Result<()
     Ok(())
 }
 
-/// Читает состояние sing-box и рассказывает о нём окну: действие могло прийти
-/// из трея, и UI об этом иначе узнал бы только на следующем опросе.
+/// Reads sing-box state and reports it to the window: the action may have
+/// come from the tray, and the UI would otherwise only learn on the next poll.
 async fn announce(app: &AppHandle) -> Result<RunStatus> {
     let info = run_status(app).await?;
     let _ = app.emit(EVENT_SERVICE, info.clone());
     Ok(info)
 }
 
-/// `группа → выбранный узел` для всех групп, которыми можно управлять руками.
+/// `group → selected node` for all groups that can be controlled by hand.
 async fn snapshot_selection(client: &ClashClient) -> Vec<(String, String)> {
     let Ok(response) = client.proxies().await else {
         return Vec::new();
@@ -312,25 +312,25 @@ async fn restore_selection(
     let current = match client.proxies().await {
         Ok(response) => response.proxies,
         Err(e) => {
-            skipped.push(format!("не удалось прочитать /proxies: {e}"));
+            skipped.push(format!("failed to read /proxies: {e}"));
             return (restored, skipped);
         }
     };
 
     for (group, wanted) in snapshot {
         let Some(proxy) = current.get(&group) else {
-            // Конфиг мог поменяться между запусками — это нормально.
-            skipped.push(format!("{group}: группы больше нет"));
+            // The config may have changed between runs — that is normal.
+            skipped.push(format!("{group}: group no longer exists"));
             continue;
         };
 
         if !proxy.all.as_ref().is_some_and(|all| all.contains(&wanted)) {
-            skipped.push(format!("{group}: узла «{wanted}» больше нет"));
+            skipped.push(format!("{group}: node \"{wanted}\" no longer exists"));
             continue;
         }
 
         if proxy.now.as_deref() == Some(wanted.as_str()) {
-            // sing-box уже восстановил выбор из cache_file — трогать нечего.
+            // sing-box already restored the selection from cache_file — nothing to do.
             continue;
         }
 
@@ -343,7 +343,7 @@ async fn restore_selection(
     (restored, skipped)
 }
 
-/// Ждём, пока sing-box поднимет Clash API после перезапуска.
+/// Wait for sing-box to bring up the Clash API after a restart.
 async fn wait_for_api(client: &ClashClient, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     loop {

@@ -1,6 +1,7 @@
-//! Фоновые подписки на Clash API: health-poller по HTTP и четыре WebSocket-потока
-//! (`/traffic`, `/logs`, `/memory`, `/connections`). Всё, что приходит, уезжает
-//! во фронтенд через Tauri-события — состояние в Rust не копим.
+//! Background subscriptions to the Clash API: an HTTP health-poller and four
+//! WebSocket streams (`/traffic`, `/logs`, `/memory`, `/connections`). Everything
+//! that arrives is sent to the frontend via Tauri events — we do not keep
+//! state in Rust.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -21,12 +22,12 @@ pub const EVENT_LOG: &str = "clash://log";
 pub const EVENT_MEMORY: &str = "clash://memory";
 pub const EVENT_CONNECTIONS: &str = "clash://connections";
 
-/// Как часто опрашиваем `/version`, чтобы знать, жив ли sing-box.
+/// How often we poll `/version` to know whether sing-box is alive.
 const HEALTH_INTERVAL: Duration = Duration::from_secs(3);
 const BACKOFF_START: Duration = Duration::from_secs(1);
 const BACKOFF_MAX: Duration = Duration::from_secs(15);
 
-/// Владеет фоновыми задачами и текущим статусом подключения.
+/// Owns the background tasks and the current connection status.
 pub struct StreamManager {
     app: AppHandle,
     tasks: Mutex<Vec<tauri::async_runtime::JoinHandle<()>>>,
@@ -48,8 +49,8 @@ impl StreamManager {
         self.status.read().expect("status lock").clone()
     }
 
-    /// Останавливает текущие подписки и поднимает новые под новый клиент.
-    /// Вызывается на старте и на каждое изменение настроек Clash API.
+    /// Stops the current subscriptions and starts new ones for the new client.
+    /// Called at startup and on every Clash API settings change.
     pub fn restart(self: &Arc<Self>, client: ClashClient, log_level: LogLevel) {
         self.stop();
         self.set_status(ConnectionStatus {
@@ -104,8 +105,8 @@ impl StreamManager {
             },
         ));
 
-        // sing-box шлёт полный снимок соединений на каждое изменение —
-        // последовательность не нужна, просто переизлучаем его в UI.
+        // sing-box sends a full snapshot of connections on every change — no
+        // ordering is needed, we just re-emit it to the UI.
         tasks.push(spawn_ws(
             Arc::clone(self),
             client.ws_url("/connections"),
@@ -118,7 +119,7 @@ impl StreamManager {
         ));
     }
 
-    /// Снимает все фоновые задачи. Идемпотентна.
+    /// Stops all background tasks. Idempotent.
     pub fn stop(&self) {
         let mut tasks = self.tasks.lock().expect("tasks lock");
         for task in tasks.drain(..) {
@@ -126,8 +127,8 @@ impl StreamManager {
         }
     }
 
-    /// Обновляет статус и шлёт событие только при реальном изменении —
-    /// иначе health-poller раз в три секунды дёргал бы UI впустую.
+    /// Updates the status and emits an event only on a real change — otherwise
+    /// the health-poller would poke the UI for nothing every three seconds.
     fn set_status(&self, next: ConnectionStatus) {
         {
             let mut guard = self.status.write().expect("status lock");
@@ -148,9 +149,9 @@ fn spawn_health(
         loop {
             match client.version().await {
                 Ok(info) => {
-                    // `/version` отдаёт «sing-box 1.13.18» — отрезаем префикс,
-                    // чтобы статус-строка не показывала «sing-box sing-box …»,
-                    // а compatibility() получала разборчивую версию.
+                    // `/version` returns "sing-box 1.13.18" — strip the prefix so
+                    // the status line does not show "sing-box sing-box …", and
+                    // compatibility() gets a clean version to parse.
                     let version = normalize_version(&info.version);
                     manager.set_status(ConnectionStatus {
                         state: ConnectionState::Connected,
@@ -171,8 +172,8 @@ fn spawn_health(
     })
 }
 
-/// Держит один WebSocket живым: переподключается с экспоненциальной задержкой,
-/// каждое текстовое сообщение отдаёт в `handler`.
+/// Keeps one WebSocket alive: reconnects with exponential backoff, hands every
+/// text message to `handler`.
 fn spawn_ws<F>(
     manager: Arc<StreamManager>,
     url: String,
@@ -194,14 +195,14 @@ where
                                 handler(&manager.app, &manager.log_seq, text.as_str())
                             }
                             Ok(Message::Close(_)) | Err(_) => break,
-                            // Ping/Pong обрабатывает сам tungstenite.
+                            // Ping/Pong is handled by tungstenite itself.
                             Ok(_) => {}
                         }
                     }
                 }
                 Err(_) => {
-                    // Молчим: причину отказа уже показывает health-poller,
-                    // дублировать её на каждый из трёх сокетов незачем.
+                    // Stay quiet: the health-poller already shows the failure
+                    // reason; duplicating it on each of the three sockets is pointless.
                 }
             }
             tokio::time::sleep(backoff).await;
@@ -219,7 +220,7 @@ async fn connect(url: &str, secret: &str) -> Result<WsStream, String> {
     if !secret.is_empty() {
         let value = format!("Bearer {secret}")
             .parse()
-            .map_err(|_| "некорректный secret".to_string())?;
+            .map_err(|_| "invalid secret".to_string())?;
         request.headers_mut().insert("Authorization", value);
     }
     let (stream, _) = tokio_tungstenite::connect_async(request)

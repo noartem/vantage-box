@@ -1,30 +1,30 @@
 use serde::{Serialize, Serializer};
 
-/// Ошибки, которые могут долететь до фронтенда. Сериализуются в строку —
-/// UI показывает их как есть, поэтому текст пишем человекочитаемый.
+/// Errors that can reach the frontend. Serialized to a string — the UI shows
+/// them as-is, so the text is written to be human-readable.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("не удалось прочитать/записать файл {path}: {source}")]
+    #[error("failed to read/write file {path}: {source}")]
     Io {
         path: String,
         #[source]
         source: std::io::Error,
     },
 
-    #[error("{path}: некорректный JSON — {source}")]
+    #[error("{path}: invalid JSON — {source}")]
     Parse {
         path: String,
         #[source]
         source: serde_json::Error,
     },
 
-    #[error("Clash API недоступен: {0}")]
+    #[error("Clash API unavailable: {0}")]
     Transport(String),
 
-    #[error("Clash API вернул {status}: {message}")]
+    #[error("Clash API returned {status}: {message}")]
     Api { status: u16, message: String },
 
-    #[error("не удалось определить директорию настроек для этой ОС")]
+    #[error("could not determine the settings directory for this OS")]
     NoConfigDir,
 
     #[error("{0}")]

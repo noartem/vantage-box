@@ -1,5 +1,5 @@
-//! Глобальные хоткеи. Биндинги живут в `settings.json` и перерегистрируются
-//! на каждое изменение настроек.
+//! Global hotkeys. Bindings live in `settings.json` and are re-registered on
+//! every settings change.
 
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -9,46 +9,46 @@ use crate::settings::Settings;
 use crate::state::AppState;
 use crate::window;
 
-/// Событие для UI: список проблем с регистрацией хоткеев.
+/// Event for the UI: the list of hotkey registration problems.
 pub const EVENT_HOTKEYS: &str = "hotkeys://problems";
 
-/// Что делает хоткей.
+/// What a hotkey does.
 #[derive(Clone, Copy)]
 enum Action {
-    /// Запустить или остановить sing-box.
+    /// Start or stop sing-box.
     Toggle,
-    /// Показать попап выбора прокси.
+    /// Show the proxy-selection popup.
     ProxyPopup,
 }
 
-/// Перерегистрирует все хоткеи под текущие настройки.
+/// Re-registers all hotkeys for the current settings.
 ///
-/// Возвращает список проблем: занятую другой программой комбинацию или опечатку
-/// в настройках надо показать пользователю, а не молча проглотить — иначе
-/// хоткей просто «не работает» без объяснений.
+/// Returns a list of problems: a combination taken by another program, or a
+/// typo in the settings, must be shown to the user and not silently swallowed
+/// — otherwise the hotkey just "does not work" with no explanation.
 pub fn apply(app: &AppHandle, settings: &Settings) -> Vec<String> {
     let shortcuts = app.global_shortcut();
     let _ = shortcuts.unregister_all();
 
     let mut problems = Vec::new();
     let bindings = [
-        (settings.hotkeys.toggle.trim(), Action::Toggle, "включить/выключить"),
+        (settings.hotkeys.toggle.trim(), Action::Toggle, "toggle on/off"),
         (
             settings.hotkeys.proxy_popup.trim(),
             Action::ProxyPopup,
-            "попап выбора прокси",
+            "proxy selection popup",
         ),
     ];
 
     for (binding, action, description) in bindings {
-        // Пустая строка — осознанный отказ от хоткея, это не ошибка.
+        // An empty string is a deliberate opt-out of the hotkey, not an error.
         if binding.is_empty() {
             continue;
         }
 
         let result = shortcuts.on_shortcut(binding, move |app, _shortcut, event| {
-            // Без этой проверки действие срабатывало бы дважды: на нажатии
-            // и на отпускании.
+            // Without this check the action would fire twice: on press and on
+            // release.
             if event.state != ShortcutState::Pressed {
                 return;
             }
@@ -70,7 +70,7 @@ fn dispatch(app: AppHandle, action: Action) {
         Action::Toggle => {
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = actions::toggle(&app).await {
-                    eprintln!("хоткей включения не сработал: {e}");
+                    eprintln!("toggle hotkey failed: {e}");
                 }
                 crate::tray::refresh(&app).await;
             });

@@ -1,17 +1,18 @@
-//! Интеграционный тест против настоящего sing-box.
+//! Integration test against a real sing-box.
 //!
-//! Сами пробы живут в `vantage_box_lib::compat` — там же, откуда их берёт
-//! построитель матрицы совместимости. Здесь только запуск и проверка, что всё
-//! прошло: иначе тест и матрица со временем разъехались бы.
+//! The probes themselves live in `vantage_box_lib::compat` — the same place the
+//! compatibility matrix builder takes them from. Here we only run them and
+//! check that everything passed: otherwise the test and the matrix would drift
+//! apart over time.
 //!
-//! Изоляция обеспечивается модулем проб: отдельный процесс sing-box,
-//! нестандартные порты, конфиг без TUN (значит, без прав администратора и без
-//! вмешательства в сетевой стек), своя рабочая папка. Уже запущенный sing-box
-//! пользователя продолжает работать.
+//! Isolation is provided by the probe module: a separate sing-box process,
+//! non-standard ports, a config without TUN (so no admin rights and no
+//! interference with the network stack), and its own working folder. The
+//! user's already-running sing-box keeps running.
 //!
-//! Запускать через `scripts/integration-test.ps1` — он подставляет переменные
-//! окружения и сохраняет вывод. Без них тест сообщает, чего не хватает, и
-//! завершается успехом: в обычном `cargo test` он не должен мешать.
+//! Run via `scripts/integration-test.ps1` — it sets the environment variables
+//! and saves the output. Without them, the test reports what is missing and
+//! succeeds: it must not get in the way of a regular `cargo test`.
 
 use std::path::PathBuf;
 
@@ -26,8 +27,8 @@ async fn live_singbox_roundtrip() {
         return;
     };
 
-    println!("бинарник sing-box: {}", binary.display());
-    println!("рабочая папка:     {}", workdir.display());
+    println!("sing-box binary: {}", binary.display());
+    println!("working folder:  {}", workdir.display());
     println!();
 
     let report = compat::probe(&ProbeOptions::new(binary, workdir)).await;
@@ -43,15 +44,15 @@ async fn live_singbox_roundtrip() {
 
     println!();
     println!(
-        "версия: {} ({:?})",
-        report.version.as_deref().unwrap_or("не определена"),
+        "version: {} ({:?})",
+        report.version.as_deref().unwrap_or("undetermined"),
         report.compatibility
     );
 
     let failed = report.failed();
     assert!(
         failed.is_empty(),
-        "пробы не прошли: {}",
+        "probes failed: {}",
         failed
             .iter()
             .map(|c| format!("{} — {}", c.name, c.detail))
@@ -59,11 +60,12 @@ async fn live_singbox_roundtrip() {
             .join("; ")
     );
 
-    println!("\nВСЁ ПРОШЛО");
+    println!("\nALL PASSED");
 }
 
-/// Тест работает только с явно переданным окружением: так исключён сценарий,
-/// в котором он случайно уедет в рабочую конфигурацию пользователя.
+/// The test only runs with an explicitly provided environment: that rules out
+/// the scenario where it would accidentally go after the user's working
+/// configuration.
 fn preconditions() -> Option<(PathBuf, PathBuf)> {
     let binary = std::env::var_os(SINGBOX_ENV).map(PathBuf::from);
     let workdir = std::env::var_os(CONFIG_DIR_ENV).map(PathBuf::from);
@@ -72,15 +74,15 @@ fn preconditions() -> Option<(PathBuf, PathBuf)> {
         (Some(binary), Some(dir)) if binary.is_file() => Some((binary, dir)),
         (Some(binary), Some(_)) => {
             println!(
-                "ПРОПУСК: {SINGBOX_ENV} указывает на несуществующий файл: {}",
+                "SKIP: {SINGBOX_ENV} points to a non-existent file: {}",
                 binary.display()
             );
             None
         }
         _ => {
             println!(
-                "ПРОПУСК: нужны переменные {SINGBOX_ENV} и {CONFIG_DIR_ENV}.\n\
-                 Запустите тест через scripts/integration-test.ps1 — он их подставит."
+                "SKIP: the {SINGBOX_ENV} and {CONFIG_DIR_ENV} variables are required.\n\
+                 Run the test via scripts/integration-test.ps1 — it sets them."
             );
             None
         }

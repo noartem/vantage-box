@@ -1,14 +1,14 @@
-//! Автопереключение selector-групп на резерв при отказе активного узла.
+//! Auto-switching selector groups to a backup when the active node fails.
 //!
-//! Периодически пингуем активный узел каждой отслеживаемой selector-группы.
-//! Если он не ответил или задержка превысила `max_delay_ms`, замеряем всю
-//! группу и переключаем на узел с наименьшей валидной задержкой. `urltest`-
-//! группы не трогаем — они рушат выбор сами.
+//! We periodically ping the active node of each watched selector group. If it
+//! did not respond or the delay exceeded `max_delay_ms`, we measure the whole
+//! group and switch to the node with the lowest valid delay. We do not touch
+//! `urltest` groups — they manage the selection themselves.
 //!
-//! Источник настроек — `settings.fallback`; URL и таймаут latency-теста —
-//! из `settings.ui`. Если fallback выключен, задача просто спит и раз в
-//! минуту перепроверяет настройку, чтобы включение подхватилось без
-//! перезапуска.
+//! The source of settings is `settings.fallback`; the latency-test URL and
+//! timeout come from `settings.ui`. If fallback is off, the task simply sleeps
+//! and re-checks the setting once a minute, so enabling it is picked up without
+//! a restart.
 
 use std::time::Duration;
 
@@ -17,12 +17,12 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::actions::EVENT_PROXIES;
 use crate::state::AppState;
 
-/// Интервал опроса настройки, когда fallback выключен.
+/// Polling interval for the setting when fallback is off.
 const IDLE_SLEEP: u64 = 60;
-/// Минимальный реальный интервал — чтобы при кривой настройке не молотить API.
+/// The minimum real interval — so a bad setting does not hammer the API.
 const MIN_INTERVAL: u32 = 5;
 
-/// Фоновая задача: запускается один раз при старте приложения.
+/// Background task: started once at application startup.
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {
@@ -32,7 +32,7 @@ pub fn spawn(app: AppHandle) {
     });
 }
 
-/// Один проход проверки. Возвращает, сколько секунд ждать до следующего.
+/// One check pass. Returns how many seconds to wait before the next one.
 async fn tick(app: &AppHandle) -> u64 {
     let settings = app.state::<AppState>().settings.get();
     let fb = settings.fallback.clone();
@@ -49,12 +49,12 @@ async fn tick(app: &AppHandle) -> u64 {
     let proxies = match client.proxies().await {
         Ok(r) => r.proxies,
         Err(_) => {
-            // sing-box не запущен или Clash API недоступен — нечего пинговать.
+            // sing-box is not running or the Clash API is unavailable — nothing to ping.
             return interval;
         }
     };
 
-    // Какие группы контролируем: явный список из настроек, иначе все selector'ы.
+    // Which groups we watch: an explicit list from settings, otherwise all selectors.
     let groups: Vec<String> = if fb.groups.is_empty() {
         proxies
             .iter()
@@ -67,7 +67,8 @@ async fn tick(app: &AppHandle) -> u64 {
 
     for group in groups {
         let Some(g) = proxies.get(&group) else { continue };
-        // urltest рулит сам — туда не лезем. Да и «select» для него бессмысленен.
+        // urltest manages itself — we do not interfere. And "select" is
+        // meaningless for it.
         if !g.is_selectable() {
             continue;
         }
@@ -78,11 +79,11 @@ async fn tick(app: &AppHandle) -> u64 {
             continue;
         }
 
-        // Активный плох — замеряем всю группу и выбираем лучшего резервного.
+        // The active one is bad — measure the whole group and pick the best backup.
         let delays = match client.group_delay(&group, &url, timeout).await {
             Ok(m) => m,
             Err(e) => {
-                eprintln!("fallback: замер {group} не удался: {e}");
+                eprintln!("fallback: measuring {group} failed: {e}");
                 continue;
             }
         };
@@ -95,22 +96,22 @@ async fn tick(app: &AppHandle) -> u64 {
 
         if let Some(best) = best {
             if let Err(e) = client.select(&group, &best).await {
-                eprintln!("fallback: не удалось переключить {group}: {e}");
+                eprintln!("fallback: failed to switch {group}: {e}");
                 continue;
             }
             let _ = app.emit(EVENT_PROXIES, ());
-            eprintln!("fallback: {group} → {best} (вместо {active})");
+            eprintln!("fallback: {group} → {best} (instead of {active})");
         }
-        // Если ни одного живого резервного нет — оставляем активный: переключаться
-        // на заведомо мёртвый узел бессмысленно.
+        // If no live backup exists — keep the active one: switching to a node
+        // known to be dead is pointless.
         let _ = &members;
     }
 
     interval
 }
 
-/// Достиг ли узел приемлемой задержки: ответил (>0) и в пределах `max_delay`
-/// (0 — ограничение не задано, любая ответившая задержка годится).
+/// Whether the node reached an acceptable delay: responded (>0) and within
+/// `max_delay` (0 — no limit set, any responding delay is fine).
 async fn is_ok(
     client: &crate::clash::ClashClient,
     name: &str,

@@ -1,4 +1,4 @@
-//! HTTP-клиент Clash API.
+//! HTTP client for the Clash API.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -9,16 +9,16 @@ use super::models::*;
 use crate::error::{Error, Result};
 use crate::settings::ClashApiSettings;
 
-/// Диапазон версий sing-box, на котором этот релиз Vantage Box протестирован.
-/// Вне диапазона приложение продолжает работать, но UI показывает предупреждение,
-/// а автообновление бинарника никогда не выходит за эти границы.
+/// The range of sing-box versions this release of Vantage Box is tested on.
+/// Outside the range the app keeps working, but the UI shows a warning and
+/// auto-update of the binary never goes beyond these bounds.
 ///
-/// Границы не назначаются на глаз: их даёт `scripts/compat-matrix.ps1`, который
-/// прогоняет пробы по каждой минорной ветке. Нижняя граница — самая старая
-/// версия, которую мы действительно проверяли; более ранние, возможно, тоже
-/// работают, но обещать это не за что.
+/// The bounds are not picked by eye: they come from `scripts/compat-matrix.ps1`,
+/// which runs probes across every minor branch. The lower bound is the oldest
+/// version we actually verified; earlier ones may work too, but we cannot
+/// promise that.
 ///
-/// Измерено 7 августа 2026: 1.10.7, 1.11.15, 1.12.25, 1.13.16 — все пробы прошли.
+/// Measured August 7, 2026: 1.10.7, 1.11.15, 1.12.25, 1.13.16 — all probes pass.
 pub const SINGBOX_MIN: (u32, u32, u32) = (1, 10, 7);
 pub const SINGBOX_MAX_EXCLUSIVE: (u32, u32, u32) = (1, 14, 0);
 
@@ -26,7 +26,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
 pub struct ClashClient {
-    /// Базовый URL без завершающего слэша, например `http://127.0.0.1:9090`.
+    /// The base URL without a trailing slash, e.g. `http://127.0.0.1:9090`.
     base: String,
     secret: String,
     http: reqwest::Client,
@@ -36,7 +36,7 @@ impl ClashClient {
     pub fn new(settings: &ClashApiSettings) -> Result<Self> {
         let http = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
-            // Clash API живёт на loopback: системный прокси тут только мешает.
+            // The Clash API lives on loopback: a system proxy only gets in the way here.
             .no_proxy()
             .build()?;
 
@@ -72,7 +72,7 @@ impl ClashClient {
         }
     }
 
-    // -- эндпоинты ---------------------------------------------------------
+    // -- endpoints ---------------------------------------------------------
 
     pub async fn version(&self) -> Result<VersionInfo> {
         self.send(self.request(reqwest::Method::GET, "/version")).await
@@ -82,7 +82,7 @@ impl ClashClient {
         self.send(self.request(reqwest::Method::GET, "/proxies")).await
     }
 
-    /// Переключает selector-группу на конкретный outbound.
+    /// Switches a selector group to a specific outbound.
     pub async fn select(&self, group: &str, name: &str) -> Result<()> {
         let path = format!("/proxies/{}", urlencode(group));
         let req = self
@@ -91,7 +91,7 @@ impl ClashClient {
         self.send_no_content(req).await
     }
 
-    /// Замер задержки одного outbound'а, мс.
+    /// Measures the delay of a single outbound, ms.
     pub async fn proxy_delay(&self, name: &str, url: &str, timeout: u32) -> Result<u32> {
         let path = format!("/proxies/{}/delay", urlencode(name));
         let req = self
@@ -101,8 +101,8 @@ impl ClashClient {
         Ok(resp.delay)
     }
 
-    /// Замер задержки всей группы разом: `{ "outbound": delay_ms }`.
-    /// Недоступные узлы sing-box просто не включает в ответ.
+    /// Measures the delay of a whole group at once: `{ "outbound": delay_ms }`.
+    /// Unreachable nodes sing-box simply omits from the response.
     pub async fn group_delay(
         &self,
         group: &str,
@@ -116,37 +116,37 @@ impl ClashClient {
         self.send(req).await
     }
 
-    /// Текущий рантайм-конфиг sing-box (то, что реально применено).
+    /// The current sing-box runtime config (what is actually applied).
     pub async fn configs(&self) -> Result<serde_json::Value> {
         self.send(self.request(reqwest::Method::GET, "/configs")).await
     }
 
-    /// Снимок активных соединений. Дублирует WebSocket `/connections`, но
-    /// нужен для разового запроса (например, при открытии вкладки).
+    /// A snapshot of active connections. Duplicates the WebSocket `/connections`,
+    /// but is needed for a one-off request (for example, when opening a tab).
     pub async fn connections(&self) -> Result<ConnectionsSnapshot> {
         self.send(self.request(reqwest::Method::GET, "/connections")).await
     }
 
-    /// Закрывает одно соединение. Идентификаторы sing-box бывают с символами,
-    /// требующими percent-encoding.
+    /// Closes one connection. sing-box ids can contain characters that need
+    /// percent-encoding.
     pub async fn close_connection(&self, id: &str) -> Result<()> {
         let path = format!("/connections/{}", urlencode(id));
         self.send_no_content(self.request(reqwest::Method::DELETE, &path))
             .await
     }
 
-    /// Закрывает все соединения.
+    /// Closes all connections.
     pub async fn close_all_connections(&self) -> Result<()> {
         self.send_no_content(self.request(reqwest::Method::DELETE, "/connections"))
             .await
     }
 
-    // -- транспорт ---------------------------------------------------------
+    // -- transport ---------------------------------------------------------
 
     async fn send<T: serde::de::DeserializeOwned>(&self, req: reqwest::RequestBuilder) -> Result<T> {
         let resp = self.check(req).await?;
         let body = resp.text().await?;
-        serde_json::from_str(&body).map_err(|e| Error::parse("ответ Clash API", e))
+        serde_json::from_str(&body).map_err(|e| Error::parse("Clash API response", e))
     }
 
     async fn send_no_content(&self, req: reqwest::RequestBuilder) -> Result<()> {
@@ -156,7 +156,7 @@ impl ClashClient {
 
     async fn check(&self, req: reqwest::RequestBuilder) -> Result<reqwest::Response> {
         let resp = req.send().await.map_err(|e| {
-            // Отдельно ловим 401 ниже; сюда попадают только сетевые проблемы.
+            // 401 is caught below; only network problems reach here.
             Error::Transport(friendly_transport_error(&e))
         })?;
 
@@ -171,14 +171,14 @@ impl ClashClient {
             .and_then(|v| v.get("message").and_then(|m| m.as_str()).map(String::from))
             .unwrap_or_else(|| {
                 if body.trim().is_empty() {
-                    status.canonical_reason().unwrap_or("ошибка").to_string()
+                    status.canonical_reason().unwrap_or("error").to_string()
                 } else {
                     body.trim().to_string()
                 }
             });
 
         let message = if status == reqwest::StatusCode::UNAUTHORIZED {
-            format!("{message} — проверьте secret в настройках")
+            format!("{message} — check the secret in settings")
         } else {
             message
         };
@@ -192,16 +192,16 @@ impl ClashClient {
 
 fn friendly_transport_error(e: &reqwest::Error) -> String {
     if e.is_connect() {
-        "не удалось подключиться — sing-box не запущен или Clash API слушает другой адрес".into()
+        "could not connect — sing-box is not running or the Clash API listens on a different address".into()
     } else if e.is_timeout() {
-        "истёк таймаут запроса".into()
+        "request timed out".into()
     } else {
         e.to_string()
     }
 }
 
-/// Приводит пользовательский ввод к `scheme://host:port` без хвостового слэша.
-/// Пустая строка и голый `host:port` — частые случаи, их чиним молча.
+/// Brings user input to `scheme://host:port` without a trailing slash.
+/// An empty string and a bare `host:port` are common cases — we fix them silently.
 pub fn normalize_base_url(input: &str) -> String {
     let trimmed = input.trim().trim_end_matches('/');
     if trimmed.is_empty() {
@@ -214,7 +214,7 @@ pub fn normalize_base_url(input: &str) -> String {
     }
 }
 
-/// Percent-encoding для имён групп: теги в sing-box бывают с пробелами и юникодом.
+/// Percent-encoding for group names: sing-box tags can have spaces and unicode.
 pub(crate) fn urlencode(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     for byte in value.as_bytes() {
@@ -228,16 +228,16 @@ pub(crate) fn urlencode(value: &str) -> String {
     out
 }
 
-/// Отвязывает голую версию от префикса, который sing-box пишет сам:
-/// поле `version` ответа `/version` — `"sing-box 1.13.18"`, первая строка
-/// вывода `sing-box version` — `"sing-box version 1.11.4"`. Без этого
-/// статус-строка показывает «sing-box sing-box …», а `parse_version`
-/// спотыкается о дефис в «sing-box». Регистр и ведущий `v` тоже снимаем.
+/// Strips the prefix that sing-box writes itself from a bare version:
+/// the `version` field of the `/version` response is `"sing-box 1.13.18"`, the
+/// first line of `sing-box version` output is `"sing-box version 1.11.4"`.
+/// Without this the status line shows "sing-box sing-box …", and `parse_version`
+/// trips on the hyphen in "sing-box". Case and a leading `v` are also stripped.
 pub fn normalize_version(raw: &str) -> String {
     let trimmed = raw.trim();
     let lower = trimmed.to_ascii_lowercase();
-    // длина отрезанного префикса одинакова в `lower` и исходной строке,
-    // поэтому режем исходник по ней — сохраняем регистр суффикса (v1.x, beta…).
+    // The cut prefix length is the same in `lower` and the source string, so
+    // we slice the source by it — preserving the case of the suffix (v1.x, beta…).
     let prefix_len = if lower.starts_with("sing-box version ") {
         "sing-box version ".len()
     } else if lower.starts_with("sing-box ") {
@@ -251,7 +251,7 @@ pub fn normalize_version(raw: &str) -> String {
         .to_string()
 }
 
-/// Разбирает `1.12.0-beta.3` в `(1, 12, 0)`; суффиксы игнорируем.
+/// Parses `1.12.0-beta.3` into `(1, 12, 0)`; suffixes are ignored.
 pub fn parse_version(raw: &str) -> Option<(u32, u32, u32)> {
     let core = normalize_version(raw);
     let core = core.split(['-', '+']).next()?;
@@ -304,11 +304,11 @@ mod tests {
 
     #[test]
     fn normalizes_versions() {
-        // `/version` отдаёт версию с префиксом «sing-box ».
+        // `/version` returns the version with a "sing-box " prefix.
         assert_eq!(normalize_version("sing-box 1.13.18"), "1.13.18");
-        // `sing-box version` пишет «sing-box version …».
+        // `sing-box version` writes "sing-box version …".
         assert_eq!(normalize_version("sing-box version 1.11.4"), "1.11.4");
-        // Голая версия и ведущий `v` остаются совместимыми.
+        // A bare version and a leading `v` stay compatible.
         assert_eq!(normalize_version("1.13.18"), "1.13.18");
         assert_eq!(normalize_version("v1.12.0-beta.3"), "1.12.0-beta.3");
         assert_eq!(normalize_version("  sing-box 1.13.18  "), "1.13.18");
@@ -320,10 +320,10 @@ mod tests {
         assert_eq!(parse_version("1.12.0"), Some((1, 12, 0)));
         assert_eq!(parse_version("v1.12.0-beta.3"), Some((1, 12, 0)));
         assert_eq!(parse_version("1.11"), Some((1, 11, 0)));
-        // sing-box отдаёт версию с префиксом — парсер должен её переваривать.
+        // sing-box returns the version with a prefix — the parser must handle it.
         assert_eq!(parse_version("sing-box 1.13.18"), Some((1, 13, 18)));
         assert_eq!(parse_version("sing-box version 1.11.4"), Some((1, 11, 4)));
-        assert_eq!(parse_version("не-версия"), None);
+        assert_eq!(parse_version("не-версия"), None); // i18n-allow-non-english
     }
 
     #[test]
@@ -332,7 +332,7 @@ mod tests {
         assert_eq!(compatibility("1.10.7"), Compatibility::Supported);
         assert_eq!(compatibility("1.10.6"), Compatibility::TooOld);
         assert_eq!(compatibility("1.14.0"), Compatibility::TooNew);
-        // Префикс из ответа `/version` не должен ломать классификацию.
+        // The prefix from the `/version` response must not break classification.
         assert_eq!(compatibility("sing-box 1.13.18"), Compatibility::Supported);
         assert_eq!(compatibility("sing-box 1.14.0"), Compatibility::TooNew);
         assert_eq!(compatibility(""), Compatibility::Unknown);

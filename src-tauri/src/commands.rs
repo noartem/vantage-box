@@ -1,4 +1,4 @@
-//! Команды, доступные фронтенду через `invoke`.
+//! Commands available to the frontend via `invoke`.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -19,7 +19,7 @@ use crate::state::{self, AppState};
 use crate::subscription::{self, ApplyOutcome, SubscriptionsState};
 
 // ---------------------------------------------------------------------------
-// Настройки
+// Settings
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
@@ -45,7 +45,7 @@ pub fn save_settings(
 }
 
 // ---------------------------------------------------------------------------
-// Подключение
+// Connection
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
@@ -54,11 +54,11 @@ pub fn get_status(state: State<'_, AppState>) -> ConnectionStatus {
 }
 
 // ---------------------------------------------------------------------------
-// Прокси
+// Proxies
 // ---------------------------------------------------------------------------
 
-/// Плоский ответ `/proxies` неудобен для UI, поэтому раскладываем его на
-/// группы с уже подставленными узлами и последними замерами задержки.
+/// The flat `/proxies` response is inconvenient for the UI, so we break it down
+/// into groups with nodes already filled in and the latest latency measurements.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProxyOverview {
@@ -72,7 +72,7 @@ pub struct GroupView {
     /// `Selector`, `URLTest`, …
     pub kind: String,
     pub now: Option<String>,
-    /// Можно ли переключать выбор руками.
+    /// Whether the selection can be changed by hand.
     pub selectable: bool,
     pub items: Vec<NodeView>,
 }
@@ -82,10 +82,10 @@ pub struct GroupView {
 pub struct NodeView {
     pub name: String,
     pub kind: String,
-    /// Последний известный замер, мс. `None` — не измеряли или узел не ответил.
+    /// Latest known measurement, ms. `None` — not measured or the node did not respond.
     pub delay: Option<u32>,
     pub udp: bool,
-    /// Вложенная группа: клик по ней должен вести внутрь, а не только выбирать.
+    /// Nested group: clicking it should go inside, not just select.
     pub is_group: bool,
 }
 
@@ -131,7 +131,7 @@ pub async fn test_proxy_delay(state: State<'_, AppState>, name: String) -> Resul
 }
 
 // ---------------------------------------------------------------------------
-// Соединения
+// Connections
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
@@ -153,24 +153,24 @@ pub async fn close_all_connections(state: State<'_, AppState>) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Конфиг sing-box
+// sing-box config
 // ---------------------------------------------------------------------------
 
-/// Читает пользовательский `config.json` для встроенного редактора.
+/// Reads the user's `config.json` for the built-in editor.
 #[tauri::command]
 pub fn read_singbox_config(state: State<'_, AppState>) -> Result<String> {
     let path = config_path(&state)?;
     let content = std::fs::read_to_string(&path).map_err(|e| Error::io(&path, e))?;
-    // Считаем прочитанное «известным»: сразу после открытия редактора файл
-    // не должен выглядеть изменённым снаружи.
+    // Mark the read content as "known": right after opening the editor, the file
+    // must not look like it was changed from the outside.
     state.remember_config(&content);
     Ok(content)
 }
 
-/// Проверяет содержимое редактора, не трогая пользовательский файл.
+/// Validates the editor contents without touching the user's file.
 ///
-/// Сначала JSON, затем — если бинарник доступен — полноценный `sing-box check`
-/// на временной копии.
+/// First JSON, then — if the binary is available — a full `sing-box check`
+/// on a temporary copy.
 #[tauri::command]
 pub async fn check_singbox_config(
     state: State<'_, AppState>,
@@ -182,7 +182,7 @@ pub async fn check_singbox_config(
             return Ok(CheckResult {
                 available: false,
                 ok: false,
-                output: format!("некорректный JSON: {e}"),
+                output: format!("invalid JSON: {e}"),
             });
         }
 
@@ -199,7 +199,7 @@ pub async fn check_singbox_config(
         let _ = std::fs::remove_file(&scratch);
 
         if !result.available {
-            // JSON уже разобран выше, так что синтаксически всё в порядке.
+            // JSON was already parsed above, so syntactically everything is fine.
             result.ok = true;
         }
         Ok(result)
@@ -207,8 +207,8 @@ pub async fn check_singbox_config(
     .await
 }
 
-/// Записывает содержимое редактора в пользовательский `config.json`.
-/// Предыдущая версия остаётся рядом как `.bak`.
+/// Writes the editor contents to the user's `config.json`.
+/// The previous version stays beside it as `.bak`.
 #[tauri::command]
 pub async fn write_singbox_config(state: State<'_, AppState>, content: String) -> Result<()> {
     let path = PathBuf::from(config_path(&state)?);
@@ -221,7 +221,7 @@ pub async fn write_singbox_config(state: State<'_, AppState>, content: String) -
                 .map_err(|e| Error::io(backup.display().to_string(), e))?;
         }
 
-        // Атомарно: sing-box может читать файл в этот же момент.
+        // Atomically: sing-box may be reading the file at the same moment.
         let tmp = path.with_extension("json.vbtmp");
         std::fs::write(&tmp, body.as_bytes())
             .map_err(|e| Error::io(tmp.display().to_string(), e))?;
@@ -234,12 +234,12 @@ pub async fn write_singbox_config(state: State<'_, AppState>, content: String) -
     Ok(())
 }
 
-/// Создаёт минимальный рабочий `config.json` в каталоге приложения и возвращает
-/// путь к нему — для онбординга первого запуска. Конфиг без TUN (не нужны права
-/// администратора): локальный mixed-инбаунд, `direct`/`block` и selector `proxy`.
-/// `experimental.clash_api` сюда не пишем — его дописывает рантайм-копия.
+/// Creates a minimal working `config.json` in the app directory and returns
+/// its path — for first-run onboarding. The config has no TUN (no admin rights
+/// needed): a local mixed inbound, `direct`/`block`, and a `proxy` selector.
+/// We do not write `experimental.clash_api` here — the runtime copy adds it.
 ///
-/// Если файл уже существует по пути по умолчанию, не затираем его — отдаём путь.
+/// If a file already exists at the default path, we do not overwrite it — just return the path.
 #[tauri::command]
 pub fn create_minimal_config() -> Result<String> {
     let dir = config_dir()?;
@@ -274,17 +274,17 @@ fn config_path(state: &State<'_, AppState>) -> Result<String> {
     let path = state.settings.get().sing_box.config_path;
     if path.trim().is_empty() {
         return Err(Error::Other(
-            "путь к config.json не задан — укажите его в настройках".into(),
+            "config.json path is not set — specify it in settings".into(),
         ));
     }
     Ok(path)
 }
 
 // ---------------------------------------------------------------------------
-// Сервис sing-box
+// sing-box service
 //
-// Тела операций живут в `actions`: то же самое умеет делать трей, и поведение
-// не должно расходиться между окном и меню в трее.
+// The operation bodies live in `actions`: the tray can do the same, and the
+// behavior must not diverge between the window and the tray menu.
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
@@ -292,7 +292,7 @@ pub async fn get_run_status(app: AppHandle) -> Result<RunStatus> {
     actions::run_status(&app).await
 }
 
-/// Регистрирует сервис. Единственное место, где всплывает UAC.
+/// Registers the service. The only place where UAC pops up.
 #[tauri::command]
 pub async fn install_service(app: AppHandle) -> Result<RunStatus> {
     actions::install(&app).await
@@ -319,11 +319,11 @@ pub async fn restart_service(app: AppHandle) -> Result<RestartOutcome> {
 }
 
 // ---------------------------------------------------------------------------
-// Окна и хоткеи
+// Windows and hotkeys
 // ---------------------------------------------------------------------------
 
-/// Хоткеи, которые не удалось занять: комбинация может быть занята другой
-/// программой или записана с опечаткой.
+/// Hotkeys that could not be acquired: the combination may be taken by another
+/// program or contain a typo.
 #[tauri::command]
 pub fn get_hotkey_problems(state: State<'_, AppState>) -> Vec<String> {
     state
@@ -333,7 +333,7 @@ pub fn get_hotkey_problems(state: State<'_, AppState>) -> Vec<String> {
         .clone()
 }
 
-/// Попап закрывает сам себя — например, сразу после выбора узла.
+/// The popup closes itself — for example, right after picking a node.
 #[tauri::command]
 pub fn close_popup(app: AppHandle) {
     crate::window::hide_popup(&app);
@@ -345,34 +345,34 @@ pub fn show_main_window(app: AppHandle) {
 }
 
 // ---------------------------------------------------------------------------
-// Помощники для формы настроек
+// Helpers for the settings form
 // ---------------------------------------------------------------------------
 
-/// Новый secret для Clash API. Генерируем здесь, а не в вебвью: источник
-/// энтропии в JS слабее, а токен защищает локальный порт управления.
+/// A new secret for the Clash API. We generate it here, not in the webview: the
+/// entropy source in JS is weaker, and the token protects the local control port.
 #[tauri::command]
 pub fn generate_secret() -> String {
     runtime::generate_secret()
 }
 
-/// Системный диалог выбора файла. `kind`: `config` или `binary`.
-/// `None` — пользователь закрыл диалог, это не ошибка.
+/// System file picker dialog. `kind`: `config` or `binary`.
+/// `None` — the user closed the dialog, that is not an error.
 #[tauri::command]
 pub async fn pick_file(app: AppHandle, kind: String) -> Option<String> {
     use tauri_plugin_dialog::DialogExt;
 
     let mut builder = app.dialog().file().set_title(if kind == "config" {
-        "Выберите config sing-box"
+        "Choose a sing-box config"
     } else {
-        "Выберите файл sing-box"
+        "Choose a sing-box file"
     });
 
     if kind == "config" {
         builder = builder.add_filter("JSON", &["json", "jsonc"]);
     } else if cfg!(windows) {
-        builder = builder.add_filter("Программа", &["exe"]);
+        builder = builder.add_filter("Program", &["exe"]);
     }
-    builder = builder.add_filter("Все файлы", &["*"]);
+    builder = builder.add_filter("All files", &["*"]);
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     builder.pick_file(move |path| {
@@ -387,11 +387,11 @@ pub async fn pick_file(app: AppHandle, kind: String) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// Файл sing-box и каталог версий
+// The sing-box file and the version catalog
 //
-// Каждая версия скачивается отдельным файлом и остаётся на диске. Активная —
-// копия выбранной версии по стабильному пути: на него ссылается сервис, и
-// переключение версии не должно требовать его переустановки.
+// Each version is downloaded as a separate file and stays on disk. The active
+// one is a copy of the selected version at a stable path: the service points to
+// it, and switching versions must not require reinstalling it.
 // ---------------------------------------------------------------------------
 
 #[tauri::command]
@@ -400,8 +400,7 @@ pub async fn get_binary_info(state: State<'_, AppState>) -> Result<BinaryInfo> {
     blocking(move || binary::info(&settings)).await
 }
 
-/// Каталог релизов. По умолчанию — из кэша, `refresh` заставляет сходить
-/// на GitHub.
+/// Release catalog. By default from cache; `refresh` forces a trip to GitHub.
 #[tauri::command]
 pub async fn list_singbox_releases(
     state: State<'_, AppState>,
@@ -416,7 +415,7 @@ pub async fn list_singbox_releases(
     binary::refresh_catalog(active.as_deref()).await
 }
 
-/// Скачивает версию в каталог, ничего не переключая.
+/// Downloads a version into the catalog, without switching to it.
 #[tauri::command]
 pub async fn download_singbox_release(
     state: State<'_, AppState>,
@@ -424,8 +423,8 @@ pub async fn download_singbox_release(
     asset_url: String,
 ) -> Result<ReleaseCatalog> {
     let target = binary::version_path(&version)?;
-    // Имя нарочно не похоже на файл версии: недокачанный архив не должен
-    // попасть в список скачанных версий.
+    // The name is deliberately unlike a version file: an unfinished download
+    // must not end up in the list of downloaded versions.
     let archive = binary::versions_dir()?.join(format!("download-{version}.archive"));
 
     binary::download(&asset_url, &archive).await?;
@@ -450,7 +449,7 @@ pub async fn delete_singbox_release(
     let active = active_version(&state).await;
     if active.as_deref() == Some(version.as_str()) {
         return Err(Error::Other(
-            "эта версия сейчас используется — сначала выберите другую".into(),
+            "this version is currently in use — pick another one first".into(),
         ));
     }
 
@@ -461,22 +460,22 @@ pub async fn delete_singbox_release(
     .await
 }
 
-/// Результат переключения версии — всё, что стоит показать после него.
+/// Result of switching versions — everything worth showing after it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstallOutcome {
     pub binary: BinaryInfo,
-    /// Пришлось ли останавливать sing-box ради замены файла.
+    /// Whether sing-box had to be stopped to replace the file.
     pub restarted: bool,
-    /// Что сказал `sing-box check` новой версией на текущем конфиге.
+    /// What `sing-box check` said with the new version on the current config.
     pub check: CheckResult,
 }
 
-/// Делает скачанную версию активной: проверить конфиг ею → остановить
-/// sing-box → заменить файл → запустить обратно.
+/// Makes a downloaded version active: check the config with it → stop
+/// sing-box → replace the file → start it back up.
 ///
-/// Работает только с файлом под управлением Vantage Box: чужой путь — это
-/// выбор пользователя, туда мы не пишем.
+/// Only works on a file managed by Vantage Box: a foreign path is the user's
+/// choice, we do not write there.
 #[tauri::command]
 pub async fn use_singbox_release(
     state: State<'_, AppState>,
@@ -486,14 +485,14 @@ pub async fn use_singbox_release(
     let choice = binary::resolve(&settings)?;
     if !choice.managed {
         return Err(Error::Other(
-            "путь к файлу sing-box задан вручную — Vantage Box его не подменяет".into(),
+            "the sing-box file path is set manually — Vantage Box does not override it".into(),
         ));
     }
 
     let source = binary::version_path(&version)?;
     if !source.is_file() {
         return Err(Error::Other(format!(
-            "версия {version} не скачана: {}",
+            "version {version} is not downloaded: {}",
             source.display()
         )));
     }
@@ -502,14 +501,14 @@ pub async fn use_singbox_release(
     let job_settings = settings.clone();
 
     let (check, restarted) = blocking(move || {
-        // Проверяем конфиг именно новой версией: несовместимые опции должны
-        // всплыть до того, как мы заменим рабочий файл.
+        // Check the config with the new version specifically: incompatible
+        // options must surface before we replace the working file.
         let config = job_settings.sing_box.config_path.trim().to_string();
         let check = if config.is_empty() {
             CheckResult {
                 available: false,
                 ok: true,
-                output: "путь к config не задан, проверка пропущена".into(),
+                output: "config path is not set, check skipped".into(),
             }
         } else {
             binary::check_config(&source, std::path::Path::new(&config))?
@@ -517,7 +516,7 @@ pub async fn use_singbox_release(
 
         if !check.ok {
             return Err(Error::Other(format!(
-                "версия {version} не принимает текущий config, переключение отменено:\n{}",
+                "version {version} does not accept the current config, switch cancelled:\n{}",
                 check.output
             )));
         }
@@ -566,7 +565,7 @@ pub async fn use_singbox_release(
     })
 }
 
-/// Версия активного файла sing-box. `None` — файла нет или версия не читается.
+/// Version of the active sing-box file. `None` — the file is missing or the version is unreadable.
 async fn active_version(state: &State<'_, AppState>) -> Option<String> {
     let settings = state.settings.get();
     blocking(move || binary::info(&settings))
@@ -575,12 +574,11 @@ async fn active_version(state: &State<'_, AppState>) -> Option<String> {
         .and_then(|info| info.version)
 }
 
-/// Ставит файл активным, уводя предыдущий в сторону: на Windows нельзя
-/// перезаписать исполняемый файл, который ещё кем-то удерживается, зато
-/// переименовать — можно.
+/// Makes a file active, moving the previous one aside: on Windows you cannot
+/// overwrite an executable still held by someone, but you can rename it.
 ///
-/// Источник копируется, а не переносится: это файл из каталога версий, он
-/// должен остаться на диске.
+/// The source is copied, not moved: it is a file from the version catalog, it
+/// must stay on disk.
 fn replace_binary(source: &std::path::Path, target: &std::path::Path) -> Result<()> {
     if let Some(parent) = target.parent() {
         std::fs::create_dir_all(parent)
@@ -601,7 +599,7 @@ fn replace_binary(source: &std::path::Path, target: &std::path::Path) -> Result<
             Ok(())
         }
         Err(e) => {
-            // Откатываемся, чтобы не остаться вообще без файла sing-box.
+            // Roll back so we are not left without a sing-box file at all.
             if previous.exists() {
                 let _ = std::fs::rename(&previous, target);
             }
@@ -611,15 +609,15 @@ fn replace_binary(source: &std::path::Path, target: &std::path::Path) -> Result<
 }
 
 fn build_overview(proxies: HashMap<String, Proxy>) -> ProxyOverview {
-    // Порядок групп берём из GLOBAL, если sing-box его отдал: он отражает
-    // порядок outbound'ов в конфиге, а не случайный обход хеш-таблицы.
+    // Take the group order from GLOBAL, if sing-box returned it: it reflects
+    // the outbound order in the config, not a random hash-table traversal.
     let global_order: Vec<String> = proxies
         .get("GLOBAL")
         .and_then(|p| p.all.clone())
         .unwrap_or_default();
 
-    // Имя берём из ключа карты: поле `name` внутри объекта sing-box отдаёт
-    // не всегда, а ключ есть всегда.
+    // Take the name from the map key: sing-box does not always return the
+    // `name` field inside the object, but the key is always there.
     let mut groups: Vec<GroupView> = proxies
         .iter()
         .filter(|(name, p)| p.is_group() && name.as_str() != "GLOBAL")
@@ -635,7 +633,7 @@ fn build_overview(proxies: HashMap<String, Proxy>) -> ProxyOverview {
                         delay: node
                             .and_then(|n| n.history.last())
                             .map(|h| h.delay)
-                            // Ноль означает «узел не ответил», а не мгновенный отклик.
+                            // Zero means "the node did not respond", not an instant reply.
                             .filter(|d| *d > 0),
                         kind: node.map(|n| n.kind.clone()).unwrap_or_default(),
                         udp: node.is_some_and(|n| n.udp),
@@ -655,8 +653,8 @@ fn build_overview(proxies: HashMap<String, Proxy>) -> ProxyOverview {
         })
         .collect();
 
-    // Порядок из GLOBAL, всё остальное — по алфавиту следом. Без второго
-    // ключа порядок плавал бы от вызова к вызову: источник — HashMap.
+    // Order from GLOBAL, everything else alphabetically after it. Without the
+    // second key the order would drift from call to call: the source is a HashMap.
     groups.sort_by_key(|g| {
         let rank = global_order
             .iter()
@@ -669,18 +667,18 @@ fn build_overview(proxies: HashMap<String, Proxy>) -> ProxyOverview {
 }
 
 // ---------------------------------------------------------------------------
-// Подписки
+// Subscriptions
 // ---------------------------------------------------------------------------
 
-/// Перетягивает все включённые подписки и вливает узлы в config.json. `force`
-/// игнорирует подпись набора — например, когда пользователь нажал «обновить».
+/// Pulls all enabled subscriptions and injects nodes into config.json. `force`
+/// ignores the set signature — for example, when the user clicks "refresh".
 #[tauri::command]
 pub async fn refresh_subscriptions(app: AppHandle, force: bool) -> Result<ApplyOutcome> {
     subscription::apply(&app, force).await
 }
 
-/// Состояние подписок из sidecar-файла: время последнего обновления, число
-/// узлов, ошибки — для отображения в UI.
+/// Subscription state from the sidecar file: last update time, node count,
+/// errors — for display in the UI.
 #[tauri::command]
 pub fn get_subscription_state() -> Result<SubscriptionsState> {
     subscription::load_state()

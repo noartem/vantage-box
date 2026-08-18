@@ -1,7 +1,7 @@
-//! Модели ответов Clash API в том виде, в котором их отдаёт sing-box.
+//! Models for the Clash API responses, in the shape sing-box returns them.
 //!
-//! Все поля, которых может не быть в конкретной версии, помечены `default` —
-//! ломаться из-за нового/пропавшего ключа приложение не должно.
+//! All fields that may be absent in a particular version are marked `default`
+//! — the app must not break on a new or removed key.
 
 use std::collections::HashMap;
 
@@ -27,10 +27,10 @@ pub struct Proxy {
     pub kind: String,
     #[serde(default)]
     pub name: String,
-    /// Текущий выбор — только у групп.
+    /// The current selection — only on groups.
     #[serde(default)]
     pub now: Option<String>,
-    /// Состав группы — только у групп.
+    /// The group members — only on groups.
     #[serde(default)]
     pub all: Option<Vec<String>>,
     #[serde(default)]
@@ -40,12 +40,13 @@ pub struct Proxy {
 }
 
 impl Proxy {
-    /// Группа — это то, у чего есть список вложенных outbound'ов.
+    /// A group is anything that has a list of nested outbounds.
     pub fn is_group(&self) -> bool {
         self.all.as_ref().is_some_and(|all| !all.is_empty())
     }
 
-    /// Только у `Selector` выбор можно менять руками; `URLTest` решает сам.
+    /// Only on `Selector` can the selection be changed by hand; `URLTest`
+    /// decides on its own.
     pub fn is_selectable(&self) -> bool {
         self.kind.eq_ignore_ascii_case("selector")
     }
@@ -75,8 +76,8 @@ pub struct Memory {
     pub oslimit: u64,
 }
 
-/// Снимок активных соединений из `/connections`. sing-box шлёт полный снимок
-/// на каждое изменение, поэтому накапливать ничего не нужно.
+/// A snapshot of active connections from `/connections`. sing-box sends a full
+/// snapshot on every change, so we do not need to accumulate anything.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionsSnapshot {
     #[serde(default)]
@@ -87,17 +88,17 @@ pub struct ConnectionsSnapshot {
     pub connections: Vec<Connection>,
 }
 
-/// Одно соединение. Полей у sing-box много и они меняются между версиями,
-/// поэтому всё кроме идентификатора и объёмов — `default`.
+/// One connection. sing-box has many fields and they change between versions,
+/// so everything except the identifier and the volumes is `default`.
 ///
-/// sing-box вкладывает сетевые адреса в подобъект `metadata` (см.
-/// `experimental/clashapi/connections.go`), а не плоско — поэтому модель
-/// повторяет именно эту схему.
+/// sing-box nests network addresses in a `metadata` sub-object (see
+/// `experimental/clashapi/connections.go`) rather than flat — so the model
+/// mirrors exactly that shape.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Connection {
     #[serde(default)]
     pub id: String,
-    /// Цепочка outbound'ов: `[узел, группа]` снаружи внутрь.
+    /// The outbound chain: `[node, group]` from outer to inner.
     #[serde(default)]
     pub chains: Vec<String>,
     #[serde(default)]
@@ -110,17 +111,18 @@ pub struct Connection {
     pub upload: u64,
     #[serde(default)]
     pub download: u64,
-    /// ISO-время старта.
+    /// The start time, ISO format.
     #[serde(default)]
     pub start: String,
 }
 
-/// Сетевые атрибуты соединения — подобъект `metadata` в ответе sing-box.
+/// Network attributes of a connection — the `metadata` sub-object in the
+/// sing-box response.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ConnectionMetadata {
     #[serde(default)]
     pub network: String,
-    /// Тип инбаунда: `Mixed`, `Tun`, …
+    /// The inbound type: `Mixed`, `Tun`, …
     #[serde(rename = "type", default)]
     pub kind: String,
     #[serde(default, rename = "sourceIP")]
@@ -145,12 +147,12 @@ pub struct RawLogEntry {
     pub payload: String,
 }
 
-/// Запись лога, обогащённая временем получения и монотонным id —
-/// по нему UI дедуплицирует и виртуализирует ленту.
+/// A log entry enriched with the receive time and a monotonic id — the UI uses
+/// it to deduplicate and virtualize the feed.
 #[derive(Debug, Clone, Serialize)]
 pub struct LogEntry {
     pub id: u64,
-    /// Unix-время в миллисекундах.
+    /// Unix time in milliseconds.
     pub time: u64,
     pub level: String,
     pub message: String,
@@ -162,17 +164,17 @@ pub struct DelayResponse {
     pub delay: u32,
 }
 
-/// Состояние подключения к Clash API. Единственный источник правды для
-/// индикатора в UI.
+/// The connection state to the Clash API. The single source of truth for the
+/// UI indicator.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionStatus {
     pub state: ConnectionState,
-    /// Версия sing-box, если удалось её получить.
+    /// The sing-box version, if we managed to get it.
     pub version: Option<String>,
-    /// Текст последней ошибки — показываем пользователю как есть.
+    /// The last error text — shown to the user as-is.
     pub error: Option<String>,
-    /// Попадает ли версия в поддерживаемый диапазон.
+    /// Whether the version falls in the supported range.
     pub compatibility: Compatibility,
 }
 
@@ -198,11 +200,11 @@ pub enum ConnectionState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Compatibility {
-    /// Версию определить не удалось.
+    /// The version could not be determined.
     Unknown,
     Supported,
-    /// Версия ниже поддерживаемого диапазона.
+    /// The version is below the supported range.
     TooOld,
-    /// Версия выше — работаем, но предупреждаем.
+    /// The version is above — we keep working, but warn.
     TooNew,
 }

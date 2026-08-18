@@ -1,8 +1,8 @@
-//! `settings.json` — единственный источник правды для конфигурации GUI.
+//! `settings.json` — the single source of truth for GUI configuration.
 //!
-//! Файл лежит в стандартной директории настроек ОС, читается как JSONC,
-//! пишется атомарно и отслеживается через `notify`: ручные правки в редакторе
-//! подхватываются на лету.
+//! The file lives in the standard OS settings directory, is read as JSONC,
+//! written atomically, and watched via `notify`: manual edits in an editor
+//! are picked up on the fly.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
@@ -14,21 +14,21 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Error, Result};
 use crate::jsonc::strip_jsonc;
 
-/// Имя директории приложения внутри системной конфиг-папки.
+/// The app directory name inside the system config folder.
 const APP_DIR: &str = "vantage-box";
 const FILE_NAME: &str = "settings.json";
 
-/// Окно, за которое схлопываются подряд идущие события файловой системы.
+/// The window over which consecutive filesystem events are collapsed.
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(250);
 
 // ---------------------------------------------------------------------------
-// Модель настроек
+// Settings model
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Settings {
-    /// Ссылка на JSON Schema — чтобы редакторы давали автокомплит.
+    /// A link to the JSON Schema — so editors provide autocompletion.
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
     pub sing_box: SingBoxSettings,
@@ -36,69 +36,69 @@ pub struct Settings {
     pub ui: UiSettings,
     pub tray: TraySettings,
     pub hotkeys: HotkeySettings,
-    /// Запускать Vantage Box при входе в систему.
+    /// Start Vantage Box at system login.
     pub autostart: bool,
-    /// Автообновление самого GUI (не sing-box). Отдельно от `sing_box.update_policy`.
+    /// Auto-update of the GUI itself (not sing-box). Separate from `sing_box.update_policy`.
     pub gui_update: GuiUpdateSettings,
-    /// Подписки на списки прокси.
+    /// Subscriptions to proxy lists.
     pub subscriptions: Vec<SubscriptionSettings>,
-    /// Автопереключение selector-групп на резерв при падении активного узла.
+    /// Auto-switch selector groups to a backup when the active node fails.
     pub fallback: FallbackSettings,
 }
 
-/// Политика автообновления GUI-приложения. Переиспользует те же значения,
-/// что и `sing_box.update_policy`, но живёт отдельно: бинарник и оболочку
-/// обновляют независимо.
+/// GUI auto-update policy. Reuses the same values as
+/// `sing_box.update_policy`, but lives separately: the binary and the shell
+/// are updated independently.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GuiUpdateSettings {
     pub policy: UpdatePolicy,
 }
 
-/// Одна подписка: URL, отдающий список прокси, и куда их вливать.
+/// One subscription: a URL that returns a proxy list, and where to inject it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SubscriptionSettings {
-    /// Уникальный идентификатор в пределах списка. Не отдаётся провайдером —
-    /// генерируем сами, чтобы UI и бэкенд могли ссылаться на подписку стабильно.
+    /// A unique identifier within the list. Not provided by the upstream —
+    /// we generate it ourselves so the UI and backend can refer to a subscription stably.
     pub id: String,
-    /// Человекочитаемое имя.
+    /// A human-readable name.
     pub name: String,
-    /// URL подписки.
+    /// The subscription URL.
     pub url: String,
-    /// Включена ли подписка (выключенная не обновляется и не вливается).
+    /// Whether the subscription is enabled (a disabled one is not updated or injected).
     pub enabled: bool,
-    /// Тег selector-группы, в чей `outbounds` дописать узлы. `None` — во все
-    /// selector/urltest-группы.
+    /// The selector group tag whose `outbounds` to append nodes to. `None` — into all
+    /// selector/urltest groups.
     pub target_group: Option<String>,
-    /// Как часто перетягивать подписку, часы.
+    /// How often to pull the subscription, hours.
     pub update_interval: u64,
 }
 
-/// Автопереключение selector-групп: если активный узел падает, выбираем резерв.
+/// Auto-switching selector groups: when the active node goes down, pick a backup.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct FallbackSettings {
     pub enabled: bool,
-    /// Как часто пингуем активный узел, секунды.
+    /// How often we ping the active node, seconds.
     pub interval_sec: u32,
-    /// Таймаут пинга, мс.
+    /// Ping timeout, ms.
     pub timeout_ms: u32,
-    /// Задержка выше этой считается «плохой» — переключаем. 0 — только по
-    /// полной недоступности.
+    /// A delay above this is considered "bad" — switch. 0 — only on full
+    /// unavailability.
     pub max_delay_ms: u32,
-    /// Теги групп, за которыми следим. Пусто — за всеми selector-группами.
+    /// Group tags to watch. Empty — all selector groups.
     pub groups: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SingBoxSettings {
-    /// Путь к пользовательскому `config.json` sing-box.
+    /// Path to the user's sing-box `config.json`.
     pub config_path: String,
-    /// Путь к бинарнику. Пусто — используем бинарник под управлением Vantage Box.
+    /// Path to the binary. Empty — use the binary managed by Vantage Box.
     pub binary_path: String,
-    /// Политика автообновления бинарника.
+    /// Binary auto-update policy.
     pub update_policy: UpdatePolicy,
 }
 
@@ -113,11 +113,11 @@ pub enum UpdatePolicy {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ClashApiSettings {
-    /// Базовый адрес Clash API. Строго loopback.
+    /// Base address of the Clash API. Strictly loopback.
     pub url: String,
-    /// Secret из конфига sing-box. Пусто — если API открыт без авторизации.
+    /// Secret from the sing-box config. Empty — if the API is open with no auth.
     pub secret: String,
-    /// Уровень, на котором подписываемся на `/logs`.
+    /// The level at which we subscribe to `/logs`.
     pub log_level: LogLevel,
 }
 
@@ -147,9 +147,9 @@ impl LogLevel {
 #[serde(default, rename_all = "camelCase")]
 pub struct UiSettings {
     pub theme: Theme,
-    /// URL, по которому измеряется задержка outbound'ов.
+    /// The URL used to measure outbound latency.
     pub latency_test_url: String,
-    /// Таймаут latency-теста, мс.
+    /// Latency test timeout, ms.
     pub latency_test_timeout: u32,
 }
 
@@ -165,7 +165,7 @@ pub enum Theme {
 #[serde(default, rename_all = "camelCase")]
 pub struct TraySettings {
     pub enabled: bool,
-    /// Закрытие окна сворачивает в трей вместо выхода.
+    /// Closing the window minimizes to the tray instead of quitting.
     pub close_to_tray: bool,
     pub start_minimized: bool,
 }
@@ -173,9 +173,9 @@ pub struct TraySettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HotkeySettings {
-    /// Попап выбора прокси.
+    /// Proxy selection popup.
     pub proxy_popup: String,
-    /// Включить/выключить sing-box.
+    /// Toggle sing-box on/off.
     pub toggle: String,
 }
 
@@ -239,21 +239,21 @@ impl Default for SingBoxSettings {
     }
 }
 
-/// Адрес Clash API по умолчанию.
+/// The default Clash API address.
 ///
-/// Порт 9090 — общий стандарт для всех клиентов на базе Clash, и он же
-/// стандартный порт Prometheus. На машине, где уже крутится что-то из этого,
-/// два процесса дерутся за один порт. Свой порт снимает вопрос целиком.
+/// Port 9090 is the common standard for all Clash-based clients, and also the
+/// standard Prometheus port. On a machine already running one of those, two
+/// processes would fight over one port. Our own port removes the question entirely.
 pub const DEFAULT_CLASH_URL: &str = "http://127.0.0.1:9797";
 
-/// Порт, который занимают все прочие клиенты Clash.
+/// The port that all other Clash clients use.
 const SHARED_CLASH_PORT: &str = ":9090";
 
-/// Приводит настройки к рабочему виду после чтения с диска.
+/// Brings settings to a working form after reading from disk.
 ///
-/// Единственное правило: стандартный клешовый порт уводим на свой. Это не
-/// вкусовщина — на 9090 приложение имеет все шансы подключиться не к тому
-/// sing-box, который запустило само.
+/// The only rule: move the standard Clash port to our own. This is not a taste
+/// call — on 9090 the app may well connect to a different sing-box than the
+/// one it started itself.
 fn normalize(mut settings: Settings) -> Settings {
     if settings
         .clash_api
@@ -307,15 +307,15 @@ impl Default for HotkeySettings {
 }
 
 // ---------------------------------------------------------------------------
-// Пути
+// Paths
 // ---------------------------------------------------------------------------
 
-/// Переменная окружения, уводящая всё состояние приложения в другую папку.
-/// Нужна интеграционным тестам, чтобы они гарантированно не трогали рабочую
-/// конфигурацию пользователя.
+/// An environment variable that moves all app state to a different folder.
+/// Integration tests need it so they definitely do not touch the user's
+/// working configuration.
 pub const CONFIG_DIR_ENV: &str = "VANTAGE_BOX_CONFIG_DIR";
 
-/// Директория настроек: `%APPDATA%/vantage-box`, `~/.config/vantage-box`,
+/// The settings directory: `%APPDATA%/vantage-box`, `~/.config/vantage-box`,
 /// `~/Library/Application Support/vantage-box`.
 pub fn config_dir() -> Result<PathBuf> {
     if let Some(custom) = std::env::var_os(CONFIG_DIR_ENV) {
@@ -334,11 +334,11 @@ pub fn settings_path() -> Result<PathBuf> {
 }
 
 // ---------------------------------------------------------------------------
-// Чтение и запись
+// Reading and writing
 // ---------------------------------------------------------------------------
 
-/// Читает настройки с диска. Отсутствующий файл — не ошибка: берём дефолты
-/// и создаём файл, чтобы пользователю было что править.
+/// Reads settings from disk. A missing file is not an error: we take the
+/// defaults and create the file so the user has something to edit.
 pub fn load_or_create() -> Result<Settings> {
     let path = settings_path()?;
     if !path.exists() {
@@ -349,8 +349,8 @@ pub fn load_or_create() -> Result<Settings> {
     }
 
     let settings = read_from_disk(&path)?;
-    // Если чтение что-то поправило (например, увело порт с общего 9090),
-    // файл должен сразу это отражать: пользователь смотрит именно в него.
+    // If reading changed anything (for example, moved the port off the shared 9090),
+    // the file must reflect it right away: the user looks at exactly that file.
     if let Ok(raw) = read_raw(&path) {
         if raw != settings {
             write_to_disk(&path, &settings)?;
@@ -369,13 +369,13 @@ fn read_raw(path: &Path) -> Result<Settings> {
 }
 
 pub fn read_from_disk(path: &Path) -> Result<Settings> {
-    // Пустой файл трактуем как «всё по умолчанию» — иначе первый же
-    // `truncate` из редактора уронил бы загрузку.
+    // An empty file is treated as "all defaults" — otherwise the very first
+    // `truncate` from an editor would kill loading.
     read_raw(path).map(normalize)
 }
 
-/// Атомарная запись: пишем во временный файл рядом и переименовываем поверх.
-/// Так редактор/watcher никогда не увидят полупустой файл.
+/// Atomic write: we write to a temp file next to the target and rename over it.
+/// That way the editor/watcher never sees a half-empty file.
 pub fn write_to_disk(path: &Path, settings: &Settings) -> Result<()> {
     let display = path.display().to_string();
     if let Some(parent) = path.parent() {
@@ -392,8 +392,8 @@ pub fn write_to_disk(path: &Path, settings: &Settings) -> Result<()> {
     Ok(())
 }
 
-/// Кладёт JSON Schema рядом с настройками — на неё ссылается `$schema`,
-/// поэтому автокомплит работает в любом редакторе офлайн.
+/// Writes the JSON Schema next to the settings — `$schema` points to it, so
+/// autocompletion works in any editor offline.
 pub fn write_schema() -> Result<()> {
     let path = config_dir()?.join("settings.schema.json");
     std::fs::create_dir_all(path.parent().unwrap())
@@ -403,10 +403,10 @@ pub fn write_schema() -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Хранилище в памяти + watcher
+// In-memory store + watcher
 // ---------------------------------------------------------------------------
 
-/// Актуальные настройки, разделяемые между командами и фоновыми задачами.
+/// Current settings, shared between commands and background tasks.
 pub struct SettingsStore {
     path: PathBuf,
     current: RwLock<Settings>,
@@ -428,15 +428,15 @@ impl SettingsStore {
         &self.path
     }
 
-    /// Пишет на диск и обновляет память. Watcher увидит собственную запись,
-    /// но сравнение со значением в памяти его погасит.
+    /// Writes to disk and updates memory. The watcher will see its own write,
+    /// but the comparison with the in-memory value will suppress it.
     pub fn save(&self, next: Settings) -> Result<()> {
         write_to_disk(&self.path, &next)?;
         *self.current.write().expect("settings lock") = next;
         Ok(())
     }
 
-    /// Перечитывает файл. `Ok(None)` — содержимое не изменилось.
+    /// Re-reads the file. `Ok(None)` — the contents have not changed.
     pub fn reload(&self) -> Result<Option<Settings>> {
         let next = read_from_disk(&self.path)?;
         let mut guard = self.current.write().expect("settings lock");
@@ -448,17 +448,18 @@ impl SettingsStore {
     }
 }
 
-/// Событие от watcher'а: файл изменился и его содержимое действительно другое.
+/// Event from the watcher: the file changed and its contents are actually different.
 pub type ChangeTx = tokio::sync::mpsc::UnboundedSender<()>;
 
-/// Следит за файлом настроек. Watcher вешаем на *директорию*: атомарная запись
-/// заменяет inode, и подписка на сам файл после первой же записи умирает.
+/// Watches the settings file. We attach the watcher to the *directory*: an
+/// atomic write replaces the inode, so a subscription on the file itself dies
+/// after the first write.
 ///
-/// Возвращённый watcher нужно держать живым — при drop'е слежка прекращается.
+/// The returned watcher must be kept alive — on drop the watch stops.
 pub fn spawn_watcher(path: &Path, tx: ChangeTx) -> Result<notify::RecommendedWatcher> {
     let dir = path
         .parent()
-        .ok_or_else(|| Error::Other("у файла настроек нет родительской директории".into()))?
+        .ok_or_else(|| Error::Other("the settings file has no parent directory".into()))?
         .to_path_buf();
     let target = path.to_path_buf();
 
@@ -467,24 +468,24 @@ pub fn spawn_watcher(path: &Path, tx: ChangeTx) -> Result<notify::RecommendedWat
     let mut watcher = notify::recommended_watcher(
         move |res: std::result::Result<Event, notify::Error>| {
             let Ok(event) = res else { return };
-            // Временный файл атомарной записи нас не интересует.
+            // The temp file of the atomic write is not interesting.
             let touches_target = event.paths.iter().any(|p| p == &target);
             if touches_target {
                 let _ = raw_tx.send(());
             }
         },
     )
-    .map_err(|e| Error::Other(format!("не удалось создать watcher: {e}")))?;
+    .map_err(|e| Error::Other(format!("failed to create watcher: {e}")))?;
 
     watcher
         .watch(&dir, RecursiveMode::NonRecursive)
-        .map_err(|e| Error::Other(format!("не удалось следить за {}: {e}", dir.display())))?;
+        .map_err(|e| Error::Other(format!("failed to watch {}: {e}", dir.display())))?;
 
-    // Дебаунс в отдельном потоке: сохранение из редактора — это обычно
-    // несколько событий подряд (truncate, write, rename).
+    // Debounce on a separate thread: saving from an editor usually produces
+    // several events in a row (truncate, write, rename).
     std::thread::spawn(move || {
         while raw_rx.recv().is_ok() {
-            // Схлопываем всё, что прилетело в окно дебаунса.
+            // Collapse everything that arrived within the debounce window.
             while raw_rx.recv_timeout(WATCH_DEBOUNCE).is_ok() {}
             if tx.send(()).is_err() {
                 break;

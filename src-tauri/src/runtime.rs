@@ -1,10 +1,10 @@
-//! Подготовка рантайм-копии конфига sing-box.
+//! Preparing the runtime copy of the sing-box config.
 //!
-//! Пользовательский `config.json` мы никогда не переписываем. Перед запуском
-//! сервиса рядом с настройками появляется `runtime.json` — та же конфигурация,
-//! но с гарантированно включённым Clash API и подставленным secret'ом.
-//! Secret не живёт в `settings.json`: он генерируется на лету и хранится
-//! в отдельном `runtime-state.json`.
+//! We never overwrite the user's `config.json`. Before starting the service,
+//! `runtime.json` appears next to the settings — the same configuration, but
+//! with Clash API guaranteed to be on and the secret injected.
+//! The secret does not live in `settings.json`: it is generated on the fly
+//! and stored in a separate `runtime-state.json`.
 
 use std::path::{Path, PathBuf};
 
@@ -18,23 +18,23 @@ use crate::settings::{config_dir, ClashApiSettings, Settings};
 const RUNTIME_CONFIG: &str = "runtime.json";
 const RUNTIME_STATE: &str = "runtime-state.json";
 
-/// Что получилось после подготовки — этим запускается sing-box.
+/// What came out of preparation — this is what sing-box is started with.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreparedConfig {
-    /// Путь к рантайм-копии, её отдаём sing-box через `-c`.
+    /// Path to the runtime copy, passed to sing-box via `-c`.
     pub config_path: String,
-    /// `host:port`, на котором будет слушать Clash API.
+    /// `host:port` where the Clash API will listen.
     pub external_controller: String,
-    /// Пришёл ли secret из пользовательского конфига (тогда мы его не трогали).
+    /// Whether the secret came from the user's config (then we left it alone).
     pub secret_from_user_config: bool,
-    /// Действующий secret. Наружу не отдаётся: структура уходит во фронтенд,
-    /// а показывать там токен управления незачем.
+    /// The effective secret. Not exposed: the struct goes to the frontend, and
+    /// showing the control token there serves no purpose.
     #[serde(skip)]
     pub secret: String,
 }
 
-/// То, что нужно знать GUI после старта сервиса, но чего нет в настройках.
+/// What the GUI needs to know after the service starts, but is not in settings.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct RuntimeState {
@@ -50,21 +50,21 @@ fn runtime_state_path() -> Result<PathBuf> {
     Ok(config_dir()?.join(RUNTIME_STATE))
 }
 
-/// Собирает рантайм-конфиг из пользовательского и записывает его на диск.
+/// Builds the runtime config from the user's one and writes it to disk.
 pub fn prepare(settings: &Settings) -> Result<PreparedConfig> {
     prepare_in(&config_dir()?, settings)
 }
 
-/// То же, но с явной директорией для рантайм-файлов.
+/// Same, but with an explicit directory for the runtime files.
 ///
-/// Отдельный параметр нужен инструментам, которые прогоняют несколько версий
-/// sing-box подряд: каждой нужна своя песочница, и подменять переменную
-/// окружения на ходу ради этого не годится.
+/// The separate parameter is needed by tools that run several sing-box
+/// versions in a row: each needs its own sandbox, and swapping an environment
+/// variable on the fly for this is not the right approach.
 pub fn prepare_in(dir: &Path, settings: &Settings) -> Result<PreparedConfig> {
     let source = settings.sing_box.config_path.trim();
     if source.is_empty() {
         return Err(Error::Other(
-            "путь к config.json sing-box не задан — укажите его в настройках".into(),
+            "sing-box config.json path is not set — specify it in settings".into(),
         ));
     }
 
@@ -74,13 +74,13 @@ pub fn prepare_in(dir: &Path, settings: &Settings) -> Result<PreparedConfig> {
 
     if !config.is_object() {
         return Err(Error::Other(format!(
-            "{source}: ожидался JSON-объект в корне конфига"
+            "{source}: expected a JSON object at the root of the config"
         )));
     }
 
     let external_controller = host_port(&settings.clash_api.url);
 
-    // Уже заданный пользователем secret — его решение, уважаем и переиспользуем.
+    // A secret already set by the user is their decision — we respect and reuse it.
     let existing_secret = config
         .pointer("/experimental/clash_api/secret")
         .and_then(Value::as_str)
@@ -94,17 +94,17 @@ pub fn prepare_in(dir: &Path, settings: &Settings) -> Result<PreparedConfig> {
         None => generate_secret(),
     };
 
-    // Без Clash API приложение слепое, поэтому блок доводим до рабочего вида
-    // независимо от того, что было в исходном конфиге. Остальные ключи
-    // clash_api (external_ui, default_mode и прочее) сохраняем как есть.
-    let root = config.as_object_mut().expect("проверено выше");
+    // Without Clash API the app is blind, so we bring this block to a working
+    // state regardless of what was in the original config. The other clash_api
+    // keys (external_ui, default_mode, etc.) are preserved as-is.
+    let root = config.as_object_mut().expect("checked above");
     let experimental = root.entry("experimental").or_insert_with(|| json!({}));
     if !experimental.is_object() {
         *experimental = json!({});
     }
     let clash_api = experimental
         .as_object_mut()
-        .expect("только что привели к объекту")
+        .expect("just converted to an object")
         .entry("clash_api")
         .or_insert_with(|| json!({}));
     if !clash_api.is_object() {
@@ -133,15 +133,15 @@ pub fn prepare_in(dir: &Path, settings: &Settings) -> Result<PreparedConfig> {
     })
 }
 
-/// Нужен ли конфигу TUN-инбаунд.
+/// Whether the config needs a TUN inbound.
 ///
-/// От этого зависит, обязателен ли сервис: TUN поднимает сетевой адаптер и
-/// требует прав администратора, всё остальное запускается обычным процессом.
+/// This determines whether the service is required: TUN brings up a network
+/// adapter and requires admin rights, everything else runs as a regular process.
 pub fn requires_tun(settings: &Settings) -> Result<bool> {
     let source = settings.sing_box.config_path.trim();
     if source.is_empty() {
         return Err(Error::Other(
-            "путь к config.json sing-box не задан — укажите его в настройках".into(),
+            "sing-box config.json path is not set — specify it in settings".into(),
         ));
     }
 
@@ -169,11 +169,11 @@ pub fn load_state() -> RuntimeState {
         .unwrap_or_default()
 }
 
-/// Настройки подключения с уже подставленным действующим secret'ом.
+/// Connection settings with the effective secret already injected.
 ///
-/// Приоритет у явного значения из `settings.json`: если пользователь его
-/// прописал, он ожидает именно его. Иначе берём то, с чем мы сами запускали
-/// sing-box — но только если адрес API с тех пор не менялся.
+/// An explicit value from `settings.json` takes priority: if the user set it,
+/// they expect exactly that. Otherwise we take what we started sing-box with —
+/// but only if the API address has not changed since.
 pub fn effective_api_settings(settings: &Settings) -> ClashApiSettings {
     if !settings.clash_api.secret.is_empty() {
         return settings.clash_api.clone();
@@ -190,8 +190,8 @@ pub fn effective_api_settings(settings: &Settings) -> ClashApiSettings {
     }
 }
 
-/// Файлы с secret'ом кладём доступными только владельцу. На Windows это уже
-/// обеспечено ACL пользовательского профиля, на Unix нужно выставить режим явно.
+/// Files with the secret are written owner-only. On Windows this is already
+/// ensured by the user profile ACL; on Unix the mode must be set explicitly.
 fn write_private(path: &Path, body: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -208,14 +208,14 @@ fn write_private(path: &Path, body: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// 16 случайных байт в hex. Берём системный CSPRNG — secret защищает
-/// локальный порт управления, слабая энтропия тут не годится.
+/// 16 random bytes in hex. We use the system CSPRNG — the secret protects the
+/// local control port, weak entropy is not acceptable here.
 pub fn generate_secret() -> String {
     let mut bytes = [0u8; 16];
     if getrandom::fill(&mut bytes).is_err() {
-        // Единственный сценарий отказа — недоступный системный источник
-        // энтропии. Тогда честнее не подставлять предсказуемое значение,
-        // а оставить API без авторизации: он всё равно только на loopback.
+        // The only failure scenario is an unavailable system entropy source.
+        // Then it is more honest not to inject a predictable value and to
+        // leave the API without auth: it is loopback-only anyway.
         return String::new();
     }
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -252,7 +252,7 @@ mod tests {
         assert_eq!(host_port(""), "127.0.0.1:9090");
     }
 
-    /// Песочница на один тест: конфиг пользователя и директория рантайма.
+    /// A per-test sandbox: a user config and a runtime directory.
     fn sandbox(name: &str, config: &str) -> (PathBuf, Settings) {
         let dir = std::env::temp_dir().join(format!("vantage-box-test-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
@@ -284,9 +284,9 @@ mod tests {
         assert!(!requires_tun(&empty).unwrap());
     }
 
-    /// Пользовательский конфиг должен остаться узнаваемым: порядок ключей тот
-    /// же, а наш блок дописан в конец — тогда номера строк в ошибках sing-box
-    /// совпадают с исходным файлом настолько, насколько это вообще возможно.
+    /// The user's config must stay recognizable: the key order is the same,
+    /// and our block is appended at the end — so line numbers in sing-box
+    /// errors match the original file as closely as possible.
     #[test]
     fn keeps_key_order_and_appends_our_block() {
         let (dir, settings) = sandbox(
@@ -305,7 +305,7 @@ mod tests {
         assert!(written.find("\"log\"").unwrap() < written.find("\"experimental\"").unwrap());
     }
 
-    /// Уже заданный external_controller правим на месте, а не добавляем второй.
+    /// An already-set external_controller is patched in place, not added a second time.
     #[test]
     fn replaces_existing_field_in_place() {
         let (dir, settings) = sandbox(
@@ -318,9 +318,9 @@ mod tests {
 
         assert!(written.contains(&prepared.external_controller));
         assert!(!written.contains("127.0.0.1:1\""));
-        // Соседние ключи не трогаем: это настройки пользователя.
+        // We do not touch neighboring keys: those are the user's settings.
         assert!(written.contains("external_ui"));
-        // Блок остался первым — переносить его вниз незачем.
+        // The block stayed first — there is no reason to move it down.
         assert!(written.find("\"experimental\"").unwrap() < written.find("\"log\"").unwrap());
     }
 

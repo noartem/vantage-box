@@ -1,7 +1,7 @@
 [package]
 name = "vantage-box"
 version = "0.1.0"
-description = "Минималистичный десктопный GUI для sing-box"
+description = "A minimalist desktop GUI for sing-box"
 authors = ["Vantage Box"]
 edition = "2021"
 
@@ -21,9 +21,10 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["image-png", "tray-icon"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
-# preserve_order: рантайм-копия конфига должна отличаться от пользовательского
-# минимально. Без него serde_json пересобирает объекты по алфавиту, и в выводе
-# sing-box номера строк не совпадали бы с исходным файлом.
+# preserve_order: the runtime copy of the config must differ from the user's
+# file as little as possible. Without it, serde_json rebuilds objects in
+# alphabetical order, and line numbers in sing-box output would no longer
+# match the original file.
 serde_json = { version = "1", features = ["preserve_order"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "sync", "time", "macros", "fs", "net", "io-util"] }
 tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["connect", "handshake"] }
@@ -45,8 +46,8 @@ tauri-plugin-process = "2"
 [target."cfg(windows)".dependencies]
 windows-service = "0.8.1"
 
-# `desktop` — это cfg от tauri-build, для выбора зависимостей cargo его не
-# знает, поэтому платформы перечисляем явно.
+# `desktop` is a cfg from tauri-build; cargo does not know it for dependency
+# selection, so we list the platforms explicitly.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2.4.3"
 

@@ -1,17 +1,16 @@
-//! Подписки на списки прокси.
+//! Subscriptions to proxy lists.
 //!
-//! Подписка — это URL, который отдаёт либо готовый конфиг sing-box (массив
-//! `outbounds` или объект с `outbounds`), либо base64-список прокси-URI
-//! (`ss://`, `vmess://`, `vless://`, `trojan://`, `hysteria2://`, `tuic://`).
-//! Узлы вливаются в пользовательский `config.json` под тегами с префиксом
-//! `sub:<id>:`, дописываются в selector/urltest-группы и применяются мягким
-//! перезапуском с сохранением выбора.
+//! A subscription is a URL that returns either a ready sing-box config (an
+//! `outbounds` array or an object with `outbounds`), or a base64 list of
+//! proxy URIs (`ss://`, `vmess://`, `vless://`, `trojan://`, `hysteria2://`,
+//! `tuic://`). Nodes are injected into the user's `config.json` under tags
+//! prefixed with `sub:<id>:`, appended to selector/urltest groups, and
+//! applied via a soft restart that preserves the selection.
 //!
-//! Префикс тега — это и есть учёт того, чем управляем: при обновлении все
-//! `sub:`-теги снимаются и накатываются заново, так что повторное обновление
-//! не плодит дубликаты. Пользовательский `config.json` переписывается
-//! атомарно, с `.bak`; JSONC-комментарии при этом не сохраняются (как и в
-//! редакторе конфига).
+//! The tag prefix is how we keep track of what we manage: on update all
+//! `sub:` tags are removed and re-added, so a repeated update does not grow
+//! duplicates. The user's `config.json` is rewritten atomically with a `.bak`;
+//! JSONC comments are not preserved (same as in the config editor).
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -29,14 +28,14 @@ use crate::jsonc::strip_jsonc;
 use crate::settings::{config_dir, Settings, SubscriptionSettings};
 use crate::state::AppState;
 
-/// Префикс тегов всех outbound'ов, внесённых подписками.
+/// The tag prefix for all outbounds contributed by subscriptions.
 const TAG_PREFIX: &str = "sub:";
 
-/// Имя sidecar-файла с состоянием подписок (хэши, время, ошибки).
+/// Name of the sidecar file with subscription state (hashes, times, errors).
 const STATE_FILE: &str = "subscriptions-state.json";
 
-/// Типы outbound'ов, которые не являются прокси-узлами: группы и псевдо-outbound'ы.
-/// Их из подписки не вливаем.
+/// Outbound types that are not proxy nodes: groups and pseudo-outbounds.
+/// We do not inject these from a subscription.
 const NON_PROXY_TYPES: &[&str] = &[
     "selector",
     "urltest",
@@ -49,20 +48,20 @@ const NON_PROXY_TYPES: &[&str] = &[
 ];
 
 // ---------------------------------------------------------------------------
-// Публичный результат применения
+// Public apply result
 // ---------------------------------------------------------------------------
 
-/// Сводка по одной подписке после применения.
+/// Summary of one subscription after applying.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubUpdate {
     pub id: String,
     pub name: String,
-    /// Сколько узлов влито.
+    /// How many nodes were injected.
     pub node_count: usize,
-    /// Время обновления, unix-мс.
+    /// Update time, unix-ms.
     pub last_updated: u64,
-    /// Последняя ошибка, если не удалось обновить.
+    /// The last error, if the update failed.
     pub last_error: Option<String>,
 }
 
@@ -70,18 +69,18 @@ pub struct SubUpdate {
 #[serde(rename_all = "camelCase")]
 pub struct ApplyOutcome {
     pub updates: Vec<SubUpdate>,
-    /// Изменился ли config.json (и был ли перезапуск).
+    /// Whether config.json changed (and a restart happened).
     pub changed: bool,
-    /// Был ли sing-box перезапущен.
+    /// Whether sing-box was restarted.
     pub restarted: bool,
 }
 
 // ---------------------------------------------------------------------------
-// Применение
+// Applying
 // ---------------------------------------------------------------------------
 
-/// Перетягивает все включённые подписки, вливает узлы в config и (если состав
-/// изменился) мягко перезапускает sing-box.
+/// Pulls all enabled subscriptions, injects nodes into the config, and (if the
+/// set of nodes changed) softly restarts sing-box.
 pub async fn apply(app: &AppHandle, force: bool) -> Result<ApplyOutcome> {
     let state = app.state::<AppState>();
     let settings = state.settings.get();
@@ -93,7 +92,7 @@ pub async fn apply(app: &AppHandle, force: bool) -> Result<ApplyOutcome> {
         .cloned()
         .collect();
 
-    // Сводка по каждой подписке: скачиваем и парсим.
+    // Summary per subscription: download and parse.
     let mut fetched: Vec<(SubscriptionSettings, Vec<Value>, Option<String>)> = Vec::new();
     for sub in &enabled {
         match fetch_and_parse(&sub.url).await {
@@ -102,15 +101,15 @@ pub async fn apply(app: &AppHandle, force: bool) -> Result<ApplyOutcome> {
         }
     }
 
-    // Подготавливаем узлы с тегами и считаем подпись, чтобы понять, было ли
-    // изменение — лишний перезапуск sing-box не нужен.
+    // Prepare nodes with tags and compute a signature, to know whether anything
+    // changed — an extra sing-box restart is not needed.
     let prepared = prepare_outbounds(&fetched);
     let new_signature = signature(&prepared);
 
     let stored = load_state()?;
-    // `None` — подписки никогда не применялись. Тогда трогаем config только
-    // если есть что вливать: пустой набор на свежей установке не должен
-    // перезаписывать конфиг и перезапускать sing-box.
+    // `None` — subscriptions were never applied. Then we touch the config only
+    // if there is something to inject: an empty set on a fresh install must not
+    // overwrite the config and restart sing-box.
     let changed = match &stored.signature {
         None => force || !prepared.is_empty(),
         Some(old) => force || new_signature != *old,
@@ -140,25 +139,25 @@ pub async fn apply(app: &AppHandle, force: bool) -> Result<ApplyOutcome> {
         let content = actions::blocking(move || inject_into_config(&inject_settings, &inject_prepared))
             .await?;
 
-        // Фиксируем, что файл теперь содержит именно это — иначе watcher
-        // решит, что конфиг правили снаружи.
+        // Record that the file now contains exactly this — otherwise the
+        // watcher would think the config was edited externally.
         state.remember_config(&content);
 
-        // Перезапуск только если sing-box уже работает: неработающий подхватит
-        // новый конфиг при следующем старте.
+        // Restart only if sing-box is already running: a non-running one picks
+        // up the new config on the next start.
         let running = actions::run_status(app).await?.running;
         if running {
             actions::restart(app).await?;
             restarted = true;
         }
 
-        // Запоминаем новую подпись.
+        // Save the new signature.
         let mut next = stored;
         next.signature = Some(new_signature);
         let _ = save_state(&next);
     }
 
-    // В любом случае обновляем время/ошибки в sidecar (для UI).
+    // In any case update the time/errors in the sidecar (for the UI).
     {
         let mut next = load_state()?;
         for u in &updates {
@@ -182,15 +181,15 @@ pub async fn apply(app: &AppHandle, force: bool) -> Result<ApplyOutcome> {
 }
 
 // ---------------------------------------------------------------------------
-// Периодическое обновление
+// Periodic refresh
 // ---------------------------------------------------------------------------
 
-/// Фоновая задача: при старте однократно вливает узлы (если их ещё нет), затем
-/// раз в минуту проверяет, не подошло ли время обновить какую-то подписку.
+/// Background task: at startup injects the nodes once (if not present yet),
+/// then once a minute checks whether any subscription is due for an update.
 pub fn spawn_refresher(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        // Стартовое применение безопасно: если набор узлов не изменился,
-        // `apply` не трогает config и не перезапускает sing-box.
+        // The startup apply is safe: if the set of nodes has not changed,
+        // `apply` does not touch the config and does not restart sing-box.
         let _ = apply(&app, false).await;
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
@@ -201,8 +200,8 @@ pub fn spawn_refresher(app: AppHandle) {
     });
 }
 
-/// Есть ли включённая подписка, у которой вышел `update_interval` с последнего
-/// обновления. Ошибки чтения состояния трактуем как «пора обновить».
+/// Whether an enabled subscription has passed its `update_interval` since the
+/// last update. Read errors of the state are treated as "time to update".
 fn any_due(app: &AppHandle) -> bool {
     let state = app.state::<AppState>();
     let settings = state.settings.get();
@@ -226,10 +225,10 @@ fn any_due(app: &AppHandle) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Подготовка outbound'ов: теги + подпись
+// Preparing outbounds: tags + signature
 // ---------------------------------------------------------------------------
 
-/// `(id подписки, теги её узлов, готовые outbound'ы)`.
+/// `(subscription id, tags of its nodes, ready outbounds)`.
 type Prepared = Vec<(String, Vec<String>, Vec<Value>)>;
 
 fn prepare_outbounds(fetched: &[(SubscriptionSettings, Vec<Value>, Option<String>)]) -> Prepared {
@@ -276,7 +275,7 @@ fn unique_tag(base: &str, existing: &[String]) -> String {
     }
 }
 
-/// Стабильная подпись набора узлов: не зависит от порядка тегов.
+/// A stable signature of the node set: does not depend on the order of tags.
 fn signature(prepared: &Prepared) -> String {
     let mut hasher = Sha256::new();
     let mut lines: Vec<String> = Vec::new();
@@ -300,7 +299,7 @@ fn signature(prepared: &Prepared) -> String {
 fn sort_object_keys(value: &mut Value) {
     match value {
         Value::Object(map) => {
-            // preserve_order включён, поэтому ключи сортируем явно для подписи.
+            // preserve_order is enabled, so we sort keys explicitly for the signature.
             let mut entries: Vec<(String, Value)> = map
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
@@ -330,15 +329,15 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Инъекция в config.json (блокирующая)
+// Injecting into config.json (blocking)
 // ---------------------------------------------------------------------------
 
-/// Вписывает подготовленные узлы в `config.json`, возвращает новое содержимое.
+/// Writes the prepared nodes into `config.json`, returns the new contents.
 fn inject_into_config(settings: &Settings, prepared: &Prepared) -> Result<String> {
     let source = settings.sing_box.config_path.trim();
     if source.is_empty() {
         return Err(Error::Other(
-            "путь к config.json sing-box не задан — укажите его в настройках".into(),
+            "config.json path is not set — specify it in settings".into(),
         ));
     }
 
@@ -348,16 +347,16 @@ fn inject_into_config(settings: &Settings, prepared: &Prepared) -> Result<String
 
     let root = config
         .as_object_mut()
-        .ok_or_else(|| Error::Other(format!("{source}: ожидался JSON-объект в корне")))?;
+        .ok_or_else(|| Error::Other(format!("{source}: expected a JSON object at the root")))?;
 
     let outbounds = root
         .entry("outbounds")
         .or_insert_with(|| json!([]));
     let outbounds = outbounds
         .as_array_mut()
-        .ok_or_else(|| Error::Other("outbounds в config не является массивом".into()))?;
+        .ok_or_else(|| Error::Other("outbounds in the config is not an array".into()))?;
 
-    // 1. Снимаем всё, что раньше внесли подписки.
+    // 1. Remove everything that subscriptions previously contributed.
     outbounds.retain(|o| !is_managed(o));
     for o in outbounds.iter_mut() {
         if let Some(list) = o.get_mut("outbounds").and_then(|v| v.as_array_mut()) {
@@ -365,9 +364,9 @@ fn inject_into_config(settings: &Settings, prepared: &Prepared) -> Result<String
         }
     }
 
-    // 2. Целевые группы. Если хоть у одной включённой подписки задан
-    //    `target_group`, вливаем только в перечисленные (и существующие)
-    //    группы; иначе — во все selector/urltest.
+    // 2. Target groups. If at least one enabled subscription has a `target_group`,
+    //    inject only into the listed (and existing) groups; otherwise — into
+    //    all selector/urltest groups.
     let explicit: Vec<String> = settings
         .subscriptions
         .iter()
@@ -385,7 +384,7 @@ fn inject_into_config(settings: &Settings, prepared: &Prepared) -> Result<String
         selector_tags(outbounds)
     };
 
-    // 3. Добавляем узлы и собираем теги по целевым группам.
+    // 3. Add nodes and collect tags per target group.
     let mut tags_by_group: HashMap<String, Vec<String>> = HashMap::new();
     for (_id, tags, nodes) in prepared {
         for node in nodes {
@@ -399,7 +398,7 @@ fn inject_into_config(settings: &Settings, prepared: &Prepared) -> Result<String
         }
     }
 
-    // 4. Дописываем теги в группы (без дубликатов).
+    // 4. Append tags to groups (without duplicates).
     for o in outbounds.iter_mut() {
         let kind = o.get("type").and_then(|v| v.as_str()).unwrap_or("");
         let tag = o.get("tag").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -410,7 +409,7 @@ fn inject_into_config(settings: &Settings, prepared: &Prepared) -> Result<String
             let list = o
                 .get_mut("outbounds")
                 .and_then(|v| v.as_array_mut())
-                .ok_or_else(|| Error::Other(format!("группа {tag}: поле outbounds не массив")))?;
+                .ok_or_else(|| Error::Other(format!("group {tag}: outbounds field is not an array")))?;
             for new_tag in add {
                 let exists = list.iter().any(|t| t.as_str() == Some(new_tag.as_str()));
                 if !exists {
@@ -428,7 +427,7 @@ fn inject_into_config(settings: &Settings, prepared: &Prepared) -> Result<String
     Ok(body)
 }
 
-/// Теги всех selector/urltest-групп в `outbounds`, в порядке объявления.
+/// Tags of all selector/urltest groups in `outbounds`, in declaration order.
 fn selector_tags(outbounds: &[Value]) -> Vec<String> {
     outbounds
         .iter()
@@ -449,7 +448,7 @@ fn is_managed(o: &Value) -> bool {
         .is_some_and(|t| t.starts_with(TAG_PREFIX))
 }
 
-/// Атомарная запись с `.bak`-бэкапом — как в `write_singbox_config`.
+/// Atomic write with a `.bak` backup — same as in `write_singbox_config`.
 fn write_config_atomic(path: &Path, body: &str) -> Result<()> {
     if path.is_file() {
         let backup = path.with_extension("json.bak");
@@ -464,7 +463,7 @@ fn write_config_atomic(path: &Path, body: &str) -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Скачивание и разбор
+// Downloading and parsing
 // ---------------------------------------------------------------------------
 
 async fn fetch_and_parse(url: &str) -> Result<Vec<Value>> {
@@ -483,11 +482,11 @@ async fn fetch(url: &str) -> Result<String> {
         .header("User-Agent", "vantage-box")
         .send()
         .await
-        .map_err(|e| Error::Transport(format!("подписка недоступна: {e}")))?;
+        .map_err(|e| Error::Transport(format!("subscription unavailable: {e}")))?;
     let status = resp.status();
     if !status.is_success() {
         return Err(Error::Other(format!(
-            "подписка вернула {status}"
+            "subscription returned {status}"
         )));
     }
     resp.text().await.map_err(|e| Error::Transport(e.to_string()))
@@ -496,10 +495,10 @@ async fn fetch(url: &str) -> Result<String> {
 fn parse_content(text: &str) -> Result<Vec<Value>> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
-        return Err(Error::Other("подписка пуста".into()));
+        return Err(Error::Other("subscription is empty".into()));
     }
 
-    // 1. Готовый sing-box: объект с outbounds или массив outbound'ов.
+    // 1. A ready sing-box config: an object with outbounds or an array of outbounds.
     if let Ok(v) = serde_json::from_str::<Value>(trimmed) {
         let outbounds = extract_singbox_outbounds(v);
         let proxies: Vec<Value> = outbounds.into_iter().filter(is_proxy_outbound).collect();
@@ -507,13 +506,13 @@ fn parse_content(text: &str) -> Result<Vec<Value>> {
             return Ok(proxies);
         }
         return Err(Error::Other(
-            "в подписке-конфиге sing-box нет прокси-outbound'ов".into(),
+            "the sing-box config subscription has no proxy outbounds".into(),
         ));
     }
 
-    // 2. Может быть base64 — разворачиваем и пробуем как список URI.
-    //    Раскодированное должно содержать `://`, иначе это не список URI
-    //    (а, например, просто текст) — тогда пробуем исходник как есть.
+    // 2. May be base64 — decode and try as a URI list. The decoded text must
+    //    contain `://`, otherwise it is not a URI list (for example, just text)
+    //    — then try the source as-is.
     let lines_text = match b64_decode(trimmed) {
         Some(d) if d.contains("://") => d,
         _ => trimmed.to_string(),
@@ -532,7 +531,7 @@ fn parse_content(text: &str) -> Result<Vec<Value>> {
     }
     if outbounds.is_empty() {
         Err(Error::Other(
-            "не удалось разобрать подписку: нет ни одного понятного узла".into(),
+            "could not parse the subscription: no recognizable node".into(),
         ))
     } else {
         Ok(outbounds)
@@ -559,13 +558,13 @@ fn is_proxy_outbound(o: &Value) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Парсинг URI
+// Parsing URIs
 // ---------------------------------------------------------------------------
 
 fn parse_uri(uri: &str) -> Result<Value> {
     let (scheme, rest) = uri
         .split_once("://")
-        .ok_or_else(|| Error::Other("не похоже на прокси-URI".into()))?;
+        .ok_or_else(|| Error::Other("does not look like a proxy URI".into()))?;
     let scheme = scheme.to_lowercase();
     match scheme.as_str() {
         "ss" => parse_ss(rest),
@@ -574,11 +573,11 @@ fn parse_uri(uri: &str) -> Result<Value> {
         "trojan" => parse_trojan(rest),
         "hysteria2" | "hy2" => parse_hysteria2(rest),
         "tuic" => parse_tuic(rest),
-        other => Err(Error::Other(format!("схема {other} не поддерживается"))),
+        other => Err(Error::Other(format!("scheme {other} is not supported"))),
     }
 }
 
-/// `rest` без `scheme://`: разделяем на `body`, `query`, `fragment`.
+/// `rest` without `scheme://`: split into `body`, `query`, `fragment`.
 fn split_uri(rest: &str) -> (&str, &str, &str) {
     let (main, fragment) = match rest.split_once('#') {
         Some((m, f)) => (m, f),
@@ -591,7 +590,7 @@ fn split_uri(rest: &str) -> (&str, &str, &str) {
     (body, query, fragment)
 }
 
-/// Тег из `#fragment` (URL-декодируем минимально).
+/// A tag from `#fragment` (URL-decode minimally).
 fn tag_from_fragment(fragment: &str, fallback: &str) -> String {
     let raw = percent_decode(fragment);
     if raw.trim().is_empty() {
@@ -605,14 +604,14 @@ fn tag_from_fragment(fragment: &str, fallback: &str) -> String {
 fn split_host_port(s: &str) -> Result<(String, u16)> {
     let (host, port) = s
         .rsplit_once(':')
-        .ok_or_else(|| Error::Other(format!("ожидался host:port, получилось «{s}»")))?;
+        .ok_or_else(|| Error::Other(format!("expected host:port, got \"{s}\"")))?;
     let port: u16 = port
         .parse()
-        .map_err(|_| Error::Other(format!("некорректный порт «{port}»")))?;
+        .map_err(|_| Error::Other(format!("invalid port \"{port}\"")))?;
     Ok((host.to_string(), port))
 }
 
-/// Простая query-пара: `?a=b&c=d` → HashMap.
+/// Simple query pairs: `?a=b&c=d` → HashMap.
 fn parse_query(query: &str) -> HashMap<String, String> {
     let mut map = HashMap::new();
     for pair in query.split('&') {
@@ -652,10 +651,10 @@ fn hex_digit(b: u8) -> Option<u8> {
     }
 }
 
-/// Пробуем несколько вариантов base64 (standard/url-safe, с паддингом и без).
-/// Возвращает строку, если раскодировалось в корректный UTF-8 — без проверки
-/// содержимого: у ss это `method:password`, у vmess — JSON, и только у целой
-/// подписки — список URI с `://`.
+/// Try several base64 variants (standard/url-safe, with and without padding).
+/// Returns the string if it decoded to valid UTF-8 — without checking the
+/// contents: for ss it is `method:password`, for vmess it is JSON, and only
+/// for a whole subscription is it a list of URIs with `://`.
 fn b64_decode(input: &str) -> Option<String> {
     use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD};
     let cleaned: String = input.chars().filter(|c| !c.is_whitespace()).collect();
@@ -669,7 +668,7 @@ fn b64_decode(input: &str) -> Option<String> {
     None
 }
 
-// --- конкретные схемы -----------------------------------------------------
+// --- specific schemes -------------------------------------------------------
 
 fn parse_ss(rest: &str) -> Result<Value> {
     let (body, _query, fragment) = split_uri(rest);
@@ -677,15 +676,15 @@ fn parse_ss(rest: &str) -> Result<Value> {
     let (userinfo, hostport) = if let Some((u, h)) = body.split_once('@') {
         (u.to_string(), h.to_string())
     } else {
-        // legacy — всё base64
+        // legacy — everything is base64
         let decoded = b64_decode(body).unwrap_or_else(|| body.to_string());
         let (u, h) = decoded
             .split_once('@')
-            .ok_or_else(|| Error::Other("ss: не удалось разобрать legacy-формат".into()))?;
+            .ok_or_else(|| Error::Other("ss: could not parse the legacy format".into()))?;
         (u.to_string(), h.to_string())
     };
 
-    // userinfo может быть base64url(method:password) или явным method:password.
+    // userinfo may be base64url(method:password) or an explicit method:password.
     let credentials = if userinfo.contains(':') {
         userinfo
     } else {
@@ -693,7 +692,7 @@ fn parse_ss(rest: &str) -> Result<Value> {
     };
     let (method, password) = credentials
         .split_once(':')
-        .ok_or_else(|| Error::Other("ss: ожидалось method:password".into()))?;
+        .ok_or_else(|| Error::Other("ss: expected method:password".into()))?;
     let (host, port) = split_host_port(&hostport)?;
     let (host, port) = strip_brackets(host, port);
 
@@ -709,12 +708,13 @@ fn parse_ss(rest: &str) -> Result<Value> {
 
 fn parse_vmess(rest: &str) -> Result<Value> {
     let decoded = b64_decode(rest)
-        .ok_or_else(|| Error::Other("vmess: ожидался base64".into()))?;
+        .ok_or_else(|| Error::Other("vmess: expected base64".into()))?;
     let v: Value = serde_json::from_str(&decoded)
-        .map_err(|e| Error::Other(format!("vmess: некорректный JSON — {e}")))?;
+        .map_err(|e| Error::Other(format!("vmess: invalid JSON — {e}")))?;
 
     let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
-    // vmess-провайдеры шлюют port и aid то числом, то строкой — принимаем оба.
+    // vmess providers send port and aid sometimes as a number, sometimes as a
+    // string — accept both.
     let i = |k: &str| {
         v.get(k)
             .and_then(|x| x.as_i64().or_else(|| x.as_str().and_then(|s| s.parse::<i64>().ok())))
@@ -734,7 +734,7 @@ fn parse_vmess(rest: &str) -> Result<Value> {
         "alter_id": i("aid"),
     });
 
-    // Транспорт.
+    // Transport.
     let net = s("net");
     if !net.is_empty() && net != "tcp" {
         if let Some(transport) = vmess_transport(&net, &v) {
@@ -795,7 +795,7 @@ fn parse_vless(rest: &str) -> Result<Value> {
     let (body, query, fragment) = split_uri(rest);
     let (uuid, hostport) = body
         .split_once('@')
-        .ok_or_else(|| Error::Other("vless: ожидался uuid@host:port".into()))?;
+        .ok_or_else(|| Error::Other("vless: expected uuid@host:port".into()))?;
     let (host, port) = split_host_port(hostport)?;
     let (host, port) = strip_brackets(host, port);
     let q = parse_query(query);
@@ -851,7 +851,7 @@ fn parse_vless(rest: &str) -> Result<Value> {
         outbound["tls"] = Value::Object(tls);
     }
 
-    // Транспорт.
+    // Transport.
     let net = q.get("type").cloned().unwrap_or_default();
     if net == "ws" {
         let path = q.get("path").cloned().unwrap_or_default();
@@ -885,7 +885,7 @@ fn parse_trojan(rest: &str) -> Result<Value> {
     let (body, query, fragment) = split_uri(rest);
     let (password, hostport) = body
         .split_once('@')
-        .ok_or_else(|| Error::Other("trojan: ожидался password@host:port".into()))?;
+        .ok_or_else(|| Error::Other("trojan: expected password@host:port".into()))?;
     let (host, port) = split_host_port(hostport)?;
     let (host, port) = strip_brackets(host, port);
     let q = parse_query(query);
@@ -928,7 +928,7 @@ fn parse_trojan(rest: &str) -> Result<Value> {
 
 fn parse_hysteria2(rest: &str) -> Result<Value> {
     let (body, query, fragment) = split_uri(rest);
-    // hysteria2://password@host:port  или  hysteria2://host:port?auth=...
+    // hysteria2://password@host:port  or  hysteria2://host:port?auth=...
     let (password, hostport) = match body.split_once('@') {
         Some((p, h)) => (Some(p.to_string()), h.to_string()),
         None => (None, body.to_string()),
@@ -978,10 +978,10 @@ fn parse_tuic(rest: &str) -> Result<Value> {
     let (body, query, fragment) = split_uri(rest);
     let (credentials, hostport) = body
         .split_once('@')
-        .ok_or_else(|| Error::Other("tuic: ожидался uuid:password@host:port".into()))?;
+        .ok_or_else(|| Error::Other("tuic: expected uuid:password@host:port".into()))?;
     let (uuid, password) = credentials
         .split_once(':')
-        .ok_or_else(|| Error::Other("tuic: ожидался uuid:password".into()))?;
+        .ok_or_else(|| Error::Other("tuic: expected uuid:password".into()))?;
     let (host, port) = split_host_port(hostport)?;
     let (host, port) = strip_brackets(host, port);
     let q = parse_query(query);
@@ -1018,20 +1018,20 @@ fn parse_tuic(rest: &str) -> Result<Value> {
     Ok(outbound)
 }
 
-/// Убирает квадратные скобки у IPv6-хоста.
+/// Strips square brackets from an IPv6 host.
 fn strip_brackets(host: String, port: u16) -> (String, u16) {
     let trimmed = host.trim_start_matches('[').trim_end_matches(']');
     (trimmed.to_string(), port)
 }
 
 // ---------------------------------------------------------------------------
-// Состояние подписок (sidecar)
+// Subscription state (sidecar)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SubscriptionsState {
-    /// Подпись последнего влитого набора — чтобы не перезапускать без нужды.
+    /// Signature of the last injected set — so we do not restart without need.
     pub signature: Option<String>,
     pub entries: HashMap<String, SubStateEntry>,
 }
@@ -1091,18 +1091,18 @@ fn now_millis() -> u64 {
         .unwrap_or(0)
 }
 
-/// Генерирует короткий стабильный идентификатор для новой подписки.
+/// Generates a short stable identifier for a new subscription.
 pub fn new_id() -> String {
     let mut buf = [0u8; 4];
     if getrandom::fill(&mut buf).is_err() {
-        // Фолбэк: псевдо-ид из времени. На практике не нужен.
+        // Fallback: a pseudo-id from the time. Not needed in practice.
         return format!("{:x}", now_millis());
     }
     hex(&buf)
 }
 
 // ---------------------------------------------------------------------------
-// Тесты
+// Tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
@@ -1200,7 +1200,7 @@ mod tests {
     fn parses_singbox_json() {
         let cfg = r#"{"outbounds":[{"type":"trojan","tag":"X","server":"h","server_port":1,"password":"p","tls":{"enabled":true}},{"type":"selector","tag":"main","outbounds":["X"]}]}"#;
         let out = parse_content(cfg).unwrap();
-        // selector отфильтрован — остаётся только прокси.
+        // selector is filtered out — only the proxy remains.
         assert_eq!(out.len(), 1);
         assert_eq!(out[0]["type"], "trojan");
     }
@@ -1218,8 +1218,8 @@ mod tests {
 
     #[test]
     fn signature_stable_regardless_of_order() {
-        // Две подписки с одним узлом каждая. Меняем порядок — подпись набора
-        // не должна зависеть от того, в каком порядке подписки пришли.
+        // Two subscriptions, one node each. Changing the order — the signature
+        // of the set must not depend on the order the subscriptions came in.
         let ob_a = vec![json!({"type":"trojan","tag":"X","server":"h","server_port":1,"password":"p","tls":{"enabled":true}})];
         let ob_b = vec![json!({"type":"vless","tag":"Y","server":"h2","server_port":1,"uuid":"u"})];
         let p1 = prepare_outbounds(&[

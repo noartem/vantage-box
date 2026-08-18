@@ -1,9 +1,9 @@
 //! Windows Service Control Manager.
 //!
-//! Установка идёт через elevated PowerShell-скрипт: `New-Service` создаёт
-//! сервис, а `sc.exe sdset` дописывает в его дескриптор безопасности право
-//! текущего пользователя на start/stop. После этого управление сервисом из
-//! GUI прав администратора не требует.
+//! Installation goes through an elevated PowerShell script: `New-Service`
+//! creates the service, and `sc.exe sdset` appends to its security descriptor
+//! the right of the current user to start/stop it. After that, controlling the
+//! service from the GUI does not require administrator rights.
 
 use std::ffi::OsStr;
 use std::path::Path;
@@ -19,29 +19,30 @@ use crate::error::{Error, Result};
 use crate::runtime;
 use crate::settings::{config_dir, Settings};
 
-/// `ERROR_SERVICE_DOES_NOT_EXIST` — единственный «нормальный» отказ SCM.
+/// `ERROR_SERVICE_DOES_NOT_EXIST` — the one "normal" SCM failure.
 const ERROR_SERVICE_DOES_NOT_EXIST: i32 = 1060;
-/// `ERROR_CANCELLED` — пользователь закрыл окно UAC.
+/// `ERROR_CANCELLED` — the user closed the UAC prompt.
 const ERROR_CANCELLED: i32 = 1223;
 
-/// Достаёт из ошибки `windows_service` код ОС. Её `Display` печатает безликое
-/// «IO error in winapi call» и съедает внутреннюю `io::Error` — без кодa
-/// («не удалось запустить сервис: IO error in winapi call») причину не найти.
+/// Extracts the OS code from a `windows_service` error. Its `Display` prints a
+/// generic "IO error in winapi call" and swallows the inner `io::Error` —
+/// without the code ("failed to start the service: IO error in winapi call")
+/// the cause cannot be found.
 fn winerr(e: &windows_service::Error) -> String {
     match e {
         windows_service::Error::Winapi(io) => {
-            format!("ошибка winapi (код {}): {io}", io.raw_os_error().unwrap_or(-1))
+            format!("winapi error (code {}): {io}", io.raw_os_error().unwrap_or(-1))
         }
         other => other.to_string(),
     }
 }
 
-/// Сколько ждём перехода сервиса в целевое состояние.
+/// How long we wait for the service to transition to the target state.
 const TRANSITION_TIMEOUT: Duration = Duration::from_secs(20);
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
 // ---------------------------------------------------------------------------
-// Чтение состояния
+// Reading state
 // ---------------------------------------------------------------------------
 
 pub fn status() -> Result<ServiceInfo> {
@@ -57,10 +58,10 @@ pub fn status() -> Result<ServiceInfo> {
 
     let status = service
         .query_status()
-        .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {}", winerr(&e))))?;
+        .map_err(|e| Error::Other(format!("failed to query service status: {}", winerr(&e))))?;
 
-    // Права проверяем отдельным открытием: если sdset не отработал, старт
-    // упрётся в отказ доступа, и об этом лучше сказать заранее.
+    // We check the rights with a separate open: if sdset did not run, a start
+    // would hit an access-denied, and it is better to say so up front.
     let can_control = open(ServiceAccess::START | ServiceAccess::STOP)
         .map(|s| s.is_some())
         .unwrap_or(false);
@@ -71,7 +72,7 @@ pub fn status() -> Result<ServiceInfo> {
         state: map_state(status.current_state),
         can_control,
         detail: (!can_control).then(|| {
-            "нет прав на управление сервисом — переустановите его, чтобы выдать их".to_string()
+            "no rights to manage the service — reinstall it to grant them".to_string()
         }),
     })
 }
@@ -86,10 +87,10 @@ fn map_state(state: WinState) -> ServiceState {
     }
 }
 
-/// `Ok(None)` — сервис не зарегистрирован. Всё остальное — настоящая ошибка.
+/// `Ok(None)` — the service is not registered. Everything else is a real error.
 fn open(access: ServiceAccess) -> Result<Option<windows_service::service::Service>> {
     let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
-        .map_err(|e| Error::Other(format!("нет доступа к диспетчеру сервисов: {}", winerr(&e))))?;
+        .map_err(|e| Error::Other(format!("no access to the service manager: {}", winerr(&e))))?;
 
     match manager.open_service(SERVICE_NAME, access) {
         Ok(service) => Ok(Some(service)),
@@ -98,57 +99,57 @@ fn open(access: ServiceAccess) -> Result<Option<windows_service::service::Servic
         {
             Ok(None)
         }
-        Err(e) => Err(Error::Other(format!("не удалось открыть сервис: {}", winerr(&e)))),
+        Err(e) => Err(Error::Other(format!("failed to open the service: {}", winerr(&e)))),
     }
 }
 
 // ---------------------------------------------------------------------------
-// Старт и остановка (без прав администратора)
+// Start and stop (without administrator rights)
 // ---------------------------------------------------------------------------
 
 pub fn start() -> Result<()> {
     let service = open(ServiceAccess::START | ServiceAccess::QUERY_STATUS)?
-        .ok_or_else(|| Error::Other("сервис не установлен".into()))?;
+        .ok_or_else(|| Error::Other("the service is not installed".into()))?;
 
     let current = service
         .query_status()
-        .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {}", winerr(&e))))?;
+        .map_err(|e| Error::Other(format!("failed to query service status: {}", winerr(&e))))?;
     if current.current_state == WinState::Running {
         return Ok(());
     }
 
     service
         .start(&[] as &[&OsStr])
-        .map_err(|e| Error::Other(format!("не удалось запустить сервис: {}", winerr(&e))))?;
+        .map_err(|e| Error::Other(format!("failed to start the service: {}", winerr(&e))))?;
 
     wait_for(&service, WinState::Running)
 }
 
 pub fn stop() -> Result<()> {
     let service = open(ServiceAccess::STOP | ServiceAccess::QUERY_STATUS)?
-        .ok_or_else(|| Error::Other("сервис не установлен".into()))?;
+        .ok_or_else(|| Error::Other("the service is not installed".into()))?;
 
     let current = service
         .query_status()
-        .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {}", winerr(&e))))?;
+        .map_err(|e| Error::Other(format!("failed to query service status: {}", winerr(&e))))?;
     if current.current_state == WinState::Stopped {
         return Ok(());
     }
 
     service
         .stop()
-        .map_err(|e| Error::Other(format!("не удалось остановить сервис: {}", winerr(&e))))?;
+        .map_err(|e| Error::Other(format!("failed to stop the service: {}", winerr(&e))))?;
 
     wait_for(&service, WinState::Stopped)
 }
 
-/// SCM отвечает на start/stop сразу, а состояние меняется асинхронно.
+/// SCM responds to start/stop immediately, but the state changes asynchronously.
 fn wait_for(service: &windows_service::service::Service, target: WinState) -> Result<()> {
     let deadline = Instant::now() + TRANSITION_TIMEOUT;
     loop {
         let status = service
             .query_status()
-            .map_err(|e| Error::Other(format!("не удалось получить состояние сервиса: {}", winerr(&e))))?;
+            .map_err(|e| Error::Other(format!("failed to query service status: {}", winerr(&e))))?;
 
         if status.current_state == target {
             return Ok(());
@@ -156,7 +157,7 @@ fn wait_for(service: &windows_service::service::Service, target: WinState) -> Re
 
         if Instant::now() >= deadline {
             return Err(Error::Other(format!(
-                "сервис не перешёл в состояние {target:?} за {} с — смотрите логи sing-box",
+                "the service did not transition to {target:?} within {} s — see the sing-box logs",
                 TRANSITION_TIMEOUT.as_secs()
             )));
         }
@@ -166,33 +167,33 @@ fn wait_for(service: &windows_service::service::Service, target: WinState) -> Re
 }
 
 // ---------------------------------------------------------------------------
-// Установка и удаление (один UAC-запрос)
+// Install and uninstall (one UAC prompt)
 // ---------------------------------------------------------------------------
 
 pub fn install(settings: &Settings) -> Result<()> {
     let choice = binary::resolve(settings)?;
     if !choice.path.is_file() {
         return Err(Error::Other(format!(
-            "файл sing-box не найден: {}",
+            "sing-box file not found: {}",
             choice.path.display()
         )));
     }
 
-    // Рантайм-конфиг готовим заранее: сервис будет ссылаться прямо на него.
+    // Prepare the runtime config in advance: the service will point straight at it.
     let prepared = runtime::prepare(settings)?;
     let data_dir = binary::data_dir()?;
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| Error::io(data_dir.display().to_string(), e))?;
 
-    // Сервисом регистрируем не sing-box (он не умеет отвечать SCM — это даёт
-    // ошибку 1053), а нас самих с флагом `--scm`: обёртка докладывает SCM о
-    // состоянии и уже внутри поднимает sing-box ребёнком. Пути к sing-box,
-    // рантайм-конфигу и data-dir передаём аргументами.
+    // We register not sing-box as the service (it does not speak to SCM — that
+    // yields error 1053), but ourselves with the `--scm` flag: the wrapper
+    // reports status to SCM and brings up sing-box as a child. Paths to
+    // sing-box, the runtime config, and the data dir are passed as arguments.
     let wrapper = std::env::current_exe()
-        .map_err(|e| Error::Other(format!("не определить путь к исполняемому файлу: {e}")))?;
+        .map_err(|e| Error::Other(format!("could not determine the executable path: {e}")))?;
     if !wrapper.is_file() {
         return Err(Error::Other(format!(
-            "исполняемый файл Vantage Box не найден: {}",
+            "the Vantage Box executable was not found: {}",
             wrapper.display()
         )));
     }
@@ -215,8 +216,9 @@ pub fn uninstall() -> Result<()> {
 }
 
 fn install_script(bin_path_name: &str, sid: &str) -> String {
-    // Пересоздаём сервис целиком: Set-Service в Windows PowerShell 5.1 не умеет
-    // менять BinaryPathName, а нам нужно уметь переустановить с новыми путями.
+    // Recreate the service wholesale: Set-Service in Windows PowerShell 5.1
+    // cannot change BinaryPathName, and we need to be able to reinstall with
+    // new paths.
     format!(
         r#"$ErrorActionPreference = 'Stop'
 $name = '{name}'
@@ -259,9 +261,9 @@ if (Get-Service -Name $name -ErrorAction SilentlyContinue) {{
     )
 }
 
-/// Дескриптор безопасности сервиса: стандартные записи плюс наша — она даёт
-/// конкретному пользователю право запускать (RP), останавливать (WP) и
-/// опрашивать (LO, CC, LC) именно этот сервис.
+/// The security descriptor of the service: standard entries plus ours — it
+/// grants a specific user the right to start (RP), stop (WP), and query
+/// (LO, CC, LC) exactly this service.
 fn sddl_for(sid: &str) -> String {
     format!(
         "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)\
@@ -273,7 +275,7 @@ fn sddl_for(sid: &str) -> String {
     )
 }
 
-/// SID текущего пользователя. Вывод API — чистый ASCII, локаль не мешает.
+/// The SID of the current user. The API output is pure ASCII, locale does not interfere.
 fn current_user_sid() -> Result<String> {
     let mut command = Command::new("powershell");
     command.args([
@@ -290,14 +292,14 @@ fn current_user_sid() -> Result<String> {
     let sid = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if !sid.starts_with("S-1-") {
         return Err(Error::Other(
-            "не удалось определить SID текущего пользователя".into(),
+            "could not determine the current user SID".into(),
         ));
     }
     Ok(sid)
 }
 
-/// Пишет скрипт на диск и запускает его с повышением прав. Один UAC-запрос
-/// на весь скрипт — сколько бы команд внутри ни было.
+/// Writes the script to disk and runs it elevated. One UAC prompt for the whole
+/// script — no matter how many commands are inside it.
 fn run_elevated(kind: &str, body: &str) -> Result<()> {
     let dir = config_dir()?;
     std::fs::create_dir_all(&dir).map_err(|e| Error::io(dir.display().to_string(), e))?;
@@ -306,8 +308,8 @@ fn run_elevated(kind: &str, body: &str) -> Result<()> {
     let log = dir.join(format!("service-{kind}.log"));
     let _ = std::fs::remove_file(&log);
 
-    // BOM обязателен: Windows PowerShell 5.1 без него читает файл в ANSI и
-    // ломает пути с кириллицей в имени пользователя.
+    // The BOM is mandatory: without it Windows PowerShell 5.1 reads the file as
+    // ANSI and breaks paths that contain Cyrillic in the user name.
     let mut content = String::from("\u{feff}");
     content.push_str(&wrap_with_log(body, &log));
     std::fs::write(&script, content.as_bytes())
@@ -366,17 +368,17 @@ fn elevate(script: &Path) -> Result<()> {
     match status.code() {
         Some(0) => Ok(()),
         Some(code) if code == ERROR_CANCELLED => Err(Error::Other(
-            "запрос прав администратора отклонён".into(),
+            "the administrator rights request was declined".into(),
         )),
         Some(code) => Err(Error::Other(format!(
-            "скрипт установки сервиса завершился с кодом {code}"
+            "the service install script exited with code {code}"
         ))),
-        None => Err(Error::Other("скрипт установки сервиса был прерван".into())),
+        None => Err(Error::Other("the service install script was interrupted".into())),
     }
 }
 
-/// Экранирование для одинарных кавычек PowerShell: внутри них спецсимволов
-/// нет, достаточно удвоить сам апостроф.
+/// Escaping for single-quoted PowerShell strings: inside them there are no
+/// special characters, doubling the apostrophe itself is enough.
 fn ps_quote(value: &str) -> String {
     value.replace('\'', "''")
 }

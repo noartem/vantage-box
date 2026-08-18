@@ -1,6 +1,6 @@
-//! Заглушка для платформ, до которых ServiceController ещё не доехал (M3:
-//! systemd на Linux, launchd на macOS). Приложение при этом остаётся рабочим —
-//! оно умеет управлять уже запущенным sing-box через Clash API.
+//! A stub for platforms that ServiceController has not reached yet (M3:
+//! systemd on Linux, launchd on macOS). The app stays functional — it can
+//! manage an already-running sing-box through the Clash API.
 
 use super::{ServiceInfo, ServiceState, SERVICE_NAME};
 use crate::error::{Error, Result};
@@ -8,7 +8,7 @@ use crate::settings::Settings;
 
 fn not_supported() -> Error {
     Error::Other(
-        "управление сервисом на этой ОС пока не реализовано — запустите sing-box самостоятельно"
+        "service management is not yet implemented on this OS — start sing-box yourself"
             .into(),
     )
 }

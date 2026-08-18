@@ -1,4 +1,4 @@
-//! Окна приложения: главное и всплывающий выбор прокси.
+//! Application windows: the main window and the proxy-selection popup.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -9,18 +9,18 @@ use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl, Webvie
 pub const MAIN: &str = "main";
 pub const POPUP: &str = "popup";
 
-/// Приложение закрывается по-настоящему, а не сворачивается в трей.
+/// The application is quitting for real, not minimizing to the tray.
 static QUITTING: AtomicBool = AtomicBool::new(false);
 
-/// Попап хотя бы раз получал фокус с момента показа.
+/// The popup has received focus at least once since it was shown.
 static POPUP_HAD_FOCUS: AtomicBool = AtomicBool::new(false);
 
-/// Когда попап показали в последний раз.
+/// When the popup was last shown.
 static POPUP_SHOWN_AT: Mutex<Option<Instant>> = Mutex::new(None);
 
-/// Пока идёт показ окна, фокус успевает несколько раз перескочить между ним и
-/// тем, что было активно раньше. В этом окне времени потерю фокуса игнорируем,
-/// иначе попап закрывался бы прямо в момент открытия.
+/// While a window is being shown, focus can jump back and forth between it and
+/// whatever was active before. Within this window of time we ignore focus
+/// loss, otherwise the popup would close right at the moment of opening.
 const FOCUS_GRACE: Duration = Duration::from_millis(600);
 
 fn mark_shown() {
@@ -35,15 +35,15 @@ fn within_grace() -> bool {
         .is_some_and(|shown| shown.elapsed() < FOCUS_GRACE)
 }
 
-/// Полный выход. Без этого флага обработчик закрытия окна принял бы выход
-/// за попытку свернуть приложение и отменил бы его.
+/// Full quit. Without this flag the window-close handler would treat a quit
+/// as an attempt to minimize the app and cancel it.
 pub fn quit(app: &AppHandle) {
     QUITTING.store(true, Ordering::SeqCst);
-    // sing-box, запущенный нами процессом, принадлежит приложению: пережить
-    // выход он не должен, иначе останется висеть без единого способа им
-    // управлять. Сервис — наоборот, живёт своей жизнью и остаётся работать.
+    // sing-box started by us as a process belongs to the application: it must
+    // not survive the quit, otherwise it would keep running with no way to
+    // manage it. The service, on the other hand, lives on its own and stays.
     if let Err(e) = crate::process::stop() {
-        eprintln!("не удалось остановить sing-box при выходе: {e}");
+        eprintln!("failed to stop sing-box on quit: {e}");
     }
     app.exit(0);
 }
@@ -52,15 +52,15 @@ pub fn is_quitting() -> bool {
     QUITTING.load(Ordering::SeqCst)
 }
 
-/// Размер попапа в логических пикселях. Строка узла — 20px, так что по высоте
-/// это примерно два десятка узлов без прокрутки.
+/// Popup size in logical pixels. A node row is 20px, so this is about two
+/// dozen nodes without scrolling.
 const POPUP_WIDTH: f64 = 320.0;
 const POPUP_HEIGHT: f64 = 420.0;
-/// Отступ попапа от края экрана и от курсора.
+/// Popup margin from the screen edge and from the cursor.
 const POPUP_MARGIN: f64 = 12.0;
 
-/// Показывает главное окно и поднимает его наверх. Если оно было свёрнуто
-/// в трей — разворачивает.
+/// Shows the main window and brings it to the front. If it was minimized to
+/// the tray — restores it.
 pub fn show_main(app: &AppHandle) {
     let Some(window) = app.get_webview_window(MAIN) else {
         return;
@@ -70,15 +70,16 @@ pub fn show_main(app: &AppHandle) {
     let _ = window.set_focus();
 }
 
-/// Прячет главное окно в трей.
+/// Hides the main window into the tray.
 pub fn hide_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN) {
         let _ = window.hide();
     }
 }
 
-/// Показывает попап у курсора, а если он уже открыт — закрывает.
-/// Именно так ведёт себя вызов по хоткею: второе нажатие убирает окно.
+/// Shows the popup at the cursor; if it is already open — closes it.
+/// That is exactly how a hotkey invocation behaves: the second press dismisses
+/// the window.
 pub fn toggle_popup(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(POPUP) {
         if window.is_visible().unwrap_or(false) {
@@ -91,18 +92,18 @@ pub fn toggle_popup(app: &AppHandle) {
 
     match build_popup(app) {
         Ok(window) => present(app, &window),
-        Err(e) => eprintln!("не удалось открыть попап: {e}"),
+        Err(e) => eprintln!("failed to open the popup: {e}"),
     }
 }
 
-/// Показ попапа: позиция, отметка времени для grace-периода, показ, фокус.
-/// Оба пути открытия обязаны идти через неё — забытый `mark_shown` означает,
-/// что окно закроется само в момент появления.
+/// Showing the popup: position, timestamp for the grace period, show, focus.
+/// Both opening paths must go through it — a forgotten `mark_shown` means the
+/// window will close itself the moment it appears.
 fn present(app: &AppHandle, window: &tauri::WebviewWindow) {
     position_at_cursor(app, window);
     mark_shown();
     if let Err(e) = window.show() {
-        eprintln!("не удалось показать попап: {e}");
+        eprintln!("failed to show the popup: {e}");
     }
     let _ = window.set_focus();
 }
@@ -115,12 +116,12 @@ pub fn hide_popup(app: &AppHandle) {
     }
 }
 
-/// Попап — то же приложение, но с другим представлением: фронтенд смотрит на
-/// метку окна и рисует компактный список групп вместо полного интерфейса.
+/// The popup is the same app, but with a different view: the frontend looks at
+/// the window label and draws a compact group list instead of the full UI.
 ///
-/// Адрес обязан быть корнем приложения. Любой путь или query-строка увели бы
-/// роутер SvelteKit на несуществующий маршрут, и вместо попапа открылась бы
-/// страница 404 — окно есть, а содержимого нет.
+/// The address must be the app root. Any path or query string would send the
+/// SvelteKit router to a non-existent route, and instead of the popup a 404
+/// page would open — the window is there, but the contents are not.
 fn build_popup(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     let window = WebviewWindowBuilder::new(app, POPUP, WebviewUrl::App("index.html".into()))
     .title("Vantage Box")
@@ -130,15 +131,15 @@ fn build_popup(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     .skip_taskbar(true)
     .resizable(false)
     .shadow(true)
-    // Показываем только после позиционирования, иначе окно мигнёт в углу.
+    // Show only after positioning, otherwise the window flashes in the corner.
     .visible(false)
     .build()?;
 
-    // Попап живёт, пока на нём фокус: клик мимо — и он не мешает.
+    // The popup lives as long as it has focus: a click outside — and it is gone.
     //
-    // Прячем только если фокус реально был и потерялся. Сразу после show()
-    // окно успевает получить Focused(false), ещё ни разу не будучи активным, —
-    // без этой проверки попап закрывался бы в момент открытия.
+    // Hide only if focus was actually had and then lost. Right after show()
+    // the window can receive Focused(false) without ever having been active —
+    // without this check the popup would close the moment it opened.
     let handle = app.clone();
     window.on_window_event(move |event| {
         if let tauri::WindowEvent::Focused(focused) = event {
@@ -153,7 +154,7 @@ fn build_popup(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     Ok(window)
 }
 
-/// Ставит окно рядом с курсором, не давая ему уехать за край экрана.
+/// Places the window next to the cursor, keeping it from going off the screen edge.
 fn position_at_cursor(app: &AppHandle, window: &tauri::WebviewWindow) {
     let Ok(cursor) = app.cursor_position() else {
         return;
@@ -170,8 +171,8 @@ fn position_at_cursor(app: &AppHandle, window: &tauri::WebviewWindow) {
         return;
     };
 
-    // Считаем в логических координатах: на экранах с масштабированием
-    // физические пиксели не совпадают с размерами, заданными окну.
+    // Compute in logical coordinates: on scaled displays physical pixels do
+    // not match the sizes given to the window.
     let scale = monitor.scale_factor();
     let area_position: LogicalPosition<f64> = monitor.position().to_logical(scale);
     let area_size: LogicalSize<f64> = monitor.size().to_logical(scale);

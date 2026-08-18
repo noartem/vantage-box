@@ -1,7 +1,8 @@
-//! Глобальное состояние приложения.
+//! Global application state.
 //!
-//! Здесь ровно две вещи: настройки и подключение к Clash API. Состояние
-//! рантайма sing-box мы не кэшируем — источник правды всегда сам sing-box.
+//! Exactly two things live here: settings and the connection to the Clash API.
+//! We do not cache the sing-box runtime state — the source of truth is always
+//! sing-box itself.
 
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
@@ -19,29 +20,29 @@ fn digest(content: &str) -> [u8; 32] {
     hasher.finalize().into()
 }
 
-/// Событие для UI: `settings.json` изменился (нами или руками в редакторе).
+/// Event for the UI: `settings.json` changed (by us or by hand in an editor).
 pub const EVENT_SETTINGS: &str = "settings://changed";
-/// Событие для UI: `settings.json` не читается (сломанный JSON и т.п.).
+/// Event for the UI: `settings.json` cannot be read (broken JSON, etc.).
 pub const EVENT_SETTINGS_ERROR: &str = "settings://error";
-/// Событие для UI: пользовательский `config.json` изменился снаружи.
+/// Event for the UI: the user's `config.json` changed externally.
 pub const EVENT_CONFIG_CHANGED: &str = "singbox://config-changed";
 
 pub struct AppState {
     pub settings: SharedSettings,
-    /// Пересобирается при изменении секции `clashApi`.
+    /// Rebuilt when the `clashApi` section changes.
     pub client: RwLock<ClashClient>,
     pub streams: Arc<StreamManager>,
-    /// Watcher должен жить столько же, сколько приложение: при drop'е слежка
-    /// за файлом настроек молча прекращается.
+    /// The watcher must live as long as the application: on drop, the watch on
+    /// the settings file silently stops.
     pub watcher: Mutex<Option<notify::RecommendedWatcher>>,
-    /// Отдельная слежка за `config.json` sing-box: путь к нему меняется вместе
-    /// с настройками, поэтому watcher приходится перевешивать.
+    /// A separate watch on the sing-box `config.json`: its path changes with
+    /// the settings, so the watcher has to be re-armed.
     pub config_watcher: Mutex<Option<notify::RecommendedWatcher>>,
     pub config_watch_tx: ChangeTx,
-    /// Хеш последнего содержимого, записанного нами. Нужен, чтобы собственная
-    /// запись не выглядела как правка файла снаружи.
+    /// Hash of the last contents we wrote. Needed so our own write does not
+    /// look like an external edit of the file.
     pub config_signature: Mutex<Option<[u8; 32]>>,
-    /// Хоткеи, которые не удалось зарегистрировать, с причинами.
+    /// Hotkeys that failed to register, with reasons.
     pub hotkey_problems: Mutex<Vec<String>>,
 }
 
@@ -64,7 +65,7 @@ impl AppState {
         }
     }
 
-    /// Перевешивает слежку на текущий `config.json`. Пустой путь снимает её.
+    /// Re-arms the watch on the current `config.json`. An empty path takes it down.
     pub fn rearm_config_watcher(&self, path: &str) {
         let path = path.trim();
         let mut slot = self.config_watcher.lock().expect("config watcher lock");
@@ -78,36 +79,36 @@ impl AppState {
             Ok(watcher) => *slot = Some(watcher),
             Err(e) => {
                 *slot = None;
-                eprintln!("watcher config.json не запущен: {e}");
+                eprintln!("config.json watcher not started: {e}");
             }
         }
     }
 
-    /// Запоминает, что файл сейчас содержит именно это.
+    /// Records that the file currently contains exactly this.
     pub fn remember_config(&self, content: &str) {
         *self.config_signature.lock().expect("signature lock") = Some(digest(content));
     }
 
-    /// `true`, если содержимое файла отличается от последнего записанного нами.
+    /// `true` if the file contents differ from the last thing we wrote.
     pub fn config_changed_externally(&self, path: &str) -> bool {
         let Ok(content) = std::fs::read_to_string(path) else {
-            // Файл исчез или стал нечитаемым — это точно повод сказать.
+            // The file disappeared or became unreadable — definitely worth reporting.
             return true;
         };
         let known = *self.config_signature.lock().expect("signature lock");
         known != Some(digest(&content))
     }
 
-    /// Снимок клиента для использования в async-командах: держать guard
-    /// через `.await` нельзя, поэтому клонируем (внутри `reqwest::Client`,
-    /// клон дешёвый и переиспользует пул соединений).
+    /// A snapshot of the client for use in async commands: holding a guard
+    /// across `.await` is not allowed, so we clone (inside `reqwest::Client`
+    /// a clone is cheap and reuses the connection pool).
     pub fn client(&self) -> ClashClient {
         self.client.read().expect("client lock").clone()
     }
 }
 
-/// Применяет новые настройки к рантайму: пересобирает клиента и, если
-/// изменилось подключение или уровень логов, перезапускает подписки.
+/// Applies new settings to the runtime: rebuilds the client and, if the
+/// connection or log level changed, restarts the subscriptions.
 pub fn apply_settings(
     app: &AppHandle,
     state: &AppState,
@@ -138,7 +139,7 @@ pub fn apply_settings(
     Ok(())
 }
 
-/// Пересоздаёт клиента и подписки принудительно — для кнопки «переподключиться».
+/// Rebuilds the client and subscriptions forcibly — for the "reconnect" button.
 pub fn reconnect(state: &AppState) -> Result<()> {
     let settings = state.settings.get();
     let client = ClashClient::new(&crate::runtime::effective_api_settings(&settings))?;
@@ -147,10 +148,10 @@ pub fn reconnect(state: &AppState) -> Result<()> {
     Ok(())
 }
 
-/// Приводит автозапуск в соответствие с настройками.
+/// Brings autostart in line with the settings.
 ///
-/// Реальное состояние спрашиваем у системы: пользователь мог убрать запись
-/// из автозагрузки мимо приложения, и тогда наш флаг врал бы.
+/// We ask the system for the real state: the user may have removed the entry
+/// from autostart outside the app, and then our flag would lie.
 pub fn sync_autostart(app: &AppHandle, enabled: bool) {
     use tauri_plugin_autostart::ManagerExt;
 
@@ -166,7 +167,7 @@ pub fn sync_autostart(app: &AppHandle, enabled: bool) {
     };
 
     if let Err(e) = result {
-        eprintln!("не удалось изменить автозапуск: {e}");
+        eprintln!("failed to change autostart: {e}");
     }
 }
 

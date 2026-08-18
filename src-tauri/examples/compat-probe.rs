@@ -1,16 +1,16 @@
-//! Строит матрицу совместимости Vantage Box с версиями sing-box.
+//! Builds the Vantage Box compatibility matrix against sing-box versions.
 //!
-//! Качает несколько релизов с GitHub (тем же загрузчиком, что и приложение),
-//! прогоняет по каждому одинаковый набор проб и складывает результат в JSON и
-//! Markdown-таблицу. По итогам печатает диапазон, который стоит записать в
-//! `SINGBOX_MIN` / `SINGBOX_MAX_EXCLUSIVE`, — так матрица получается из
-//! измерений, а не из предположений.
+//! Downloads several releases from GitHub (with the same loader the app uses),
+//! runs the same set of probes against each, and folds the result into JSON
+//! and a Markdown table. At the end it prints the range that should go into
+//! `SINGBOX_MIN` / `SINGBOX_MAX_EXCLUSIVE` — so the matrix comes from
+//! measurements, not from assumptions.
 //!
-//! Каждая версия проверяется изолированно: свой процесс sing-box, свои порты,
-//! конфиг без TUN, своя рабочая папка. Рабочий sing-box пользователя не
-//! затрагивается.
+//! Each version is checked in isolation: its own sing-box process, its own
+//! ports, a config without TUN, its own working folder. The user's working
+//! sing-box is not touched.
 //!
-//! Запуск: `scripts/compat-matrix.ps1`
+//! Run: `scripts/compat-matrix.ps1`
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -20,13 +20,13 @@ use vantage_box_lib::binary;
 use vantage_box_lib::clash::client::{parse_version, SINGBOX_MAX_EXCLUSIVE, SINGBOX_MIN};
 use vantage_box_lib::compat::{self, ProbeOptions, ProbeReport, CHECK_ORDER};
 
-/// Пауза между версиями: даём портам и файлам освободиться.
+/// A pause between versions: let the ports and files be released.
 const COOLDOWN: Duration = Duration::from_secs(1);
 
 struct Args {
-    /// Сколько минорных веток проверять (берём последний патч каждой).
+    /// How many minor branches to check (we take the latest patch of each).
     minors: usize,
-    /// Явный список версий; если задан, `minors` игнорируется.
+    /// An explicit list of versions; when set, `minors` is ignored.
     versions: Vec<String>,
     cache: PathBuf,
     workdir: PathBuf,
@@ -37,25 +37,25 @@ struct Args {
 async fn main() {
     let args = parse_args();
 
-    println!("Vantage Box — матрица совместимости");
-    println!("объявленный диапазон: {}", binary::supported_range());
-    println!("кэш загрузок:         {}", args.cache.display());
+    println!("Vantage Box — sing-box compatibility matrix");
+    println!("declared range: {}", binary::supported_range());
+    println!("download cache: {}", args.cache.display());
     println!();
 
     let targets = match select_versions(&args).await {
         Ok(targets) if !targets.is_empty() => targets,
         Ok(_) => {
-            eprintln!("не нашлось ни одной версии со сборкой под эту платформу");
+            eprintln!("no version with a build for this platform was found");
             std::process::exit(2);
         }
         Err(e) => {
-            eprintln!("не удалось получить список релизов: {e}");
+            eprintln!("failed to fetch the release list: {e}");
             std::process::exit(2);
         }
     };
 
     println!(
-        "проверяю {} версий: {}",
+        "checking {} versions: {}",
         targets.len(),
         targets
             .iter()
@@ -72,7 +72,7 @@ async fn main() {
         let binary_path = match ensure_binary(&args.cache, target).await {
             Ok(path) => path,
             Err(e) => {
-                println!("не скачался: {e}");
+                println!("download failed: {e}");
                 continue;
             }
         };
@@ -91,7 +91,7 @@ async fn main() {
     }
 
     if let Err(e) = write_reports(&args.out, &results) {
-        eprintln!("не удалось записать отчёт: {e}");
+        eprintln!("failed to write the report: {e}");
         std::process::exit(2);
     }
 
@@ -101,15 +101,15 @@ async fn main() {
     println!("JSON:     {}", args.out.join("compat-matrix.json").display());
     println!("Markdown: {}", args.out.join("compat-matrix.md").display());
 
-    // Ненулевой код только если не прошла ни одна версия: отдельные провалы —
-    // это нормальный результат измерения, а не поломка инструмента.
+    // A non-zero code only if not a single version passed: individual failures
+    // are a normal measurement result, not a broken tool.
     if results.iter().all(|(_, report)| !report.ok) {
         std::process::exit(1);
     }
 }
 
 // ---------------------------------------------------------------------------
-// Выбор и загрузка версий
+// Selecting and downloading versions
 // ---------------------------------------------------------------------------
 
 struct Target {
@@ -119,7 +119,8 @@ struct Target {
 }
 
 async fn select_versions(args: &Args) -> Result<Vec<Target>, String> {
-    // Берём с запасом: релизов много, а нам нужны последние патчи по минорам.
+    // Take with a margin: there are many releases, but we need the latest patches
+    // per minor.
     let releases = binary::fetch_releases(60).await.map_err(|e| e.to_string())?;
 
     let mut available: Vec<Target> = releases
@@ -139,8 +140,8 @@ async fn select_versions(args: &Args) -> Result<Vec<Target>, String> {
         return Ok(available);
     }
 
-    // Последний патч каждой минорной ветки: внутри минора поведение API
-    // не меняется, а гонять все патчи — это часы загрузок.
+    // The latest patch of each minor branch: within a minor the API behavior
+    // does not change, and running every patch means hours of downloads.
     let mut latest: BTreeMap<(u32, u32), Target> = BTreeMap::new();
     for target in available {
         let Some((major, minor, patch)) = parse_version(&target.version) else {
@@ -168,7 +169,7 @@ async fn select_versions(args: &Args) -> Result<Vec<Target>, String> {
     Ok(selected)
 }
 
-/// Скачивает и распаковывает версию, если её ещё нет в кэше.
+/// Downloads and unpacks a version if it is not yet in the cache.
 async fn ensure_binary(cache: &Path, target: &Target) -> Result<PathBuf, String> {
     let dir = cache.join(&target.version);
     let exe = dir.join(if cfg!(windows) { "sing-box.exe" } else { "sing-box" });
@@ -189,7 +190,7 @@ async fn ensure_binary(cache: &Path, target: &Target) -> Result<PathBuf, String>
 }
 
 // ---------------------------------------------------------------------------
-// Отчёты
+// Reports
 // ---------------------------------------------------------------------------
 
 fn summarize(report: &ProbeReport) -> String {
@@ -198,7 +199,7 @@ fn summarize(report: &ProbeReport) -> String {
     if report.ok {
         format!("OK ({passed}/{total})")
     } else {
-        format!("провал ({passed}/{total})")
+        format!("failed ({passed}/{total})")
     }
 }
 
@@ -223,17 +224,17 @@ fn write_reports(out: &PathBuf, results: &[(String, ProbeReport)]) -> std::io::R
 }
 
 fn markdown(results: &[(String, ProbeReport)]) -> String {
-    let mut text = String::from("# Матрица совместимости с sing-box\n\n");
+    let mut text = String::from("# sing-box compatibility matrix\n\n");
     text.push_str(&format!(
-        "Объявленный диапазон: `{}`\n\n",
+        "Declared range: `{}`\n\n",
         binary::supported_range()
     ));
 
-    text.push_str("| версия |");
+    text.push_str("| version |");
     for name in CHECK_ORDER {
         text.push_str(&format!(" {name} |"));
     }
-    text.push_str(" итог |\n|---|");
+    text.push_str(" result |\n|---|");
     for _ in CHECK_ORDER {
         text.push_str("---|");
     }
@@ -245,14 +246,14 @@ fn markdown(results: &[(String, ProbeReport)]) -> String {
             let mark = match report.checks.iter().find(|c| c.name == *name) {
                 Some(check) if check.ok => "✓",
                 Some(_) => "✗",
-                // Пробы после фатального отказа просто не выполнялись.
+                // Probes after a fatal failure simply did not run.
                 None => "—",
             };
             text.push_str(&format!(" {mark} |"));
         }
         text.push_str(&format!(
             " {} |\n",
-            if report.ok { "**OK**" } else { "провал" }
+            if report.ok { "**OK**" } else { "failed" }
         ));
     }
 
@@ -267,7 +268,7 @@ fn markdown(results: &[(String, ProbeReport)]) -> String {
         .collect();
 
     if !failures.is_empty() {
-        text.push_str("\n## Отказы\n\n");
+        text.push_str("\n## Failures\n\n");
         text.push_str(&failures.join("\n"));
         text.push('\n');
     }
@@ -275,7 +276,7 @@ fn markdown(results: &[(String, ProbeReport)]) -> String {
     text
 }
 
-/// Печатает диапазон, выведенный из результатов, и сравнивает с объявленным.
+/// Prints the range derived from the results and compares it with the declared one.
 fn print_recommendation(results: &[(String, ProbeReport)]) {
     let passing: Vec<(u32, u32, u32)> = results
         .iter()
@@ -284,27 +285,27 @@ fn print_recommendation(results: &[(String, ProbeReport)]) {
         .collect();
 
     let Some(min) = passing.iter().min().copied() else {
-        println!("Ни одна версия не прошла — диапазон менять не по чему.");
+        println!("No version passed — nothing to change the range against.");
         return;
     };
-    let max = passing.iter().max().copied().expect("непустой список");
+    let max = passing.iter().max().copied().expect("non-empty list");
 
-    // Верхняя граница исключающая: следующий минор после старшей рабочей версии.
+    // The upper bound is exclusive: the next minor after the highest passing version.
     let upper = (max.0, max.1 + 1, 0);
 
-    println!("Проверено успешно: {} … {}", fmt(min), fmt(max));
+    println!("Passed successfully: {} … {}", fmt(min), fmt(max));
     println!(
-        "Рекомендуемые константы (src-tauri/src/clash/client.rs):\n\
+        "Recommended constants (src-tauri/src/clash/client.rs):\n\
          \x20   SINGBOX_MIN           = ({}, {}, {});\n\
          \x20   SINGBOX_MAX_EXCLUSIVE = ({}, {}, {});",
         min.0, min.1, min.2, upper.0, upper.1, upper.2
     );
 
     if min == SINGBOX_MIN && upper == SINGBOX_MAX_EXCLUSIVE {
-        println!("Объявленный диапазон совпадает с измеренным.");
+        println!("The declared range matches the measured one.");
     } else {
         println!(
-            "Объявленный сейчас: {} … <{} — расходится с измерениями.",
+            "Currently declared: {} … <{} — diverges from the measurements.",
             fmt(SINGBOX_MIN),
             fmt(SINGBOX_MAX_EXCLUSIVE)
         );
@@ -365,7 +366,7 @@ fn parse_args() -> Args {
                 );
                 std::process::exit(0);
             }
-            other => eprintln!("неизвестный аргумент: {other}"),
+            other => eprintln!("unknown argument: {other}"),
         }
     }
 

@@ -1,13 +1,14 @@
-//! Запуск sing-box дочерним процессом — режим без установки сервиса.
+//! Running sing-box as a child process — the mode without installing the service.
 //!
-//! Сервис нужен только там, где sing-box требует прав администратора: TUN
-//! поднимает сетевой адаптер, и без elevation это не работает. Конфигурация
-//! без TUN (обычный http/socks-inbound) прекрасно живёт обычным процессом от
-//! имени пользователя — заставлять ради неё ставить сервис незачем.
+//! The service is only needed where sing-box requires administrator rights:
+//! TUN brings up a network adapter, and without elevation that does not work.
+//! A configuration without TUN (a regular http/socks inbound) lives perfectly
+//! fine as a regular process under the user — there is no reason to force a
+//! service install for it.
 //!
-//! Процесс принадлежит приложению: он останавливается при выходе, иначе после
-//! закрытия GUI остался бы висеть безымянный sing-box, которым уже нечем
-//! управлять.
+//! The process belongs to the application: it is stopped on quit, otherwise
+//! after closing the GUI an unnamed sing-box would keep running with nothing
+//! left to manage it.
 
 use std::process::{Child, Command, Stdio};
 use std::sync::{Mutex, OnceLock};
@@ -17,22 +18,23 @@ use crate::error::{Error, Result};
 use crate::runtime;
 use crate::settings::Settings;
 
-/// Запущенный нами sing-box. `None` — процесс не запускался или уже завершился.
+/// The sing-box we started. `None` — the process was never started or has
+/// already exited.
 fn slot() -> &'static Mutex<Option<Child>> {
     static SLOT: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
     SLOT.get_or_init(|| Mutex::new(None))
 }
 
-/// Куда уходит вывод sing-box. Через Clash API приходят те же логи, но если
-/// процесс падает на старте, API подняться не успевает — и единственная
-/// причина отказа видна только здесь.
+/// Where sing-box output goes. The same logs come through the Clash API, but if
+/// the process crashes at startup the API does not come up in time — and the
+/// only reason for the failure is visible only here.
 pub fn log_path() -> Result<std::path::PathBuf> {
     Ok(binary::data_dir()?.join("sing-box.log"))
 }
 
-/// Работает ли наш дочерний процесс прямо сейчас.
+/// Whether our child process is running right now.
 ///
-/// Заодно подчищает слот: завершившийся процесс без `wait` остаётся зомби.
+/// Also cleans up the slot: a finished process without a `wait` stays a zombie.
 pub fn running() -> bool {
     let mut guard = slot().lock().expect("process lock");
     let Some(child) = guard.as_mut() else {
@@ -44,8 +46,8 @@ pub fn running() -> bool {
             false
         }
         Ok(None) => true,
-        // Состояние процесса неизвестно — считаем, что его нет: иначе кнопка
-        // «Запустить» осталась бы заблокированной навсегда.
+        // The process state is unknown — assume it is gone: otherwise the
+        // "Start" button would stay disabled forever.
         Err(_) => {
             *guard = None;
             false
@@ -53,8 +55,8 @@ pub fn running() -> bool {
     }
 }
 
-/// PID запущенного процесса — показываем его в UI как доказательство, что
-/// «работает» относится к чему-то конкретному.
+/// The PID of the running process — we show it in the UI as proof that
+/// "running" refers to something concrete.
 pub fn pid() -> Option<u32> {
     let mut guard = slot().lock().expect("process lock");
     let child = guard.as_mut()?;
@@ -67,7 +69,7 @@ pub fn pid() -> Option<u32> {
     }
 }
 
-/// Запускает sing-box с уже подготовленным рантайм-конфигом.
+/// Starts sing-box with an already-prepared runtime config.
 pub fn start(settings: &Settings) -> Result<()> {
     if running() {
         return Ok(());
@@ -76,7 +78,7 @@ pub fn start(settings: &Settings) -> Result<()> {
     let choice = binary::resolve(settings)?;
     if !choice.path.is_file() {
         return Err(Error::Other(format!(
-            "файл sing-box не найден: {}",
+            "sing-box file not found: {}",
             choice.path.display()
         )));
     }
@@ -109,23 +111,23 @@ pub fn start(settings: &Settings) -> Result<()> {
 
     *slot().lock().expect("process lock") = Some(child);
 
-    // Процесс может отвалиться сразу — например, конфиг не принят. Молча
-    // отрапортовать «запущено» в этом случае было бы враньём.
+    // The process may drop right away — for example, the config was rejected.
+    // Silently reporting "started" in that case would be a lie.
     std::thread::sleep(std::time::Duration::from_millis(600));
     if !running() {
         let detail = std::fs::read_to_string(&log).unwrap_or_default();
         let detail = tail(&detail, 12);
         return Err(Error::Other(if detail.is_empty() {
-            "sing-box завершился сразу после запуска".into()
+            "sing-box exited immediately after start".into()
         } else {
-            format!("sing-box завершился сразу после запуска:\n{detail}")
+            format!("sing-box exited immediately after start:\n{detail}")
         }));
     }
 
     Ok(())
 }
 
-/// Останавливает процесс. Отсутствие процесса — не ошибка.
+/// Stops the process. A missing process is not an error.
 pub fn stop() -> Result<()> {
     let mut guard = slot().lock().expect("process lock");
     let Some(mut child) = guard.take() else {
@@ -138,13 +140,13 @@ pub fn stop() -> Result<()> {
 
     child
         .kill()
-        .map_err(|e| Error::Other(format!("не удалось остановить sing-box: {e}")))?;
+        .map_err(|e| Error::Other(format!("failed to stop sing-box: {e}")))?;
     let _ = child.wait();
     Ok(())
 }
 
-/// Последние `lines` строк — вывод sing-box на старте бывает длинным, а
-/// причина отказа всегда в конце.
+/// The last `lines` lines — sing-box output at startup can be long, and the
+/// reason for failure is always at the end.
 fn tail(text: &str, lines: usize) -> String {
     let all: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     let start = all.len().saturating_sub(lines);

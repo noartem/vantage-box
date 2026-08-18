@@ -1,10 +1,10 @@
-//! Минимальный препроцессор JSONC → JSON.
+//! A minimal JSONC → JSON preprocessor.
 //!
-//! Вырезает `//`- и `/* */`-комментарии и висячие запятые, заменяя их пробелами,
-//! чтобы смещения символов не съезжали — тогда номера строк в ошибках serde_json
-//! указывают на реальное место в исходном файле.
+//! Strips `//` and `/* */` comments and trailing commas, replacing them with
+//! spaces so character offsets do not shift — then line numbers in serde_json
+//! errors point at the real location in the source file.
 
-/// Приводит JSONC к валидному JSON той же длины.
+/// Brings JSONC to valid JSON of the same length.
 pub fn strip_jsonc(input: &str) -> String {
     let without_comments = strip_comments(input);
     strip_trailing_commas(&without_comments)
@@ -18,7 +18,7 @@ fn strip_comments(input: &str) -> String {
     while i < bytes.len() {
         match bytes[i] {
             b'"' => {
-                // Строковый литерал копируем как есть, уважая экранирование.
+                // Copy a string literal as-is, respecting escaping.
                 out.push(bytes[i]);
                 i += 1;
                 while i < bytes.len() {
@@ -52,7 +52,7 @@ fn strip_comments(input: &str) -> String {
                         i += 2;
                         break;
                     }
-                    // Переводы строк сохраняем, остальное превращаем в пробел.
+                    // Keep newlines, turn everything else into a space.
                     out.push(if bytes[i] == b'\n' { b'\n' } else { b' ' });
                     i += 1;
                 }
@@ -64,8 +64,8 @@ fn strip_comments(input: &str) -> String {
         }
     }
 
-    // Мы работали побайтово, но резали только ASCII-последовательности вне строк,
-    // поэтому UTF-8 остался целым.
+    // We worked byte-wise, but only cut ASCII sequences outside strings, so
+    // UTF-8 stayed intact.
     String::from_utf8(out).unwrap_or_else(|_| input.to_string())
 }
 
@@ -143,9 +143,9 @@ mod tests {
 
     #[test]
     fn survives_escaped_quotes_and_utf8() {
-        let src = r#"{"s": "он сказал \"привет\" // не комментарий"}"#;
+        let src = r#"{"s": "он сказал \"привет\" // не комментарий"}"#; // i18n-allow-non-english
         let out = strip_jsonc(src);
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-        assert_eq!(v["s"], "он сказал \"привет\" // не комментарий");
+        assert_eq!(v["s"], "он сказал \"привет\" // не комментарий"); // i18n-allow-non-english
     }
 }
