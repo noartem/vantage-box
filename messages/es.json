@@ -122,6 +122,7 @@
 	"service_help_not_needed": "Esta configuración no necesita el servicio — no tiene TUN y sing-box se ejecuta como un proceso ordinario bajo tu cuenta. El servicio es útil si más adelante añades TUN o quieres que sing-box se ejecute sin Vantage Box abierto.",
 	"service_version_undefined": "indefinido",
 	"service_no_file": "sin archivo",
+	"service_view_runtime_config": "Configuración en ejecución",
 
 	"mini_open_service_tab": "Abrir la pestaña 'Servicio'",
 	"mini_open_connections_tab": "Abrir la pestaña 'Conexiones'",
@@ -188,6 +189,11 @@
 	"config_checking": "Validando…",
 	"config_close_list": "Cerrar lista",
 
+	"runtime_config_title": "Configuración en ejecución",
+	"runtime_config_hint": "Esta es la configuración con la que se inició sing-box: tu config.json con el bloque Clash API (external controller y secreto) inyectado. Los números de línea coinciden con los mensajes de error de sing-box.",
+	"runtime_config_not_found": "La configuración en ejecución aún no existe — inicia sing-box al menos una vez.",
+	"runtime_config_loading": "Leyendo la configuración en ejecución…",
+
 	"subs_save_first": "Guarda tus cambios primero — la actualización lee las suscripciones ya guardadas.",
 	"subs_refresh_failed": "Error al actualizar: {names}",
 	"subs_nodes_poured": "Cargados {count} nodos.",
@@ -215,8 +221,8 @@
 	"subs_nodes_count": "nodos: {count}",
 	"subs_not_refreshed": "Aún no actualizada",
 	"subs_delete_title": "Eliminar suscripción",
-	"subs_hint_pre": "Los nodos se cargan en config.json bajo",
-	"subs_hint_post": "etiquetas y se añaden a los grupos destino; al actualizar los antiguos se eliminan, así no aparecen duplicados. Los comentarios en config.json no se conservan — igual que en el editor de configuración.",
+	"subs_hint_pre": "Los nodos y endpoints se cargan en config.json bajo",
+	"subs_hint_post": "etiquetas. Una suscripción con sus propios grupos los inserta como grupos nuevos, o rellena grupos existentes con el mismo nombre; en caso contrario los nodos van a los grupos destino. Al actualizar el contenido gestionado anterior se elimina, así no aparecen duplicados. Los comentarios en config.json no se conservan — igual que en el editor de configuración.",
 
 	"onboarding_resume_title": "Mostrar la guía de inicio otra vez",
 	"onboarding_button": "Guía de inicio",
@@ -326,6 +332,7 @@
 	"alert_update_now": "Actualizar",
 	"alert_prev": "Mensaje anterior",
 	"alert_next": "Mensaje siguiente",
+	"alert_view_runtime_config": "Configuración en ejecución",
 
 	"traffic_hint": "Un minuto de historial, escala compartida para ambas series. Pico {peak}",
 	"traffic_download": "Descarga",

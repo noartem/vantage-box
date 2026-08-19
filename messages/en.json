@@ -122,6 +122,7 @@
 	"service_help_not_needed": "This config does not need the service — it has no TUN, and sing-box runs as an ordinary process under your account. The service is useful if you later add TUN or want sing-box to run without Vantage Box open.",
 	"service_version_undefined": "undefined",
 	"service_no_file": "no file",
+	"service_view_runtime_config": "Running config",
 
 	"mini_open_service_tab": "Open the 'Service' tab",
 	"mini_open_connections_tab": "Open the 'Connections' tab",
@@ -188,6 +189,11 @@
 	"config_checking": "Validating…",
 	"config_close_list": "Close list",
 
+	"runtime_config_title": "Running config",
+	"runtime_config_hint": "This is the config sing-box was started with — your config.json with the Clash API block (external controller and secret) injected. Line numbers match sing-box error messages.",
+	"runtime_config_not_found": "The running config does not exist yet — start sing-box at least once.",
+	"runtime_config_loading": "Reading the running config…",
+
 	"subs_save_first": "Save your changes first — refresh reads the already saved subscriptions.",
 	"subs_refresh_failed": "Failed to refresh: {names}",
 	"subs_nodes_poured": "Loaded {count} nodes.",
@@ -215,8 +221,8 @@
 	"subs_nodes_count": "nodes: {count}",
 	"subs_not_refreshed": "Not refreshed yet",
 	"subs_delete_title": "Delete subscription",
-	"subs_hint_pre": "Nodes are loaded into config.json under",
-	"subs_hint_post": "tags and appended to the target groups; on refresh the old ones are removed, so no duplicates appear. Comments in config.json are not preserved — same as in the config editor.",
+	"subs_hint_pre": "Nodes and endpoints are loaded into config.json under",
+	"subs_hint_post": "tags. A subscription that ships its own groups inserts them as new groups, or fills existing groups with the same name; otherwise nodes go into the target groups. On refresh the old managed content is removed, so no duplicates appear. Comments in config.json are not preserved — same as in the config editor.",
 
 	"onboarding_resume_title": "Show onboarding again",
 	"onboarding_button": "Onboarding",
@@ -326,6 +332,7 @@
 	"alert_update_now": "Update",
 	"alert_prev": "Previous message",
 	"alert_next": "Next message",
+	"alert_view_runtime_config": "Running config",
 
 	"traffic_hint": "A minute of history, shared scale for both series. Peak {peak}",
 	"traffic_download": "Download",

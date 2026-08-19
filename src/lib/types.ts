@@ -85,6 +85,8 @@ export interface SubStateEntry {
 
 export interface SubscriptionsState {
 	entries: Record<string, SubStateEntry>;
+	/** Tags of groups subscriptions created (not merely filled). Internal. */
+	createdGroups?: string[];
 }
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
@@ -255,4 +257,11 @@ export interface CheckResult {
 	available: boolean;
 	ok: boolean;
 	output: string;
+}
+
+/** The runtime config sing-box was last started with — the user's config.json
+ *  plus the injected Clash API block. Read-only, for debugging. */
+export interface RuntimeConfigView {
+	path: string;
+	content: string;
 }

@@ -6,21 +6,30 @@
 
 export type AlertSeverity = 'error' | 'warn' | 'ok';
 
+export type AlertAction = {
+	label: string;
+	run: () => void;
+};
+
 export type TransientAlert = {
 	id: number;
 	severity: AlertSeverity;
 	text: string;
+	/** Optional action button (e.g. "Running config" on a startup error).
+	 *  When set, the alert strip renders it instead of the "Hide" button and
+	 *  keeps a separate dismiss ✕. */
+	action?: AlertAction;
 };
 
 class Transient {
 	items = $state<TransientAlert[]>([]);
 	private nextId = 1;
 
-	push(severity: AlertSeverity, text: string): number {
+	push(severity: AlertSeverity, text: string, action?: AlertAction): number {
 		const id = this.nextId++;
 		// Do not stack the same text repeatedly: three identical lines in a "1/3"
 		// counter is noise, not information.
-		this.items = [...this.items.filter((a) => a.text !== text), { id, severity, text }];
+		this.items = [...this.items.filter((a) => a.text !== text), { id, severity, text, action }];
 		return id;
 	}
 
@@ -35,8 +44,8 @@ class Transient {
 
 export const transientAlerts = new Transient();
 
-export function pushAlert(severity: AlertSeverity, text: string): number {
-	return transientAlerts.push(severity, text);
+export function pushAlert(severity: AlertSeverity, text: string, action?: AlertAction): number {
+	return transientAlerts.push(severity, text, action);
 }
 
 export function dismissAlert(id: number) {

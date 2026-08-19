@@ -57,16 +57,21 @@
 		onchange,
 		onsave,
 		ondiagnostics,
-		version = null
+		version = null,
+		readOnly = false
 	}: {
 		value: string;
-		onchange: (next: string) => void;
+		/** Editor content changed by the user. Not called in read-only mode. */
+		onchange?: (next: string) => void;
 		/** Ctrl+S inside the editor — more familiar than reaching for a button. */
 		onsave?: () => void;
 		/** List of active diagnostics, recomputed as edits and lint progress. */
 		ondiagnostics?: (diags: EditorDiagnostic[]) => void;
 		/** The running sing-box version — used to pick the linter schema. */
 		version?: string | null;
+		/** Read-only viewer mode: no linting, no autocomplete, no editing — just
+		 *  syntax highlighting, line numbers and folding. */
+		readOnly?: boolean;
 	} = $props();
 
 	let container = $state<HTMLDivElement | null>(null);
@@ -137,80 +142,94 @@
 	onMount(() => {
 		if (!container) return;
 
-		lintWorker = new SchemaLintWorker();
-		lintWorker.onmessage = (event: MessageEvent) => {
-			const msg = event.data;
-			if (msg?.type !== 'lintResult') return;
-			const resolve = lintPending.get(msg.id);
-			if (resolve) {
-				lintPending.delete(msg.id);
-				resolve(msg.diags);
-			}
-		};
+		// Common to both modes: line numbers, active line, folding, selection,
+		// highlighting, theme. JSON5 is a superset of JSONC, so the mode gives
+		// comments and trailing commas at once (the backend already handles them
+		// — src-tauri/src/jsonc.rs).
+		const extensions = [
+			lineNumbers(),
+			highlightActiveLineGutter(),
+			highlightActiveLine(),
+			foldGutter(),
+			drawSelection(),
+			syntaxHighlighting(highlight),
+			theme,
+			json5()
+		];
+
+		if (!readOnly) {
+			// Linting runs in a Web worker (schema-lint-worker.ts), so parsing the
+			// config and Draft07.validate do not freeze typing on the main thread.
+			lintWorker = new SchemaLintWorker();
+			lintWorker.onmessage = (event: MessageEvent) => {
+				const msg = event.data;
+				if (msg?.type !== 'lintResult') return;
+				const resolve = lintPending.get(msg.id);
+				if (resolve) {
+					lintPending.delete(msg.id);
+					resolve(msg.diags);
+				}
+			};
+
+			extensions.push(
+				highlightSelectionMatches(),
+				history(),
+				indentOnInput(),
+				bracketMatching(),
+				closeBrackets(),
+				autocompletion(),
+				lintGutter(),
+				// Autocomplete and hover — always from the official 1.14 schema: it has
+				// Russian descriptions and a union transform, and the field hints are
+				// version-neutral.
+				json5Language.data.of({ autocomplete: jsoncCompletion() }),
+				hoverTooltip(json5SchemaHover()),
+				stateExtensions(autocompleteSchema),
+				linter(json5ParseLinter()),
+				// The schema linter is asynchronous; validation runs in a Web worker
+				// (schema-lint-worker.ts). The schema for the sing-box version is sent
+				// there in a separate message in the $effect below. CodeMirror discards
+				// stale results itself if the document changed in the meantime.
+				linter(async (v) => lintAsync(v.state.doc.toString())),
+				// JSON5 allows more than serde will digest on the Rust side.
+				jsoncLinter,
+				keymap.of([
+					{
+						key: 'Mod-s',
+						preventDefault: true,
+						run: () => {
+							onsave?.();
+							return true;
+						}
+					},
+					...closeBracketsKeymap,
+					...defaultKeymap,
+					...searchKeymap,
+					...historyKeymap,
+					...foldKeymap,
+					...completionKeymap,
+					...lintKeymap,
+					indentWithTab
+				]),
+				EditorView.updateListener.of((update) => {
+					if (update.docChanged) onchange?.(update.state.doc.toString());
+					// Recompute the error list when the document changed or lint
+					// completed (its result arrives as a separate transaction).
+					const countChanged =
+						diagnosticCount(update.state) !== diagnosticCount(update.startState);
+					if (update.docChanged || countChanged) emitDiagnostics(update.state);
+				})
+			);
+		} else {
+			// Read-only viewer: folding is still useful, editing is not.
+			extensions.push(EditorState.readOnly.of(true), keymap.of([...foldKeymap]));
+		}
 
 		view = new EditorView({
 			parent: container,
 			state: EditorState.create({
 				doc: value,
-				extensions: [
-					lineNumbers(),
-					highlightActiveLineGutter(),
-					highlightActiveLine(),
-					highlightSelectionMatches(),
-					foldGutter(),
-					drawSelection(),
-					history(),
-					indentOnInput(),
-					bracketMatching(),
-					closeBrackets(),
-					autocompletion(),
-					lintGutter(),
-					syntaxHighlighting(highlight),
-					theme,
-					// JSON5 is a superset of JSONC, so the mode gives comments and
-					// trailing commas at once (the backend already handles them — src-tauri/src/jsonc.rs).
-					json5(),
-					// Autocomplete and hover — always from the official 1.14 schema: it has
-					// Russian descriptions and a union transform, and the field hints are
-					// version-neutral.
-					json5Language.data.of({ autocomplete: jsoncCompletion() }),
-					hoverTooltip(json5SchemaHover()),
-					stateExtensions(autocompleteSchema),
-					linter(json5ParseLinter()),
-					// The schema linter is asynchronous; validation runs in a Web worker
-					// (schema-lint-worker.ts). The schema for the sing-box version is sent
-					// there in a separate message in the $effect below. CodeMirror discards
-					// stale results itself if the document changed in the meantime.
-					linter(async (v) => lintAsync(v.state.doc.toString())),
-					// JSON5 allows more than serde will digest on the Rust side.
-					jsoncLinter,
-					keymap.of([
-						{
-							key: 'Mod-s',
-							preventDefault: true,
-							run: () => {
-								onsave?.();
-								return true;
-							}
-						},
-						...closeBracketsKeymap,
-						...defaultKeymap,
-						...searchKeymap,
-						...historyKeymap,
-						...foldKeymap,
-						...completionKeymap,
-						...lintKeymap,
-						indentWithTab
-					]),
-					EditorView.updateListener.of((update) => {
-						if (update.docChanged) onchange(update.state.doc.toString());
-						// Recompute the error list when the document changed or lint
-						// completed (its result arrives as a separate transaction).
-						const countChanged =
-							diagnosticCount(update.state) !== diagnosticCount(update.startState);
-						if (update.docChanged || countChanged) emitDiagnostics(update.state);
-					})
-				]
+				extensions
 			})
 		});
 
@@ -272,6 +291,8 @@
 	});
 
 	$effect(() => {
+		// Read-only viewers do not lint — no schema to swap.
+		if (readOnly) return;
 		// sing-box version change → swap the linter schema and force a re-lint so
 		// the errors recompute against the new schema.
 		version;

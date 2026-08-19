@@ -206,6 +206,7 @@ pub fn run() {
             commands::check_singbox_config,
             commands::write_singbox_config,
             commands::create_minimal_config,
+            commands::read_runtime_config,
             commands::get_run_status,
             commands::install_service,
             commands::uninstall_service,

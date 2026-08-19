@@ -5,6 +5,7 @@
 	import VersionsPanel from '$lib/components/VersionsPanel.svelte';
 	import { SERVICE_LABELS, runServiceAction } from '$lib/service-actions';
 	import { m } from '$lib/paraglide/messages.js';
+	import { runtimeConfigModal } from '$lib/runtime-config.svelte';
 	import { app } from '$lib/state.svelte';
 	import { tooltip } from '$lib/tooltip';
 
@@ -103,6 +104,11 @@
 						onclick={() => act('restart', api.restart)}
 					>
 						{busy === 'restart' ? m.service_restarting() : m.service_soft_restart()}
+					</button>
+					<!-- Read-only view of the config sing-box was started with — for
+					     debugging. Works whether running or stopped. -->
+					<button disabled={busy !== null} onclick={() => runtimeConfigModal.show()}>
+						{m.service_view_runtime_config()}
 					</button>
 				</div>
 

@@ -5,6 +5,7 @@
 import { m } from '$lib/paraglide/messages.js';
 import { errorText } from './api';
 import { pushAlert } from './alerts.svelte';
+import { runtimeConfigModal } from './runtime-config.svelte';
 import { app } from './state.svelte';
 import type { RestartOutcome, ServiceState } from './types';
 
@@ -45,7 +46,15 @@ export async function runServiceAction(kind: string, call: () => Promise<unknown
 		const result = await call();
 		if (kind === 'restart') reportRestart(result as RestartOutcome);
 	} catch (e) {
-		pushAlert('error', errorText(e));
+		// A start/restart failure usually means sing-box rejected the runtime
+		// config — which was just written to disk by `prepare`. Point the user
+		// at it: their config.json differs (the injected Clash API block, shifted
+		// line numbers), so the error is otherwise hard to map to the real cause.
+		const action =
+			kind === 'start' || kind === 'restart'
+				? { label: m.alert_view_runtime_config(), run: () => runtimeConfigModal.show() }
+				: undefined;
+		pushAlert('error', errorText(e), action);
 	} finally {
 		await app.refreshRun();
 	}

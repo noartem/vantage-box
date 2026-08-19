@@ -15,6 +15,7 @@ import type {
 	ProxyOverview,
 	ReleaseCatalog,
 	RestartOutcome,
+	RuntimeConfigView,
 	RunStatus,
 	Settings,
 	SubscriptionsState,
@@ -41,6 +42,8 @@ export const api = {
 	checkSingboxConfig: (content: string) => invoke<CheckResult>('check_singbox_config', { content }),
 	writeSingboxConfig: (content: string) => invoke<void>('write_singbox_config', { content }),
 	createMinimalConfig: () => invoke<string>('create_minimal_config'),
+	/** The runtime config sing-box was last started with (runtime.json). */
+	readRuntimeConfig: () => invoke<RuntimeConfigView>('read_runtime_config'),
 
 	getRunStatus: () => invoke<RunStatus>('get_run_status'),
 	installService: () => invoke<RunStatus>('install_service'),

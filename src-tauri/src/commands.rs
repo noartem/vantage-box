@@ -167,6 +167,14 @@ pub fn read_singbox_config(state: State<'_, AppState>) -> Result<String> {
     Ok(content)
 }
 
+/// Reads `runtime.json` — the config sing-box was last started with (the user's
+/// config plus the injected Clash API block). Read-only, for debugging: works
+/// whether sing-box is running or stopped.
+#[tauri::command]
+pub fn read_runtime_config() -> Result<runtime::RuntimeConfigView> {
+    runtime::read_runtime_config()
+}
+
 /// Validates the editor contents without touching the user's file.
 ///
 /// First JSON, then — if the binary is available — a full `sing-box check`

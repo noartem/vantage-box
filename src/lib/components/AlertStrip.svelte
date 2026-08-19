@@ -12,6 +12,10 @@
 		severity: AlertSeverity;
 		text: string;
 		action?: { label: string; disabled?: boolean; run: () => void };
+		/** When the action slot is taken by a custom action, dismiss moves to a
+		 *  separate ✕ button so the alert stays dismissible. */
+		dismissable?: boolean;
+		dismissId?: number;
 	};
 
 	/** Previously each problem was its own banner in the header, and the top row
@@ -48,12 +52,25 @@
 		}
 
 		for (const alert of transientAlerts.items) {
-			list.push({
-				key: `t${alert.id}`,
-				severity: alert.severity,
-				text: alert.text,
-				action: { label: m.common_hide(), run: () => dismissAlert(alert.id) }
-			});
+			if (alert.action) {
+				// A custom action (e.g. "Running config") takes the action slot;
+				// dismiss still works via the separate ✕ button.
+				list.push({
+					key: `t${alert.id}`,
+					severity: alert.severity,
+					text: alert.text,
+					action: { label: alert.action.label, run: alert.action.run },
+					dismissable: true,
+					dismissId: alert.id
+				});
+			} else {
+				list.push({
+					key: `t${alert.id}`,
+					severity: alert.severity,
+					text: alert.text,
+					action: { label: m.common_hide(), run: () => dismissAlert(alert.id) }
+				});
+			}
 		}
 
 		// The config needs TUN, but the service is not installed — nothing to start it with.
@@ -108,6 +125,17 @@
 		{#if current.action}
 			<button class="act" disabled={current.action.disabled} onclick={current.action.run}>
 				{current.action.label}
+			</button>
+		{/if}
+
+		{#if current.dismissable}
+			<button
+				class="icon-btn"
+				aria-label={m.common_hide()}
+				title={m.common_hide()}
+				onclick={() => dismissAlert(current.dismissId!)}
+			>
+				<Icon name="close" size={12} />
 			</button>
 		{/if}
 

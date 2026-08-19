@@ -122,6 +122,7 @@
 	"service_help_not_needed": "Cette config n'a pas besoin du service — elle n'a pas de TUN, et sing-box s'exécute comme un processus ordinaire sous votre compte. Le service est utile si vous ajoutez plus tard un TUN ou si vous souhaitez que sing-box s'exécute sans Vantage Box ouvert.",
 	"service_version_undefined": "non défini",
 	"service_no_file": "aucun fichier",
+	"service_view_runtime_config": "Configuration d'exécution",
 
 	"mini_open_service_tab": "Ouvrir l'onglet « Service »",
 	"mini_open_connections_tab": "Ouvrir l'onglet « Connexions »",
@@ -188,6 +189,11 @@
 	"config_checking": "Validation…",
 	"config_close_list": "Fermer la liste",
 
+	"runtime_config_title": "Configuration d'exécution",
+	"runtime_config_hint": "Il s'agit de la configuration avec laquelle sing-box a été démarré — votre config.json avec le bloc Clash API (external controller et secret) injecté. Les numéros de ligne correspondent aux messages d'erreur de sing-box.",
+	"runtime_config_not_found": "La configuration d'exécution n'existe pas encore — démarrez sing-box au moins une fois.",
+	"runtime_config_loading": "Lecture de la configuration d'exécution…",
+
 	"subs_save_first": "Enregistrez d'abord vos modifications — l'actualisation lit les abonnements déjà enregistrés.",
 	"subs_refresh_failed": "Échec de l'actualisation : {names}",
 	"subs_nodes_poured": "{count} nœuds chargés.",
@@ -215,8 +221,8 @@
 	"subs_nodes_count": "nœuds : {count}",
 	"subs_not_refreshed": "Pas encore actualisé",
 	"subs_delete_title": "Supprimer l'abonnement",
-	"subs_hint_pre": "Les nœuds sont chargés dans config.json sous les",
-	"subs_hint_post": "tags et ajoutés aux groupes cibles ; lors de l'actualisation les anciens sont supprimés, donc aucun doublon n'apparaît. Les commentaires dans config.json ne sont pas conservés — comme dans l'éditeur de config.",
+	"subs_hint_pre": "Les nœuds et endpoints sont chargés dans config.json sous les",
+	"subs_hint_post": "tags. Un abonnement avec ses propres groupes les insère comme de nouveaux groupes, ou remplit des groupes existants du même nom ; sinon les nœuds vont dans les groupes cibles. Lors de l'actualisation le contenu géré précédent est supprimé, donc aucun doublon n'apparaît. Les commentaires dans config.json ne sont pas conservés — comme dans l'éditeur de config.",
 
 	"onboarding_resume_title": "Afficher à nouveau l'accueil",
 	"onboarding_button": "Accueil",
@@ -326,6 +332,7 @@
 	"alert_update_now": "Mettre à jour",
 	"alert_prev": "Message précédent",
 	"alert_next": "Message suivant",
+	"alert_view_runtime_config": "Configuration d'exécution",
 
 	"traffic_hint": "Une minute d'historique, échelle commune pour les deux séries. Pic {peak}",
 	"traffic_download": "Réception",

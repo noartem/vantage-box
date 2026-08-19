@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import AlertStrip from '$lib/components/AlertStrip.svelte';
+	import RuntimeConfigModal from '$lib/components/RuntimeConfigModal.svelte';
 	import StatusBar from '$lib/components/StatusBar.svelte';
 	import TitleBar from '$lib/components/TitleBar.svelte';
 	import { app } from '$lib/state.svelte';
@@ -140,6 +141,10 @@
 
 		<StatusBar />
 	</div>
+
+	<!-- Read-only viewer for the running config (runtime.json). Hosted at the top
+	     level so the error alert can open it regardless of the active tab. -->
+	<RuntimeConfigModal />
 
 	<!-- First-run onboarding: on top of everything until a binary and config are chosen. -->
 	{#if app.needsOnboarding}<Onboarding />{/if}

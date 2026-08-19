@@ -42,8 +42,45 @@ pub struct RuntimeState {
     pub secret: String,
 }
 
+/// The runtime config sing-box was last started with, for the read-only viewer.
+/// Reading it from disk works whether sing-box is running or stopped — so the
+/// config that just crashed can be inspected.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeConfigView {
+    pub path: String,
+    pub content: String,
+}
+
 pub fn runtime_config_path() -> Result<PathBuf> {
     Ok(config_dir()?.join(RUNTIME_CONFIG))
+}
+
+/// Reads `runtime.json` from disk — exactly what was passed to sing-box via `-c`.
+/// If the file does not exist yet (sing-box was never started), the error says so
+/// plainly instead of dumping a raw IO message.
+pub fn read_runtime_config() -> Result<RuntimeConfigView> {
+    read_runtime_config_in(&config_dir()?)
+}
+
+/// Same, but with an explicit directory — for tests that need a sandbox.
+pub fn read_runtime_config_in(dir: &Path) -> Result<RuntimeConfigView> {
+    let path = dir.join(RUNTIME_CONFIG);
+    let content = match std::fs::read_to_string(&path) {
+        Ok(content) => content,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(Error::Other(
+                "the running config (runtime.json) does not exist yet \
+                 — start sing-box at least once"
+                    .into(),
+            ));
+        }
+        Err(e) => return Err(Error::io(path.display().to_string(), e)),
+    };
+    Ok(RuntimeConfigView {
+        path: path.display().to_string(),
+        content,
+    })
 }
 
 fn runtime_state_path() -> Result<PathBuf> {
@@ -330,5 +367,30 @@ mod tests {
         let b = generate_secret();
         assert_eq!(a.len(), 32);
         assert_ne!(a, b);
+    }
+
+    /// A never-started app has no runtime.json: the error must say so plainly,
+    /// not dump a raw IO message the user cannot act on.
+    #[test]
+    fn read_runtime_config_missing_is_friendly() {
+        let (dir, _) = sandbox("missing-runtime", r#"{"log":{}}"#);
+        let err = read_runtime_config_in(&dir).unwrap_err();
+        assert!(err.to_string().contains("does not exist"));
+    }
+
+    /// After `prepare_in`, the runtime config is readable and matches what was
+    /// written — the viewer shows exactly what sing-box was started with.
+    #[test]
+    fn read_runtime_config_after_prepare() {
+        let (dir, settings) = sandbox(
+            "read-runtime",
+            r#"{"log":{"level":"info"},"inbounds":[],"outbounds":[]}"#,
+        );
+        prepare_in(&dir, &settings).unwrap();
+
+        let view = read_runtime_config_in(&dir).unwrap();
+        assert!(view.path.ends_with("runtime.json"));
+        assert!(view.content.contains("\"experimental\""));
+        assert!(view.content.contains("\"clash_api\""));
     }
 }

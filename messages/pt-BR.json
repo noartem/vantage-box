@@ -122,6 +122,7 @@
 	"service_help_not_needed": "Esta config não precisa do serviço — não tem TUN, e o sing-box roda como um processo comum sob sua conta. O serviço é útil se você adicionar TUN depois ou quiser que o sing-box rode sem o Vantage Box aberto.",
 	"service_version_undefined": "indefinida",
 	"service_no_file": "nenhum arquivo",
+	"service_view_runtime_config": "Configuração em execução",
 
 	"mini_open_service_tab": "Abrir a aba 'Serviço'",
 	"mini_open_connections_tab": "Abrir a aba 'Conexões'",
@@ -188,6 +189,11 @@
 	"config_checking": "Validando…",
 	"config_close_list": "Fechar lista",
 
+	"runtime_config_title": "Configuração em execução",
+	"runtime_config_hint": "Esta é a configuração com a qual o sing-box foi iniciado — seu config.json com o bloco Clash API (external controller e segredo) injetado. Os números de linha correspondem às mensagens de erro do sing-box.",
+	"runtime_config_not_found": "A configuração em execução ainda não existe — inicie o sing-box pelo menos uma vez.",
+	"runtime_config_loading": "Lendo a configuração em execução…",
+
 	"subs_save_first": "Salve suas alterações primeiro — a atualização lê as assinaturas já salvas.",
 	"subs_refresh_failed": "Falha ao atualizar: {names}",
 	"subs_nodes_poured": "Carregados {count} nós.",
@@ -215,8 +221,8 @@
 	"subs_nodes_count": "nós: {count}",
 	"subs_not_refreshed": "Ainda não atualizada",
 	"subs_delete_title": "Excluir assinatura",
-	"subs_hint_pre": "Os nós são carregados em config.json sob as tags",
-	"subs_hint_post": "e anexados aos grupos de destino; na atualização os antigos são removidos, então não há duplicatas. Comentários em config.json não são preservados — assim como no editor de config.",
+	"subs_hint_pre": "Os nós e endpoints são carregados em config.json sob as tags",
+	"subs_hint_post": ". Uma assinatura com seus próprios grupos os insere como novos grupos, ou preenche grupos existentes com o mesmo nome; caso contrário os nós vão para os grupos de destino. Na atualização o conteúdo gerenciado anterior é removido, então não há duplicatas. Comentários em config.json não são preservados — assim como no editor de config.",
 
 	"onboarding_resume_title": "Mostrar o onboarding novamente",
 	"onboarding_button": "Onboarding",
@@ -326,6 +332,7 @@
 	"alert_update_now": "Atualizar",
 	"alert_prev": "Mensagem anterior",
 	"alert_next": "Próxima mensagem",
+	"alert_view_runtime_config": "Configuração em execução",
 
 	"traffic_hint": "Um minuto de histórico, escala compartilhada para ambas as séries. Pico {peak}",
 	"traffic_download": "Download",

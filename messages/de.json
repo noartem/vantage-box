@@ -122,6 +122,7 @@
 	"service_help_not_needed": "Diese Konfiguration benötigt den Dienst nicht — sie hat kein TUN, und sing-box läuft als normaler Prozess unter deinem Konto. Der Dienst ist nützlich, wenn du später TUN hinzufügst oder sing-box ohne geöffnetes Vantage Box laufen lassen willst.",
 	"service_version_undefined": "undefiniert",
 	"service_no_file": "keine Datei",
+	"service_view_runtime_config": "Laufende Konfiguration",
 
 	"mini_open_service_tab": "Den Reiter 'Dienst' öffnen",
 	"mini_open_connections_tab": "Den Reiter 'Verbindungen' öffnen",
@@ -188,6 +189,11 @@
 	"config_checking": "Wird validiert…",
 	"config_close_list": "Liste schließen",
 
+	"runtime_config_title": "Laufende Konfiguration",
+	"runtime_config_hint": "Dies ist die Konfiguration, mit der sing-box gestartet wurde — dein config.json mit eingefügtem Clash-API-Block (external controller und secret). Die Zeilennummern stimmen mit den Fehlermeldungen von sing-box überein.",
+	"runtime_config_not_found": "Die laufende Konfiguration existiert noch nicht — starte sing-box mindestens einmal.",
+	"runtime_config_loading": "Lese laufende Konfiguration…",
+
 	"subs_save_first": "Speichere zuerst deine Änderungen — die Aktualisierung liest die bereits gespeicherten Abonnements.",
 	"subs_refresh_failed": "Aktualisierung fehlgeschlagen: {names}",
 	"subs_nodes_poured": "{count} Nodes geladen.",
@@ -215,8 +221,8 @@
 	"subs_nodes_count": "Nodes: {count}",
 	"subs_not_refreshed": "Noch nicht aktualisiert",
 	"subs_delete_title": "Abonnement löschen",
-	"subs_hint_pre": "Nodes werden in config.json unter",
-	"subs_hint_post": "-Tags geladen und an die Zielgruppen angehängt; bei der Aktualisierung werden die alten entfernt, damit keine Duplikate entstehen. Kommentare in config.json werden nicht erhalten — genauso wie im Konfig-Editor.",
+	"subs_hint_pre": "Nodes und Endpoints werden in config.json unter",
+	"subs_hint_post": "-Tags geladen. Ein Abonnement mit eigenen Gruppen fügt diese als neue Gruppen ein oder füllt bestehende Gruppen mit demselben Namen; sonst landen die Nodes in den Zielgruppen. Bei der Aktualisierung wird der alte verwaltete Inhalt entfernt, damit keine Duplikate entstehen. Kommentare in config.json werden nicht erhalten — genauso wie im Konfig-Editor.",
 
 	"onboarding_resume_title": "Onboarding erneut anzeigen",
 	"onboarding_button": "Onboarding",
@@ -326,6 +332,7 @@
 	"alert_update_now": "Update",
 	"alert_prev": "Vorherige Nachricht",
 	"alert_next": "Nächste Nachricht",
+	"alert_view_runtime_config": "Laufende Konfiguration",
 
 	"traffic_hint": "Eine Minute Verlauf, gemeinsame Skala für beide Reihen. Spitze {peak}",
 	"traffic_download": "Download",
