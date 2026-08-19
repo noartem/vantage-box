@@ -59,8 +59,8 @@
 		<div class="banner">{error}</div>
 	{/if}
 
-	<!-- Верхний ряд: управление сервисом рядом с графиками вход/выход. Высота
-		 секции сервиса больше полосы графика, поэтому ряд выравниваем по верху. -->
+	<!-- Top row: service controls next to the in/out traffic charts. The service
+		 section is taller than the chart strip, so the row is aligned to the top. -->
 	<div class="top">
 		<MiniService onopen={() => ongoto('service')} />
 		<TrafficChart history={app.trafficHistory} current={app.traffic} />
@@ -98,7 +98,7 @@
 		align-content: start;
 	}
 
-	/* Сервис и графики — две равные колонки; на узком окне сваливаемся в стопку. */
+	/* Service and charts — two equal columns; on a narrow window they stack. */
 	.top {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
