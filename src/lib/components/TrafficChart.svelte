@@ -54,26 +54,36 @@
 </div>
 
 <style>
-	/* A strip, not a chart card: the current speed is already in the status bar,
-	   here we only need the shape of a minute — 24px is enough for that. */
+	/* Takes 3/4 of the row's width. No height: the top row uses align-items:
+	   stretch, so this card stretches to the service block's height (which
+	   sizes the row). A height: 100% would not resolve — the row is auto — and
+	   would disable stretch. The min-height is a floor for the stacked
+	   (narrow-window) layout, where the chart is in its own row and has no
+	   taller sibling to stretch against; the SVG being out of flow, the card
+	   would otherwise collapse to zero. */
 	.chart {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
+		display: flex;
 		gap: var(--sp-5);
-		padding: var(--sp-3) var(--sp-4);
+		padding: var(--sp-4);
+		min-height: 80px;
 	}
 
 	.series {
-		display: grid;
-		grid-template-columns: max-content 1fr;
-		align-items: center;
-		gap: var(--sp-4);
+		position: relative;
+		flex: 1 1 0;
 		min-width: 0;
 	}
 
 	.value {
+		position: absolute;
+		top: 0;
+		left: 0;
 		font-size: var(--fs-lg);
 		white-space: nowrap;
+		padding: 0 var(--sp-2);
+		border-radius: 3px;
+		/* A faint surface pill so the reading stays legible over the area fill. */
+		background: color-mix(in srgb, var(--surface) 72%, transparent);
 	}
 
 	.arrow {
@@ -88,9 +98,15 @@
 		color: var(--good);
 	}
 
+	/* Out of flow so the SVG's intrinsic height (from the viewBox) does not
+	   inflate the row: the service block sizes the row, this card stretches to
+	   it, and the SVG fills the series via absolute positioning. */
 	svg {
+		position: absolute;
+		top: 0;
+		left: 0;
 		width: 100%;
-		height: 24px;
+		height: 100%;
 		display: block;
 	}
 
@@ -120,13 +136,5 @@
 
 	path.area.up {
 		fill: color-mix(in srgb, var(--good) 18%, transparent);
-	}
-
-	/* Narrow window: two columns become a single row with two pairs. */
-	@media (max-width: 640px) {
-		.chart {
-			grid-template-columns: 1fr;
-			gap: var(--sp-2);
-		}
 	}
 </style>

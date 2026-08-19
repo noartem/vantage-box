@@ -42,6 +42,7 @@
 	"common_show_in_folder": "Mostrar en carpeta",
 	"common_unsaved_changes": "cambios sin guardar",
 	"common_loading_settings": "Cargando ajustes…",
+	"common_loading": "Cargando…",
 	"common_reading_state": "Leyendo estado…",
 	"common_no_filter_match": "Nada coincide con el filtro.",
 
@@ -140,7 +141,7 @@
 	"binary_manual_hint": "La ruta está definida manualmente, así que Vantage Box no toca este archivo — solo reporta versiones incompatibles. Limpia el campo 'archivo sing-box' en Ajustes para ceder el control de versión a la app.",
 	"binary_reading": "Leyendo información del archivo…",
 
-	"versions_compat_supported": "en rango",
+	"versions_compat_supported": "compatible",
 	"versions_compat_too_new": "más reciente",
 	"versions_compat_too_old": "más antigua",
 	"versions_compat_unknown": "—",
@@ -201,11 +202,11 @@
 	"subs_no_restart_suffix": " Config actualizada sin reinicio.",
 	"subs_count": "{count} suscripciones",
 	"subs_url_hint": "La URL puede devolver una configuración sing-box con outbounds, un arreglo simple de outbounds, o una lista base64 de ss:// vmess:// vless:// trojan:// hysteria2:// tuic://",
-	"subs_url_short": "La URL devuelve JSON de sing-box o una lista base64 de URI",
 	"subs_add": "Añadir",
 	"subs_refreshing": "Actualizando…",
 	"subs_refresh_now": "Actualizar ahora",
 	"subs_empty": "No hay suscripciones. 'Añadir' crea una nueva — introduce una URL, nombre y grupo.",
+	"subs_empty_title": "Sin suscripciones",
 	"subs_enabled_hint": "La suscripción cuenta durante la actualización",
 	"subs_group_hint": "Vacío — los nodos van a todos los grupos selector/urltest",
 	"subs_group": "Grupo",
@@ -301,6 +302,7 @@
 	"settings_help_app_update": "Las actualizaciones se descargan desde GitHub y se verifican por firma. 'Notificar' muestra una barra con un botón de instalación; 'Instalar automáticamente' instala y reinicia la app sin preguntar.",
 	"settings_file_section": "Archivo de ajustes",
 	"settings_help_file": "El archivo se lee como JSONC — se admiten comentarios y comas finales. Los cambios se detectan al vuelo, sin reiniciar.",
+	"settings_file_edit": "Editar",
 
 	"status_connected": "conectado",
 	"status_connecting": "conectando",

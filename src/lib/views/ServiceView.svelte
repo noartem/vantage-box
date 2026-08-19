@@ -1,16 +1,21 @@
 <script lang="ts">
-	import { api } from '$lib/api';
+	import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
+	import { api, errorText } from '$lib/api';
+	import { pushAlert } from '$lib/alerts.svelte';
 	import BinaryPanel from '$lib/components/BinaryPanel.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import InfoButton from '$lib/components/InfoButton.svelte';
 	import VersionsPanel from '$lib/components/VersionsPanel.svelte';
 	import { SERVICE_LABELS, runServiceAction } from '$lib/service-actions';
 	import { m } from '$lib/paraglide/messages.js';
 	import { runtimeConfigModal } from '$lib/runtime-config.svelte';
 	import { app } from '$lib/state.svelte';
 	import { tooltip } from '$lib/tooltip';
+	import type { TabId } from '$lib/tabs';
+
+	let { ongoto }: { ongoto: (tab: TabId) => void } = $props();
 
 	let busy = $state<string | null>(null);
-	let help = $state(false);
 
 	/** Tooltip text over buttons blocked by a running service. Lazy function:
 	 *  m.x() reads the locale at call time, not at module load. */
@@ -26,6 +31,12 @@
 	const serviceRequired = $derived(run !== null && !installed && run.tun);
 	const configPath = $derived(app.settings?.singBox.configPath ?? '');
 	const configMissing = $derived(configPath.trim() === '');
+	/** runtime.json lives next to settings.json — same dir, same name pattern as
+	 *  the backend's runtime_config_path() (config_dir()/runtime.json). Derived
+	 *  here so a backend round-trip is not needed just to show the path. */
+	const runtimePath = $derived(
+		app.settingsPath ? app.settingsPath.replace(/[^\\/]+$/, 'runtime.json') : ''
+	);
 
 	async function act(name: string, call: () => Promise<unknown>) {
 		busy = name;
@@ -35,12 +46,36 @@
 			busy = null;
 		}
 	}
+
+	/** Opens a path in the system editor / folder viewer. Surface errors as an
+	 *  alert instead of letting them sink silently — the file may not exist yet
+	 *  (runtime.json before the first start), and the opener will then reject. */
+	async function guard(action: () => Promise<unknown>) {
+		try {
+			await action();
+		} catch (e) {
+			pushAlert('error', errorText(e));
+		}
+	}
+
+	/** Which path was just copied — flips its inline icon to a check briefly. */
+	let copiedPath = $state<'config' | 'runtime' | null>(null);
+	async function copyPath(which: 'config' | 'runtime') {
+		const value = which === 'config' ? configPath : runtimePath;
+		if (!value) return;
+		await guard(async () => {
+			await navigator.clipboard.writeText(value);
+			copiedPath = which;
+			setTimeout(() => (copiedPath = null), 1500);
+		});
+	}
 </script>
 
 <div class="page">
-	<!-- Cards flow through columns: in a grid a row was as tall as the tallest
-		 section, and under a short one there was empty space to the end of the row. -->
-	<div class="masonry">
+	<!-- A flex row, not CSS columns: in a row the three blocks stretch to the
+		 tallest one's height, so no empty space is left between them and the
+		 versions table below. Wraps to a column on narrow windows. -->
+	<div class="top-row">
 		{#if !run}
 			<p class="hint">{m.common_reading_state()}</p>
 		{:else}
@@ -51,18 +86,15 @@
 						{running ? m.service_state_running() : m.service_state_stopped()}
 					</span>
 					<span class="spacer"></span>
-					<button
-						class="icon-btn"
-						class:on={help}
-						title={m.common_explanations()}
-						aria-label={m.common_explanations()}
-						onclick={() => (help = !help)}
-					>
-						<Icon name="info" size={13} />
-					</button>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>
+							{m.service_help_restart()}
+							<code class="inline">cache_file</code>.
+						</p>
+					</InfoButton>
 				</div>
 
-				<div class="form">
+				<div class="form aligned-baseline">
 					<span class="lbl">{m.service_launch()}</span>
 					<span>
 						{installed ? m.service_system_service() : m.service_child_process()}
@@ -77,9 +109,81 @@
 					</span>
 
 					<span class="lbl">{m.common_config()}</span>
-					<code class="path ell selectable" title={configPath || m.service_not_set()}>
-						{configPath || m.service_not_set()}
-					</code>
+					<!-- The path is a click-to-copy button (icon flips to a check);
+					     the actions live under it. The editor is on the Config tab;
+					     Open / Show in folder hand the file itself to the system. -->
+					<div class="path-cell">
+						<button
+							class="copy-path"
+							disabled={!configPath}
+							title={copiedPath === 'config' ? m.common_copied() : configPath || m.service_not_set()}
+							aria-label={m.common_copy()}
+							onclick={() => copyPath('config')}
+						>
+							<code class="path ell">{configPath || m.service_not_set()}</code>
+							<Icon name={copiedPath === 'config' ? 'check' : 'copy'} size={12} />
+						</button>
+						<div class="path-actions">
+							<button class="mini" disabled={!configPath} onclick={() => ongoto('config')}>
+								<Icon name="edit" size={12} />
+								{m.settings_file_edit()}
+							</button>
+							<button
+								class="mini"
+								disabled={!configPath}
+								onclick={() => guard(() => openPath(configPath))}
+							>
+								<Icon name="external" size={12} />
+								{m.common_open()}
+							</button>
+							<button
+								class="mini"
+								disabled={!configPath}
+								onclick={() => guard(() => revealItemInDir(configPath))}
+							>
+								<Icon name="folder" size={12} />
+								{m.common_show_in_folder()}
+							</button>
+						</div>
+					</div>
+
+					<span class="lbl">{m.runtime_config_title()}</span>
+					<!-- The runtime config is read-only — "Edit" opens the in-app viewer
+					     modal; Open / Show in folder hand the file to the system. -->
+					<div class="path-cell">
+						<button
+							class="copy-path"
+							disabled={!runtimePath}
+							title={copiedPath === 'runtime' ? m.common_copied() : runtimePath || m.service_not_set()}
+							aria-label={m.common_copy()}
+							onclick={() => copyPath('runtime')}
+						>
+							<code class="path ell">{runtimePath || m.service_not_set()}</code>
+							<Icon name={copiedPath === 'runtime' ? 'check' : 'copy'} size={12} />
+						</button>
+						<div class="path-actions">
+							<button class="mini" disabled={!runtimePath} onclick={() => runtimeConfigModal.show()}>
+								<Icon name="edit" size={12} />
+								{m.settings_file_edit()}
+							</button>
+							<button
+								class="mini"
+								disabled={!runtimePath}
+								onclick={() => guard(() => openPath(runtimePath))}
+							>
+								<Icon name="external" size={12} />
+								{m.common_open()}
+							</button>
+							<button
+								class="mini"
+								disabled={!runtimePath}
+								onclick={() => guard(() => revealItemInDir(runtimePath))}
+							>
+								<Icon name="folder" size={12} />
+								{m.common_show_in_folder()}
+							</button>
+						</div>
+					</div>
 				</div>
 
 				{#if configMissing}
@@ -105,19 +209,7 @@
 					>
 						{busy === 'restart' ? m.service_restarting() : m.service_soft_restart()}
 					</button>
-					<!-- Read-only view of the config sing-box was started with — for
-					     debugging. Works whether running or stopped. -->
-					<button disabled={busy !== null} onclick={() => runtimeConfigModal.show()}>
-						{m.service_view_runtime_config()}
-					</button>
 				</div>
-
-				{#if help}
-					<p class="hint">
-						{m.service_help_restart()}
-						<code class="inline">cache_file</code>.
-					</p>
-				{/if}
 			</section>
 
 			{#if run.service.supported}
@@ -128,6 +220,17 @@
 							{SERVICE_LABELS[run.service.state]()}
 						</span>
 						<span class="spacer"></span>
+						<InfoButton label={() => m.common_explanations()}>
+							<p>
+								{#if installed}
+									{m.service_help_installed()}
+								{:else if run.tun}
+									{m.service_help_tun_required()}
+								{:else}
+									{m.service_help_not_needed()}
+								{/if}
+							</p>
+						</InfoButton>
 					</div>
 
 					<div class="form">
@@ -171,18 +274,6 @@
 							</span>
 						{/if}
 					</div>
-
-					{#if help}
-						<p class="hint">
-							{#if installed}
-								{m.service_help_installed()}
-							{:else if run.tun}
-								{m.service_help_tun_required()}
-							{:else}
-								{m.service_help_not_needed()}
-							{/if}
-						</p>
-					{/if}
 				</section>
 			{:else}
 				<p class="hint">{run.service.detail}</p>
@@ -208,6 +299,82 @@
 		display: flex;
 		align-items: center;
 		gap: var(--sp-3);
+	}
+
+	/* Top row of blocks: equal width, equal height (stretch), wraps when narrow.
+	   Stretching closes the gap to the versions table below. */
+	.top-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--sp-4);
+		align-items: stretch;
+	}
+
+	.top-row > :global(.section) {
+		flex: 1 1 330px;
+		min-width: 0;
+	}
+
+	/* The state form pairs a label with a value, then a path cell that stacks a
+	   copyable path and the action buttons. Baseline, not center: the mono path
+	   sits higher than the sans label, so center alignment put them on different
+	   lines. Baseline puts the label and the path text on one line; the buttons
+	   stay stacked under the path. */
+	.aligned-baseline {
+		align-items: baseline;
+	}
+
+	/* A path shown as a click-to-copy button, with the actions stacked underneath. */
+	.path-cell {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--sp-2);
+	}
+
+	/* Click-to-copy: the path reads like the code it replaces (mono, ellipsized,
+	   accent on hover) and the icon flips to a check briefly. Resets the global
+	   button chrome so it sits on the value line. */
+	.copy-path {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-2);
+		width: 100%;
+		text-align: left;
+		height: auto;
+		min-height: 0;
+		padding: 0;
+		background: transparent;
+		border: none;
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	.copy-path:hover:not(:disabled) {
+		border: none;
+		color: var(--accent);
+	}
+
+	.copy-path .path {
+		flex: 1;
+		min-width: 0;
+	}
+
+	/* The row of follow-up actions under a path: edit / open / show in folder. */
+	.path-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-2);
+		flex-wrap: wrap;
+	}
+
+	/* A compact button under a path — smaller than the 22px service controls so
+	   it reads as a follow-up action, not a primary one. */
+	.mini {
+		height: auto;
+		min-height: 0;
+		padding: var(--sp-1) var(--sp-3);
+		font-size: var(--fs-sm);
 	}
 
 	.path {

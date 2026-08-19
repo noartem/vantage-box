@@ -18,6 +18,7 @@ import type {
 	RuntimeConfigView,
 	RunStatus,
 	Settings,
+	SettingsFileView,
 	SubscriptionsState,
 	Traffic
 } from './types';
@@ -26,6 +27,10 @@ export const api = {
 	getSettings: () => invoke<Settings>('get_settings'),
 	getSettingsPath: () => invoke<string>('get_settings_path'),
 	saveSettings: (settings: Settings) => invoke<Settings>('save_settings', { settings }),
+	/** The raw settings.json for the built-in editor. */
+	readSettingsFile: () => invoke<SettingsFileView>('read_settings_file'),
+	/** Parses JSONC and writes through the store (emits settings://changed). */
+	writeSettingsFile: (content: string) => invoke<Settings>('write_settings_file', { content }),
 
 	getStatus: () => invoke<ConnectionStatus>('get_status'),
 

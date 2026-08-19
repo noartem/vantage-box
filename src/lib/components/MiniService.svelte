@@ -38,6 +38,13 @@
 		</span>
 
 		<span class="spacer"></span>
+
+		{#if run}
+			<span class="ver muted mono">
+				{app.binaryInfo?.version ??
+					(app.binaryInfo?.present ? m.service_version_undefined() : m.service_no_file())}
+			</span>
+		{/if}
 	</div>
 
 	{#if !run}
@@ -52,18 +59,13 @@
 				{/if}
 			</span>
 
-			{#if run.service.supported}
+			{#if run.service.supported && run.service.state !== 'running' && run.service.state !== 'stopped'}
 				<span class="lbl">{m.service_service_label()}</span>
 				<span>{SERVICE_LABELS[run.service.state]()}</span>
 			{/if}
 
 			<span class="lbl">{m.service_tun_in_config()}</span>
 			<span class:warnish={serviceRequired}>{run.tun ? m.service_tun_present_short() : m.service_tun_absent()}</span>
-
-			<span class="lbl">{m.common_version()}</span>
-			<span class="mono">
-				{app.binaryInfo?.version ?? (app.binaryInfo?.present ? m.service_version_undefined() : m.service_no_file())}
-			</span>
 		</div>
 
 		{#if configMissing}
@@ -80,15 +82,18 @@
 				disabled={busy !== null || running || serviceRequired || configMissing}
 				onclick={() => act('start', api.start)}
 			>
+				<Icon name="play" size={12} fill />
 				{busy === 'start' ? m.service_starting() : m.service_start()}
 			</button>
 			<button disabled={busy !== null || !running} onclick={() => act('stop', api.stop)}>
+				<Icon name="stop" size={12} fill />
 				{busy === 'stop' ? m.service_stopping() : m.service_stop()}
 			</button>
 			<button
 				disabled={busy !== null || !running || configMissing}
 				onclick={() => act('restart', api.restart)}
 			>
+				<Icon name="restart" size={13} />
 				{busy === 'restart' ? m.service_restarting() : m.service_restart()}
 			</button>
 		</div>
@@ -96,6 +101,18 @@
 </section>
 
 <style>
+	/* The block is a digest next to the traffic chart, so it is denser than the
+	   shared .section: tighter padding and row gap keep it from towering over
+	   the row. */
+	.section {
+		padding: var(--sp-3);
+		gap: var(--sp-2);
+	}
+
+	.form {
+		gap: var(--sp-1) var(--sp-4);
+	}
+
 	.head {
 		display: flex;
 		align-items: center;
@@ -117,6 +134,20 @@
 	.title:hover:not(:disabled) {
 		border: none;
 		color: var(--accent);
+	}
+
+	/* Version tucked into the header right; the form keeps only launch mode and
+	   TUN, so the block is one row shorter. */
+	.ver {
+		font-size: var(--fs-sm);
+		white-space: nowrap;
+	}
+
+	/* Icon + label sit on one baseline. */
+	.toolbar button {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--sp-2);
 	}
 
 	.warnish {

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from '@codemirror/autocomplete';
+	import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 	import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 	import {
 		HighlightStyle,
@@ -32,11 +32,10 @@
 	} from '@codemirror/view';
 	import { tags } from '@lezer/highlight';
 	import type { JSONSchema7 } from 'json-schema';
-	import { json5, json5Language, json5ParseLinter } from 'codemirror-json5';
+	import { json5, json5ParseLinter } from 'codemirror-json5';
 	import { json5SchemaHover } from 'codemirror-json-schema/json5';
 	import { stateExtensions } from 'codemirror-json-schema';
 	import { jsoncLinter } from '$lib/jsonc-lint';
-	import { jsoncCompletion } from '$lib/double-quote-completion';
 	import SchemaLintWorker from '$lib/schema-lint-worker?worker';
 	import { autocompleteSchema, lintSchemaForVersion } from '$lib/singbox-schemas';
 
@@ -58,6 +57,7 @@
 		onsave,
 		ondiagnostics,
 		version = null,
+		schema = null,
 		readOnly = false
 	}: {
 		value: string;
@@ -69,7 +69,11 @@
 		ondiagnostics?: (diags: EditorDiagnostic[]) => void;
 		/** The running sing-box version — used to pick the linter schema. */
 		version?: string | null;
-		/** Read-only viewer mode: no linting, no autocomplete, no editing — just
+		/** An explicit schema to lint/hover against. When set, it overrides the
+		 *  sing-box version lookup — used by the settings editor, which lints
+		 *  against settings.schema.json regardless of the sing-box version. */
+		schema?: JSONSchema7 | null;
+		/** Read-only viewer mode: no linting, no editing — just
 		 *  syntax highlighting, line numbers and folding. */
 		readOnly?: boolean;
 	} = $props();
@@ -177,14 +181,14 @@
 				indentOnInput(),
 				bracketMatching(),
 				closeBrackets(),
-				autocompletion(),
 				lintGutter(),
-				// Autocomplete and hover — always from the official 1.14 schema: it has
-				// Russian descriptions and a union transform, and the field hints are
-				// version-neutral.
-				json5Language.data.of({ autocomplete: jsoncCompletion() }),
+				// Hover tooltips come from the active schema — the sing-box 1.14 schema
+				// by default (Russian descriptions, union transform, version-neutral field
+				// hints), or an explicit `schema` prop (the settings editor lints against
+				// settings.schema.json). Autocomplete was removed: the schema-driven
+				// completion source recomputed on every keystroke and froze typing.
 				hoverTooltip(json5SchemaHover()),
-				stateExtensions(autocompleteSchema),
+				stateExtensions(schema ?? autocompleteSchema),
 				linter(json5ParseLinter()),
 				// The schema linter is asynchronous; validation runs in a Web worker
 				// (schema-lint-worker.ts). The schema for the sing-box version is sent
@@ -207,7 +211,6 @@
 					...searchKeymap,
 					...historyKeymap,
 					...foldKeymap,
-					...completionKeymap,
 					...lintKeymap,
 					indentWithTab
 				]),
@@ -293,10 +296,12 @@
 	$effect(() => {
 		// Read-only viewers do not lint — no schema to swap.
 		if (readOnly) return;
-		// sing-box version change → swap the linter schema and force a re-lint so
-		// the errors recompute against the new schema.
+		// An explicit `schema` prop wins (settings editor); otherwise the sing-box
+		// version picks the linter schema. A version change swaps it and forces a
+		// re-lint so the errors recompute against the new schema.
 		version;
-		const next = lintSchemaForVersion(version);
+		schema;
+		const next = schema ?? lintSchemaForVersion(version);
 		if (next === activeLintSchema) return;
 		activeLintSchema = next;
 		// Send the schema to the worker first — postMessage preserves order, so the

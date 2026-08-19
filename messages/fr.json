@@ -42,6 +42,7 @@
 	"common_show_in_folder": "Afficher dans le dossier",
 	"common_unsaved_changes": "modifications non enregistrées",
 	"common_loading_settings": "Chargement des paramètres…",
+	"common_loading": "Chargement…",
 	"common_reading_state": "Lecture de l'état…",
 	"common_no_filter_match": "Rien ne correspond au filtre.",
 
@@ -140,7 +141,7 @@
 	"binary_manual_hint": "Le chemin est défini manuellement, donc Vantage Box ne touche pas à ce fichier — il signale seulement les versions incompatibles. Videz le champ « fichier sing-box » dans Paramètres pour confier la gestion de la version à l'application.",
 	"binary_reading": "Lecture des infos du fichier…",
 
-	"versions_compat_supported": "dans la plage",
+	"versions_compat_supported": "conforme",
 	"versions_compat_too_new": "plus récent",
 	"versions_compat_too_old": "plus ancien",
 	"versions_compat_unknown": "—",
@@ -201,11 +202,11 @@
 	"subs_no_restart_suffix": " Config mise à jour sans redémarrage.",
 	"subs_count": "{count} abonnements",
 	"subs_url_hint": "L'URL peut renvoyer une config sing-box avec des outbounds, un tableau brut d'outbounds, ou une liste base64 de ss:// vmess:// vless:// trojan:// hysteria2:// tuic://",
-	"subs_url_short": "L'URL renvoie du JSON sing-box ou une liste d'URI base64",
 	"subs_add": "Ajouter",
 	"subs_refreshing": "Actualisation…",
 	"subs_refresh_now": "Actualiser maintenant",
 	"subs_empty": "Aucun abonnement. « Ajouter » en crée un nouveau — saisissez une URL, un nom et un groupe.",
+	"subs_empty_title": "Aucun abonnement",
 	"subs_enabled_hint": "Compte parmi les abonnements lors de l'actualisation",
 	"subs_group_hint": "Vide — les nœuds vont dans tous les groupes selector/urltest",
 	"subs_group": "Groupe",
@@ -301,6 +302,7 @@
 	"settings_help_app_update": "Les mises à jour sont téléchargées depuis GitHub et vérifiées par signature. « Notifier » affiche une barre avec un bouton d'installation ; « Installer automatiquement » installe et relance l'application sans demander.",
 	"settings_file_section": "Fichier de paramètres",
 	"settings_help_file": "Le fichier est lu en tant que JSONC — les commentaires et les virgules finales sont autorisés. Les modifications sont prises en compte à la volée, aucun redémarrage nécessaire.",
+	"settings_file_edit": "Modifier",
 
 	"status_connected": "connecté",
 	"status_connecting": "connexion",

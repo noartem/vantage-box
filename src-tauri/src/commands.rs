@@ -44,6 +44,42 @@ pub fn save_settings(
     Ok(settings)
 }
 
+/// The raw `settings.json` for the built-in editor — comments and formatting
+/// preserved, exactly what is on disk. Read-only from the store's standpoint:
+/// the editor parses and writes through `write_settings_file`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsFileView {
+    pub path: String,
+    pub content: String,
+}
+
+#[tauri::command]
+pub fn read_settings_file(state: State<'_, AppState>) -> Result<SettingsFileView> {
+    let path = state.settings.path().to_path_buf();
+    let display = path.display().to_string();
+    let content = std::fs::read_to_string(&path).map_err(|e| Error::io(&display, e))?;
+    Ok(SettingsFileView { path: display, content })
+}
+
+/// Writes the editor contents to `settings.json`. The text is parsed as JSONC
+/// and saved through the store — same path as `save_settings`, so the watcher,
+/// `apply_settings` and the `settings://changed` event all fire as usual.
+#[tauri::command]
+pub fn write_settings_file(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    content: String,
+) -> Result<Settings> {
+    let path = state.settings.path().display().to_string();
+    let next: Settings =
+        serde_json::from_str(&strip_jsonc(&content)).map_err(|e| Error::parse(&path, e))?;
+    let previous = state.settings.get();
+    state.settings.save(next.clone())?;
+    state::apply_settings(&app, &state, &previous, &next)?;
+    Ok(next)
+}
+
 // ---------------------------------------------------------------------------
 // Connection
 // ---------------------------------------------------------------------------

@@ -2,9 +2,9 @@
 //
 // The point: without the union transform (see gen-singbox-schema.mjs) the
 // json-schema-library resolver returns a bare `oneOf` with no `properties` at
-// inbounds/outbounds/route.rules nodes — autocomplete and hints simply don't
-// appear there. A regression of that kind can't be caught by eye, so we check
-// exactly the points the schema was reworked for.
+// inbounds/outbounds/route.rules nodes — hover hints simply don't appear there.
+// A regression of that kind can't be caught by eye, so we check exactly the
+// points the schema was reworked for.
 //
 // Run: task schema:verify  (or npm run schema:verify)
 
@@ -32,10 +32,10 @@ const sample = {
 	experimental: { clash_api: { external_controller: '127.0.0.1:9090' } }
 };
 
-// ── 1. Resolve at the points where autocomplete and hints live ───────────────
-// codemirror-json-schema uses Draft07 for autocomplete (features/completion.js).
-console.log('\nSchema resolve (autocomplete and hover):');
-const completion = new Draft07(schema);
+// ── 1. Resolve at the points where hover hints live ──────────────────────────
+// codemirror-json-schema uses Draft07 for hover tooltips (features/hover.js).
+console.log('\nSchema resolve (hover):');
+const resolver = new Draft07(schema);
 const EXPECTED = [
 	['#/route/rules/0', 60],
 	['#/inbounds/0', 80],
@@ -46,7 +46,7 @@ const EXPECTED = [
 for (const [pointer, min] of EXPECTED) {
 	let count = 0;
 	try {
-		const sub = completion.getSchema({ pointer, data: sample });
+		const sub = resolver.getSchema({ pointer, data: sample });
 		count = sub?.properties ? Object.keys(sub.properties).length : 0;
 	} catch (err) {
 		count = 0;
@@ -59,7 +59,7 @@ for (const [pointer, min] of EXPECTED) {
 console.log('\nSignatures:');
 const described = (pointer, field) => {
 	try {
-		const sub = completion.getSchema({ pointer, data: sample });
+		const sub = resolver.getSchema({ pointer, data: sample });
 		return sub?.properties?.[field]?.description ?? null;
 	} catch {
 		return null;

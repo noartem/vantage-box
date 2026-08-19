@@ -59,7 +59,7 @@ tasks:
       - npm run schema:update
 
   verify:editor:
-    desc: 'Config editor checks: JSONC mode, autocomplete, signatures, validation'
+    desc: 'Config editor checks: JSONC mode, hover resolution, signatures, validation'
     cmds:
       - npm run verify:editor
 

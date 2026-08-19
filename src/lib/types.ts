@@ -265,3 +265,9 @@ export interface RuntimeConfigView {
 	path: string;
 	content: string;
 }
+
+/** The raw settings.json for the built-in editor — exactly what is on disk. */
+export interface SettingsFileView {
+	path: string;
+	content: string;
+}

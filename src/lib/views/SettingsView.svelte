@@ -3,6 +3,8 @@
 	import { api, errorText } from '$lib/api';
 	import { pushAlert } from '$lib/alerts.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import InfoButton from '$lib/components/InfoButton.svelte';
+	import SettingsFileModal from '$lib/components/SettingsFileModal.svelte';
 	import {
 		LANGUAGE_OPTIONS,
 		getLanguagePreference,
@@ -11,6 +13,7 @@
 	} from '$lib/i18n.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
+	import { settingsFileModal } from '$lib/settings-file.svelte';
 	import type { Settings } from '$lib/types';
 
 	/** Whether the settings tab is active. Tabs are not destroyed on switch, so
@@ -18,10 +21,6 @@
 	 *  hotkey recording when leaving — otherwise the capture listener would stay
 	 *  active in other tabs and intercept keys. */
 	let { active = true }: { active?: boolean } = $props();
-
-	/** Explanations are collapsed: six paragraphs in flow took more space than
-	 *  all the fields combined. */
-	let help = $state(false);
 
 	let draft = $state<Settings | null>(null);
 	let saving = $state(false);
@@ -98,6 +97,16 @@
 		});
 	}
 
+	/** Click the settings file path to copy it. */
+	let pathCopied = $state(false);
+	async function copyPath() {
+		await guard(async () => {
+			await navigator.clipboard.writeText(app.settingsPath);
+			pathCopied = true;
+			setTimeout(() => (pathCopied = false), 1500);
+		});
+	}
+
 	// -------------------------------------------------------------------------
 	// Hotkey recording
 	// -------------------------------------------------------------------------
@@ -170,26 +179,19 @@
 
 <div class="page">
 	{#if draft}
-		<div class="toolbar">
-			<span class="count">{m.settings_title()}</span>
-			<span class="spacer"></span>
-			<button
-				class="icon-btn"
-				class:on={help}
-				title={m.settings_help_title()}
-				aria-label={m.common_explanations()}
-				onclick={() => (help = !help)}
-			>
-				<Icon name="info" size={13} />
-			</button>
-		</div>
-
 		<!-- All nine sections at once, flowing through columns: in a single scroll
 			 they gave a page of about 1700px in a 720px window, and in a grid a short
-			 section left empty space to the end of the row. -->
+			 section left empty space to the end of the row. Each section's title
+			 carries its own "?" with the explanation. -->
 		<div class="masonry">
 			<section class="section">
-				<h3 class="section-title">Clash API</h3>
+				<div class="head">
+					<h3 class="section-title">Clash API</h3>
+					<span class="spacer"></span>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>{m.settings_help_clash_api()}</p>
+					</InfoButton>
+				</div>
 				<div class="form">
 					<label>
 						<span>{m.settings_address()}</span>
@@ -235,15 +237,16 @@
 						</select>
 					</label>
 				</div>
-				{#if help}
-					<p class="hint">
-						{m.settings_help_clash_api()}
-					</p>
-				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">sing-box</h3>
+				<div class="head">
+					<h3 class="section-title">sing-box</h3>
+					<span class="spacer"></span>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>{m.settings_help_singbox()}</p>
+					</InfoButton>
+				</div>
 				<div class="form">
 					<label>
 						<span>{m.common_config()}</span>
@@ -290,15 +293,16 @@
 						</select>
 					</label>
 				</div>
-				{#if help}
-					<p class="hint">
-						{m.settings_help_singbox()}
-					</p>
-				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">{m.settings_ui_section()}</h3>
+				<div class="head">
+					<h3 class="section-title">{m.settings_ui_section()}</h3>
+					<span class="spacer"></span>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>{m.settings_help_ui()}</p>
+					</InfoButton>
+				</div>
 				<div class="form">
 					<label>
 						<span>{m.settings_theme()}</span>
@@ -323,15 +327,16 @@
 						/>
 					</label>
 				</div>
-				{#if help}
-					<p class="hint">
-						{m.settings_help_ui()}
-					</p>
-				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">{m.settings_language()}</h3>
+				<div class="head">
+					<h3 class="section-title">{m.settings_language()}</h3>
+					<span class="spacer"></span>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>{m.settings_help_language()}</p>
+					</InfoButton>
+				</div>
 				<div class="form">
 					<label>
 						<span>{m.settings_language()}</span>
@@ -345,15 +350,22 @@
 						</select>
 					</label>
 				</div>
-				{#if help}
-					<p class="hint">
-						{m.settings_help_language()}
-					</p>
-				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">{m.settings_autoswitch()}</h3>
+				<div class="head">
+					<h3 class="section-title">{m.settings_autoswitch()}</h3>
+					<span class="spacer"></span>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>
+							{m.settings_help_autoswitch_pre()}
+							<em>{m.settings_help_interval()}</em>
+							{m.settings_help_autoswitch_mid()}
+							<code class="inline">urltest</code>
+							{m.settings_help_autoswitch_post()}
+						</p>
+					</InfoButton>
+				</div>
 				<div class="form">
 					<label>
 						<span>{m.common_enabled()}</span>
@@ -406,19 +418,16 @@
 						/>
 					</label>
 				</div>
-				{#if help}
-					<p class="hint">
-						{m.settings_help_autoswitch_pre()}
-						<em>{m.settings_help_interval()}</em>
-						{m.settings_help_autoswitch_mid()}
-						<code class="inline">urltest</code>
-						{m.settings_help_autoswitch_post()}
-					</p>
-				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">{m.settings_tray_section()}</h3>
+				<div class="head">
+					<h3 class="section-title">{m.settings_tray_section()}</h3>
+					<span class="spacer"></span>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>{m.settings_help_tray()}</p>
+					</InfoButton>
+				</div>
 				<div class="form">
 					<label>
 						<span>{m.settings_tray_icon()}</span>
@@ -437,15 +446,25 @@
 						<input type="checkbox" bind:checked={draft.autostart} />
 					</label>
 				</div>
-				{#if help}
-					<p class="hint">
-						{m.settings_help_tray()}
-					</p>
-				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">{m.settings_hotkeys()}</h3>
+				<div class="head">
+					<h3 class="section-title">{m.settings_hotkeys()}</h3>
+					<span class="spacer"></span>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>
+							{m.settings_help_hotkeys_a()}
+							<code class="inline">Ctrl</code>, <code class="inline">Alt</code>,
+							<code class="inline">Shift</code>, <code class="inline">Super</code>
+							{m.settings_help_hotkeys_b()}
+							<code class="inline">Esc</code>
+							{m.settings_help_hotkeys_c()}
+							<code class="inline">+</code>
+							{m.settings_help_hotkeys_d()}
+						</p>
+					</InfoButton>
+				</div>
 				<div class="form">
 					{#each [{ id: 'proxyPopup', label: () => m.settings_hotkey_proxy_popup() }, { id: 'toggle', label: () => m.settings_hotkey_toggle() }] as item (item.id)}
 						{@const name = item.id as 'proxyPopup' | 'toggle'}
@@ -480,22 +499,16 @@
 				{#if app.hotkeyProblems.length > 0}
 					<div class="banner">{m.settings_hotkey_failed()}: {app.hotkeyProblems.join(', ')}</div>
 				{/if}
-				{#if help}
-					<p class="hint">
-						{m.settings_help_hotkeys_a()}
-						<code class="inline">Ctrl</code>, <code class="inline">Alt</code>,
-						<code class="inline">Shift</code>, <code class="inline">Super</code>
-						{m.settings_help_hotkeys_b()}
-						<code class="inline">Esc</code>
-						{m.settings_help_hotkeys_c()}
-						<code class="inline">+</code>
-						{m.settings_help_hotkeys_d()}
-					</p>
-				{/if}
 			</section>
 
 			<section class="section">
-				<h3 class="section-title">{m.settings_app_update()}</h3>
+				<div class="head">
+					<h3 class="section-title">{m.settings_app_update()}</h3>
+					<span class="spacer"></span>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>{m.settings_help_app_update()}</p>
+					</InfoButton>
+				</div>
 				<div class="form">
 					<label>
 						<span>{m.settings_check_updates()}</span>
@@ -506,21 +519,35 @@
 						</select>
 					</label>
 				</div>
-				{#if help}
-					<p class="hint">
-						{m.settings_help_app_update()}
-					</p>
-				{/if}
 			</section>
 
 			<!-- The settings file — for those who edit it by hand; hence last. -->
 			<section class="section">
-				<h3 class="section-title">{m.settings_file_section()}</h3>
-				<div class="form">
+				<div class="head">
+					<h3 class="section-title">{m.settings_file_section()}</h3>
+					<span class="spacer"></span>
+					<InfoButton label={() => m.common_explanations()}>
+						<p>{m.settings_help_file()}</p>
+					</InfoButton>
+				</div>
+				<div class="form baseline-row">
 					<span class="lbl">{m.common_path()}</span>
-					<code class="path selectable ell" title={app.settingsPath}>{app.settingsPath}</code>
+					<!-- Click the path to copy it; the icon flips to a check briefly. -->
+					<button
+						class="copy-path"
+						title={pathCopied ? m.common_copied() : app.settingsPath}
+						aria-label={m.common_copy()}
+						onclick={copyPath}
+					>
+						<span class="path ell">{app.settingsPath}</span>
+						<Icon name={pathCopied ? 'check' : 'copy'} size={12} />
+					</button>
 				</div>
 				<div class="toolbar">
+					<button class="primary" onclick={() => settingsFileModal.show()}>
+						<Icon name="edit" size={12} />
+						{m.settings_file_edit()}
+					</button>
 					<button onclick={() => guard(() => openPath(app.settingsPath))}>
 						<Icon name="external" size={12} />
 						{m.common_open()}
@@ -530,11 +557,6 @@
 						{m.common_show_in_folder()}
 					</button>
 				</div>
-				{#if help}
-					<p class="hint">
-						{m.settings_help_file()}
-					</p>
-				{/if}
 			</section>
 		</div>
 
@@ -545,6 +567,10 @@
 			<button onclick={() => app.refreshSettings()} disabled={!dirty || saving}>{m.common_cancel()}</button>
 			{#if dirty}<span class="hint">{m.common_unsaved_changes()}</span>{/if}
 		</div>
+
+		<!-- In-app editor for settings.json. Store-driven, so it can be opened from
+		     the file section above without prop drilling. -->
+		<SettingsFileModal />
 	{:else}
 		<p class="hint">{m.common_loading_settings()}</p>
 	{/if}
@@ -561,8 +587,11 @@
 		min-height: 100%;
 	}
 
-	.count {
-		font-weight: 600;
+	/* Section title row: the label and its "?" explanation button. */
+	.head {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-3);
 	}
 
 	/* Field with buttons on the right: buttons size to content, the field takes the rest. */
@@ -584,9 +613,46 @@
 		gap: var(--sp-2);
 	}
 
+	/* The settings file path as a click-to-copy button: mono, ellipsized, accent
+	   on hover — reads like the code it replaces. Resets the global button chrome
+	   (background/border/22px height) so it sits on the value line. */
+	.copy-path {
+		display: flex;
+		align-items: center;
+		gap: var(--sp-2);
+		width: 100%;
+		font-family: var(--mono);
+		font-size: var(--fs-sm);
+		text-align: left;
+		height: auto;
+		min-height: 0;
+		padding: 0;
+		background: transparent;
+		border: none;
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	.copy-path:hover {
+		border: none;
+		color: var(--accent);
+	}
+
+	.copy-path .path {
+		flex: 1;
+		min-width: 0;
+	}
+
 	.path {
 		font-family: var(--mono);
 		font-size: var(--fs-sm);
+	}
+
+	/* The path row: align the "Path" label with the mono path by baseline, not
+	   box center — the mono font sits higher than the sans label, so center
+	   alignment made the path read above the label. */
+	.baseline-row {
+		align-items: baseline;
 	}
 
 	.hint {

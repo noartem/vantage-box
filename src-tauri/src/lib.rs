@@ -192,6 +192,8 @@ pub fn run() {
             commands::get_settings,
             commands::get_settings_path,
             commands::save_settings,
+            commands::read_settings_file,
+            commands::write_settings_file,
             commands::get_status,
             commands::get_proxies,
             commands::select_proxy,

@@ -6,6 +6,7 @@
 	import { app } from '$lib/state.svelte';
 	import type { InstallOutcome, ReleaseCatalog, ReleaseInfo, Settings } from '$lib/types';
 	import Icon from './Icon.svelte';
+	import InfoButton from './InfoButton.svelte';
 
 	/** Compatibility labels — lazy functions: m.x() reads the locale at call time,
 	 *  not at module load. Callers invoke COMPAT_LABELS[key](). */
@@ -133,12 +134,6 @@
 	);
 </script>
 
-{#if !managed && app.binaryInfo}
-	<div class="banner warn">
-		{m.versions_manual_banner()}
-	</div>
-{/if}
-
 <section class="section">
 	<div class="head">
 		<h3 class="section-title">{m.versions_title()}</h3>
@@ -153,7 +148,16 @@
 		>
 			<Icon name="refresh" size={13} />
 		</button>
+		<InfoButton label={() => m.common_explanations()}>
+			<p>{m.versions_hint()}</p>
+		</InfoButton>
 	</div>
+
+	{#if !managed && app.binaryInfo}
+		<div class="banner warn">
+			{m.versions_manual_banner()}
+		</div>
+	{/if}
 
 	{#if catalog && catalog.releases.length > 0}
 		<div class="tbl">
@@ -161,7 +165,10 @@
 				<div class="tbl-row" class:active={release.active}>
 					<span class="mono">{release.version}</span>
 
-					<span class="chip" data-tone={release.compatibility === 'supported' ? 'good' : undefined}>
+					<span
+						class="chip compat"
+						data-tone={release.compatibility === 'supported' ? 'good' : undefined}
+					>
 						{COMPAT_LABELS[release.compatibility]?.() ?? '—'}
 					</span>
 
@@ -221,10 +228,6 @@
 				</div>
 			{/each}
 		</div>
-
-		<p class="hint">
-			{m.versions_hint()}
-		</p>
 	{:else if catalog}
 		<p class="hint">
 			{m.versions_empty()}
@@ -267,9 +270,17 @@
 	}
 
 	.tbl-row {
-		grid-template-columns: 68px 76px 1fr max-content var(--h-ctl);
+		grid-template-columns: 68px 88px 1fr max-content var(--h-ctl);
 		border-radius: var(--radius-ctl);
 		border-bottom: none;
+	}
+
+	/* The compatibility chip fills its column and centers, so labels of
+	   different lengths align the same way. */
+	.compat {
+		width: 100%;
+		justify-content: center;
+		text-align: center;
 	}
 
 	.tbl-row button:not(.icon-btn) {

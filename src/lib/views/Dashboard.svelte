@@ -59,8 +59,8 @@
 		<div class="banner">{error}</div>
 	{/if}
 
-	<!-- Top row: service controls next to the in/out traffic charts. The service
-		 section is taller than the chart strip, so the row is aligned to the top. -->
+	<!-- Top row: service controls (a quarter of the width) next to the in/out
+		 traffic charts (three quarters). Both blocks stretch to the same height. -->
 	<div class="top">
 		<MiniService onopen={() => ongoto('service')} />
 		<TrafficChart history={app.trafficHistory} current={app.traffic} />
@@ -98,12 +98,29 @@
 		align-content: start;
 	}
 
-	/* Service and charts — two equal columns; on a narrow window they stack. */
+	/* Service and traffic chart: a quarter / three quarters on a wide window,
+	   half / half in the mid range, and stacked on a narrow one. Both blocks
+	   stretch to the same height — the chart card is exactly as tall as the
+	   service card. */
 	.top {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-		align-items: start;
+		grid-template-columns: minmax(240px, 1fr) minmax(0, 3fr);
+		align-items: stretch;
 		gap: var(--sp-4);
+	}
+
+	/* Mid range: not enough width for a one-quarter service block to keep its
+	   form readable, so the two columns go equal. */
+	@media (max-width: 1340px) {
+		.top {
+			grid-template-columns: minmax(240px, 1fr) minmax(0, 1fr);
+		}
+	}
+
+	@media (max-width: 720px) {
+		.top {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.groups {

@@ -42,6 +42,7 @@
 	"common_show_in_folder": "Показать в папке",
 	"common_unsaved_changes": "несохранённые изменения",
 	"common_loading_settings": "Загрузка настроек…",
+	"common_loading": "Загрузка…",
 	"common_reading_state": "Чтение состояния…",
 	"common_no_filter_match": "Ничего не подходит под фильтр.",
 
@@ -140,7 +141,7 @@
 	"binary_manual_hint": "Путь задан вручную, поэтому Vantage Box не трогает этот файл — лишь сообщает о несовместимых версиях. Очистите поле «Файл sing-box» в Настройках, чтобы передать управление версией приложению.",
 	"binary_reading": "Чтение сведений о файле…",
 
-	"versions_compat_supported": "в диапазоне",
+	"versions_compat_supported": "подходит",
 	"versions_compat_too_new": "новее",
 	"versions_compat_too_old": "старее",
 	"versions_compat_unknown": "—",
@@ -201,11 +202,11 @@
 	"subs_no_restart_suffix": " Конфиг обновлён без перезапуска.",
 	"subs_count": "{count} подписок",
 	"subs_url_hint": "URL может возвращать конфиг sing-box с outbounds, простой массив outbounds или список base64 из ss:// vmess:// vless:// trojan:// hysteria2:// tuic://",
-	"subs_url_short": "URL возвращает JSON sing-box или список base64-URI",
 	"subs_add": "Добавить",
 	"subs_refreshing": "Обновление…",
 	"subs_refresh_now": "Обновить сейчас",
 	"subs_empty": "Подписок нет. Кнопка «Добавить» создаёт новую — укажите URL, имя и группу.",
+	"subs_empty_title": "Подписок нет",
 	"subs_enabled_hint": "Подписка учитывается при обновлении",
 	"subs_group_hint": "Пусто — узлы идут во все группы selector/urltest",
 	"subs_group": "Группа",
@@ -301,6 +302,7 @@
 	"settings_help_app_update": "Обновления скачиваются с GitHub и проверяются подписью. «Уведомлять» показывает панель с кнопкой установки; «Устанавливать автоматически» устанавливает и перезапускает приложение без спроса.",
 	"settings_file_section": "Файл настроек",
 	"settings_help_file": "Файл читается как JSONC — комментарии и завершающие запятые допустимы. Правки подхватываются на лету, перезапуск не нужен.",
+	"settings_file_edit": "Изменить",
 
 	"status_connected": "подключено",
 	"status_connecting": "подключение",

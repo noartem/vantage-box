@@ -2,6 +2,7 @@
 	import { api, errorText } from '$lib/api';
 	import { pushAlert } from '$lib/alerts.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import InfoButton from '$lib/components/InfoButton.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { app } from '$lib/state.svelte';
 	import type { Settings, SubStateEntry, SubscriptionSettings } from '$lib/types';
@@ -129,13 +130,15 @@
 	{#if draft}
 		<div class="toolbar">
 			<span class="count">{m.subs_count({ count: draft.subscriptions.length })}</span>
-			<span
-				class="hint ell"
-				title={m.subs_url_hint()}
-			>
-				{m.subs_url_short()}
-			</span>
 			<span class="spacer"></span>
+			<InfoButton label={() => m.common_explanations()}>
+				<p>{m.subs_url_hint()}</p>
+				<p>
+					{m.subs_hint_pre()}
+					<code class="inline">sub:</code>
+					{m.subs_hint_post()}
+				</p>
+			</InfoButton>
 			<button onclick={add}>
 				<Icon name="plus" size={12} />
 				{m.subs_add()}
@@ -145,24 +148,30 @@
 			</button>
 		</div>
 
-		{#if draft.subscriptions.length === 0}
-			<p class="hint">{m.subs_empty()}</p>
-		{:else}
-			<!-- Rows are edited right in the table: previously each subscription was
-				 a card with five label rows, i.e. ~230px for four fields. -->
-			<div class="table card">
-				<div class="row head">
-					<span title={m.subs_enabled_hint()}></span>
-					<span>{m.common_name()}</span>
-					<span>URL</span>
-					<span title={m.subs_group_hint()}>{m.subs_group()}</span>
-					<span class="right" title={m.subs_interval_hint()}>{m.subs_interval_h()}</span>
-					<span class="right">{m.subs_nodes()}</span>
-					<span>{m.subs_updated()}</span>
-					<span></span>
-					<span></span>
-				</div>
+		<!-- Rows are edited right in the table: previously each subscription was
+			 a card with five label rows, i.e. ~230px for four fields. -->
+		<div class="table card">
+			<div class="row head">
+				<span title={m.subs_enabled_hint()}></span>
+				<span>{m.common_name()}</span>
+				<span>URL</span>
+				<span title={m.subs_group_hint()}>{m.subs_group()}</span>
+				<span class="right" title={m.subs_interval_hint()}>{m.subs_interval_h()}</span>
+				<span class="right">{m.subs_nodes()}</span>
+				<span>{m.subs_updated()}</span>
+				<span></span>
+				<span></span>
+			</div>
 
+			{#if draft.subscriptions.length === 0}
+				<div class="row empty-row">
+					<div class="empty">
+						<Icon name="subscriptions" size={48} />
+						<p class="empty-title">{m.subs_empty_title()}</p>
+						<p class="hint">{m.subs_empty()}</p>
+					</div>
+				</div>
+			{:else}
 				{#each draft.subscriptions as sub (sub.id)}
 					{@const st = subState[sub.id]}
 					<div class="row">
@@ -199,14 +208,8 @@
 						</button>
 					</div>
 				{/each}
-			</div>
-		{/if}
-
-		<p class="hint">
-			{m.subs_hint_pre()}
-			<code class="inline">sub:</code>
-			{m.subs_hint_post()}
-		</p>
+			{/if}
+		</div>
 
 		<div class="sticky-footer">
 			<button class="primary" onclick={save} disabled={!dirty || saving}>
@@ -226,6 +229,28 @@
 		flex-direction: column;
 		gap: var(--sp-3);
 		min-height: 100%;
+	}
+
+	.empty {
+		grid-column: 1 / -1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: var(--sp-4);
+		padding: var(--sp-6) 0;
+		text-align: center;
+	}
+
+	.empty :global(svg) {
+		color: var(--text-muted);
+		opacity: 0.45;
+	}
+
+	.empty-title {
+		font-size: var(--fs-lg);
+		font-weight: 600;
+		color: var(--text);
 	}
 
 	.count {

@@ -42,6 +42,7 @@
 	"common_show_in_folder": "Mostrar na pasta",
 	"common_unsaved_changes": "alterações não salvas",
 	"common_loading_settings": "Carregando ajustes…",
+	"common_loading": "Carregando…",
 	"common_reading_state": "Lendo estado…",
 	"common_no_filter_match": "Nada corresponde ao filtro.",
 
@@ -140,7 +141,7 @@
 	"binary_manual_hint": "O caminho foi definido manualmente, então o Vantage Box não toca nesse arquivo — apenas relata versões incompatíveis. Limpe o campo 'arquivo sing-box' em Ajustes para delegar o controle de versão ao app.",
 	"binary_reading": "Lendo info do arquivo…",
 
-	"versions_compat_supported": "na faixa",
+	"versions_compat_supported": "compatível",
 	"versions_compat_too_new": "mais nova",
 	"versions_compat_too_old": "mais antiga",
 	"versions_compat_unknown": "—",
@@ -201,11 +202,11 @@
 	"subs_no_restart_suffix": " Config atualizada sem reinício.",
 	"subs_count": "{count} assinaturas",
 	"subs_url_hint": "A URL pode retornar uma config do sing-box com outbounds, um array isolado de outbounds ou uma lista base64 de ss:// vmess:// vless:// trojan:// hysteria2:// tuic://",
-	"subs_url_short": "A URL retorna JSON do sing-box ou uma lista de URIs base64",
 	"subs_add": "Adicionar",
 	"subs_refreshing": "Atualizando…",
 	"subs_refresh_now": "Atualizar agora",
 	"subs_empty": "Sem assinaturas. 'Adicionar' cria uma nova — informe URL, nome e grupo.",
+	"subs_empty_title": "Sem assinaturas",
 	"subs_enabled_hint": "A assinatura conta durante a atualização",
 	"subs_group_hint": "Vazio — os nós vão para todos os grupos selector/urltest",
 	"subs_group": "Grupo",
@@ -301,6 +302,7 @@
 	"settings_help_app_update": "As atualizações são baixadas do GitHub e verificadas por assinatura. 'Notificar' mostra uma barra com um botão de instalar; 'Instalar automaticamente' instala e reinicia o app sem perguntar.",
 	"settings_file_section": "Arquivo de ajustes",
 	"settings_help_file": "O arquivo é lido como JSONC — comentários e vírgulas finais são permitidos. Edições são captadas em tempo real, sem reiniciar.",
+	"settings_file_edit": "Editar",
 
 	"status_connected": "conectado",
 	"status_connecting": "conectando",

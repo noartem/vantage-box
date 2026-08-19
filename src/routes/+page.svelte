@@ -130,7 +130,7 @@
 						{:else if t.id === 'logs'}
 							<LogsView active={tab === 'logs'} />
 						{:else if t.id === 'service'}
-							<ServiceView />
+							<ServiceView ongoto={goto} />
 						{:else if t.id === 'settings'}
 							<SettingsView active={tab === 'settings'} />
 						{/if}

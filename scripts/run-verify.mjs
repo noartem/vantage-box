@@ -17,10 +17,9 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const SUITES = [
-	['scripts/verify-singbox-schema.mjs', '1.14 schema: autocomplete, signatures, validation'],
+	['scripts/verify-singbox-schema.mjs', '1.14 schema: hover resolution, signatures, validation'],
 	['scripts/verify-singbox-schemas.mjs', 'per-version 1.11–1.13 schemas + version-based mapping'],
-	['scripts/verify-jsonc-lint.mjs', 'editor JSONC mode'],
-	['scripts/verify-completion.mjs', 'autocomplete via the real CodeMirror source']
+	['scripts/verify-jsonc-lint.mjs', 'editor JSONC mode']
 ];
 
 const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vb-verify-'));

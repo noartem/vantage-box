@@ -42,6 +42,7 @@
 	"common_show_in_folder": "Show in folder",
 	"common_unsaved_changes": "unsaved changes",
 	"common_loading_settings": "Loading settings…",
+	"common_loading": "Loading…",
 	"common_reading_state": "Reading state…",
 	"common_no_filter_match": "Nothing matches the filter.",
 
@@ -140,7 +141,7 @@
 	"binary_manual_hint": "The path is set manually, so Vantage Box does not touch this file — it only reports incompatible versions. Clear the 'sing-box file' field in Settings to hand version control to the app.",
 	"binary_reading": "Reading file info…",
 
-	"versions_compat_supported": "in range",
+	"versions_compat_supported": "fits",
 	"versions_compat_too_new": "newer",
 	"versions_compat_too_old": "older",
 	"versions_compat_unknown": "—",
@@ -201,11 +202,11 @@
 	"subs_no_restart_suffix": " Config updated without restart.",
 	"subs_count": "{count} subscriptions",
 	"subs_url_hint": "The URL may return a sing-box config with outbounds, a bare array of outbounds, or a base64 list of ss:// vmess:// vless:// trojan:// hysteria2:// tuic://",
-	"subs_url_short": "URL returns sing-box JSON or a base64 URI list",
 	"subs_add": "Add",
 	"subs_refreshing": "Refreshing…",
 	"subs_refresh_now": "Refresh now",
 	"subs_empty": "No subscriptions. 'Add' creates a new one — enter a URL, name, and group.",
+	"subs_empty_title": "No subscriptions",
 	"subs_enabled_hint": "Subscription counts during refresh",
 	"subs_group_hint": "Empty — nodes go to all selector/urltest groups",
 	"subs_group": "Group",
@@ -301,6 +302,7 @@
 	"settings_help_app_update": "Updates are downloaded from GitHub and verified by signature. 'Notify' shows a bar with an install button; 'Install automatically' installs and restarts the app without asking.",
 	"settings_file_section": "Settings file",
 	"settings_help_file": "The file is read as JSONC — comments and trailing commas are allowed. Edits are picked up on the fly, no restart needed.",
+	"settings_file_edit": "Edit",
 
 	"status_connected": "connected",
 	"status_connecting": "connecting",

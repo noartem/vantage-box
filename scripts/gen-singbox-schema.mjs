@@ -6,7 +6,7 @@
 //      Texts have to be assembled from the SagerNet docs (markdown, `#### field`).
 //   2. The schema describes inbounds/outbounds/route.rules as `oneOf` variants with a `type`
 //      discriminator. json-schema-library (which codemirror-json-schema builds on) returns a
-//      bare `oneOf` with no `properties` at such a node — i.e. no autocomplete and no hints
+//      bare `oneOf` with no `properties` at such a node — i.e. no hover hints
 //      exactly where they matter most. Fixed by the union transform below.
 //
 // Run: task schema:update  (or npm run schema:update)
@@ -253,7 +253,7 @@ function applyDescriptions(node, map, stats, depth = 0) {
  * For every `oneOf` node, sets `properties` = the union of all variants' properties.
  * The `oneOf` itself stays untouched, so validation is not weakened: `oneOf` still
  * rejects invalid combinations, and `properties` gives the resolver something to
- * anchor autocomplete and hover hints to.
+ * anchor hover hints to.
  */
 function addUnionProps(defs, node, stats) {
 	if (!node || typeof node !== 'object') return;

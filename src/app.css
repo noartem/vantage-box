@@ -177,6 +177,11 @@ button {
 	line-height: 1;
 	white-space: nowrap;
 	cursor: pointer;
+	/* An icon next to the label sits on the same line as the text: the <Icon> svg
+	   is display:block, so without a flex row it would stack above the label. */
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-2);
 }
 
 button:hover:not(:disabled) {
@@ -596,11 +601,39 @@ code.inline {
 	transition: opacity 0.12s ease;
 }
 
+/* Rich popover for a block's "?" button (see InfoButton.svelte). Same surface
+   as .tip-balloon, but interactive: the user may hover it, read long help, and
+   select text. Inline code keeps its styling via the global .hint code rule. */
+.info-card {
+	position: fixed;
+	top: 0;
+	left: 0;
+	max-width: 320px;
+	padding: var(--sp-4) var(--sp-5);
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-ctl);
+	box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+	z-index: 1000;
+}
+
+.info-body {
+	font-size: var(--fs-sm);
+	color: var(--text);
+	text-align: left;
+	white-space: normal;
+	line-height: 1.4;
+}
+
+.info-body :global(p) {
+	margin: 0;
+}
+
 /* A save bar at the bottom of a form. Was copied byte for byte into
    SettingsView and SubscriptionsView. */
 .sticky-footer {
 	position: sticky;
-	bottom: 0;
+	bottom: -8px;
 	z-index: 2;
 	display: flex;
 	align-items: center;

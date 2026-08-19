@@ -2,6 +2,7 @@
 	import { app } from '$lib/state.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import Icon from './Icon.svelte';
+	import InfoButton from './InfoButton.svelte';
 
 	// File details live in shared state: onboarding reads them too, to tell whether
 	// a binary exists at all. There is intentionally no local copy here — otherwise
@@ -34,6 +35,11 @@
 		>
 			<Icon name="refresh" size={13} />
 		</button>
+		{#if info && !managed}
+			<InfoButton label={() => m.common_explanations()}>
+				<p>{m.binary_manual_hint()}</p>
+			</InfoButton>
+		{/if}
 	</div>
 
 	{#if info}
@@ -61,12 +67,6 @@
 			<div class="banner warn">
 				{m.binary_too_new()}
 			</div>
-		{/if}
-
-		{#if !managed}
-			<p class="hint">
-				{m.binary_manual_hint()}
-			</p>
 		{/if}
 	{:else}
 		<p class="hint">{m.binary_reading()}</p>

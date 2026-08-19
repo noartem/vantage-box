@@ -42,6 +42,7 @@
 	"common_show_in_folder": "Im Ordner anzeigen",
 	"common_unsaved_changes": "ungespeicherte Änderungen",
 	"common_loading_settings": "Einstellungen werden geladen…",
+	"common_loading": "Laden…",
 	"common_reading_state": "Status wird gelesen…",
 	"common_no_filter_match": "Nichts passt auf den Filter.",
 
@@ -140,7 +141,7 @@
 	"binary_manual_hint": "Der Pfad ist manuell gesetzt, daher lässt Vantage Box diese Datei unangetastet — es meldet nur inkompatible Versionen. Leere das Feld 'sing-box-Datei' in den Einstellungen, um die Versionsverwaltung an die App zu übergeben.",
 	"binary_reading": "Dateiinformationen werden gelesen…",
 
-	"versions_compat_supported": "im Bereich",
+	"versions_compat_supported": "passend",
 	"versions_compat_too_new": "neuer",
 	"versions_compat_too_old": "älter",
 	"versions_compat_unknown": "—",
@@ -201,11 +202,11 @@
 	"subs_no_restart_suffix": " Konfiguration ohne Neustart aktualisiert.",
 	"subs_count": "{count} Abonnements",
 	"subs_url_hint": "Die URL kann eine sing-box-Konfiguration mit outbounds, ein bloßes Array von outbounds oder eine base64-Liste von ss:// vmess:// vless:// trojan:// hysteria2:// tuic:// zurückgeben",
-	"subs_url_short": "URL liefert sing-box-JSON oder eine base64-URI-Liste",
 	"subs_add": "Hinzufügen",
 	"subs_refreshing": "Wird aktualisiert…",
 	"subs_refresh_now": "Jetzt aktualisieren",
 	"subs_empty": "Keine Abonnements. 'Hinzufügen' erstellt ein neues — gib URL, Name und Gruppe ein.",
+	"subs_empty_title": "Keine Abonnements",
 	"subs_enabled_hint": "Abonnement wird bei der Aktualisierung gezählt",
 	"subs_group_hint": "Leer — Nodes gehen an alle selector-/urltest-Gruppen",
 	"subs_group": "Gruppe",
@@ -301,6 +302,7 @@
 	"settings_help_app_update": "Updates werden von GitHub heruntergeladen und per Signatur verifiziert. 'Benachrichtigen' zeigt eine Leiste mit einer Installations-Schaltfläche; 'Automatisch installieren' installiert und startet die App neu, ohne zu fragen.",
 	"settings_file_section": "Einstellungsdatei",
 	"settings_help_file": "Die Datei wird als JSONC gelesen — Kommentare und abschließende Kommas sind erlaubt. Änderungen werden im laufenden Betrieb übernommen, kein Neustart nötig.",
+	"settings_file_edit": "Bearbeiten",
 
 	"status_connected": "verbunden",
 	"status_connecting": "wird verbunden",

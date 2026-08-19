@@ -1,9 +1,9 @@
 import type { JSONSchema7 } from 'json-schema';
 // The official sing-box 1.14-dev schema — the only one that exists officially
 // (the `sing-box schema` command and the on-site schema appeared only in 1.14.0). It has
-// Manual descriptions (singbox-schema-overlay.mjs) and a union transform for autocomplete,
-// so we also use it for autocomplete/hover in the config tab regardless of version —
-// the field descriptions are mostly version-neutral.
+// Manual descriptions (singbox-schema-overlay.mjs) and a union transform so properties
+// resolve at oneOf nodes, so we use it for hover tooltips in the config tab regardless of
+// version — the field descriptions are mostly version-neutral.
 import generated from './singbox-schema.generated.json';
 // Third-party per-version schemas for 1.11–1.13 (no official ones exist for these).
 // Maintained by the community in the BlackDuty/sing-box-schema repo, built from Zod.
@@ -13,7 +13,7 @@ import s113 from './schemas/singbox-1.13.13.json';
 
 const asSchema = (s: unknown) => s as unknown as JSONSchema7;
 
-/** Schema for autocomplete/hover — always the official 1.14 (with manual descriptions). */
+/** Schema for hover tooltips — always the official 1.14 (with manual descriptions). */
 export const autocompleteSchema = asSchema(generated);
 
 // Minor → schema for the linter. Key is `major*100+minor`, so 1.11 ≠ 1.1 etc.

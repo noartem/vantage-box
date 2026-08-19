@@ -5,13 +5,15 @@
 class RuntimeConfigModalState {
 	open = $state(false);
 
-	show() {
+	// Arrow methods so `this` stays bound when passed as a callback (the modal
+	// calls onclose() without a receiver).
+	show = () => {
 		this.open = true;
-	}
+	};
 
-	hide() {
+	hide = () => {
 		this.open = false;
-	}
+	};
 }
 
 export const runtimeConfigModal = new RuntimeConfigModalState();
