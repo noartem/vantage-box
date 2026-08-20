@@ -12,9 +12,30 @@
 		type LanguagePreference
 	} from '$lib/i18n.svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import { mainKey, modsFromEvent } from '$lib/hotkeys';
 	import { app } from '$lib/state.svelte';
 	import { settingsFileModal } from '$lib/settings-file.svelte';
 	import type { Settings } from '$lib/types';
+
+	/** The editable name of any hotkey binding. */
+	type HotkeyName = keyof Settings['hotkeys'];
+
+	/** Global hotkeys — registered with the OS, work even when the window is closed. */
+	const GLOBAL_HOTKEYS: { id: HotkeyName; label: () => string }[] = [
+		{ id: 'proxyPopup', label: () => m.settings_hotkey_proxy_popup() },
+		{ id: 'toggle', label: () => m.settings_hotkey_toggle() },
+		{ id: 'showMain', label: () => m.settings_hotkey_show_main() },
+		{ id: 'restart', label: () => m.settings_hotkey_restart() }
+	];
+
+	/** In-app shortcuts — matched against keydown events while the window is focused. */
+	const INAPP_HOTKEYS: { id: HotkeyName; label: () => string }[] = [
+		{ id: 'goToSettings', label: () => m.settings_hotkey_go_to_settings() },
+		{ id: 'nextTab', label: () => m.settings_hotkey_next_tab() },
+		{ id: 'prevTab', label: () => m.settings_hotkey_prev_tab() },
+		{ id: 'tabIndex', label: () => m.settings_hotkey_tab_index() },
+		{ id: 'closeWindow', label: () => m.settings_hotkey_close_window() }
+	];
 
 	/** Whether the settings tab is active. Tabs are not destroyed on switch, so
 	 *  they do not know on their own whether they are visible. Needed to stop
@@ -28,7 +49,7 @@
 	let secretVisible = $state(false);
 	let copied = $state(false);
 	/** Which hotkey is currently being recorded from the keyboard. */
-	let recording = $state<'proxyPopup' | 'toggle' | null>(null);
+	let recording = $state<HotkeyName | null>(null);
 	/** The selected UI language: "system" or a specific locale. */
 	let langPref = $state<LanguagePreference>(getLanguagePreference());
 
@@ -111,34 +132,6 @@
 	// Hotkey recording
 	// -------------------------------------------------------------------------
 
-	/** Keys whose accelerator name differs from `KeyboardEvent.code`. */
-	const KEY_NAMES: Record<string, string> = {
-		Escape: 'Esc',
-		Backquote: '`',
-		Minus: '-',
-		Equal: '=',
-		BracketLeft: '[',
-		BracketRight: ']',
-		Backslash: '\\',
-		Semicolon: ';',
-		Quote: "'",
-		Comma: ',',
-		Period: '.',
-		Slash: '/'
-	};
-
-	/** The main key of the combination. `null` — only a modifier was pressed. */
-	function mainKey(code: string): string | null {
-		if (/^(Control|Alt|Shift|Meta|OS)/.test(code)) return null;
-		const letter = /^Key([A-Z])$/.exec(code);
-		if (letter) return letter[1];
-		const digit = /^Digit(\d)$/.exec(code);
-		if (digit) return digit[1];
-		const numpad = /^Numpad(\d)$/.exec(code);
-		if (numpad) return `Numpad${numpad[1]}`;
-		return KEY_NAMES[code] ?? code;
-	}
-
 	// Intercept on the capture phase: otherwise Ctrl+1…7 would switch the tab
 	// before recording sees the press.
 	function onKeydown(event: KeyboardEvent) {
@@ -155,20 +148,21 @@
 		const key = mainKey(event.code);
 		if (key === null) return;
 
-		const mods: string[] = [];
-		if (event.ctrlKey) mods.push('Ctrl');
-		if (event.altKey) mods.push('Alt');
-		if (event.shiftKey) mods.push('Shift');
-		if (event.metaKey) mods.push('Super');
-
-		// A global hotkey without a modifier would steal the key from the whole system.
+		const mods = modsFromEvent(event);
+		// A hotkey without a modifier would steal the key from the whole system.
 		if (mods.length === 0) return;
 
-		draft.hotkeys[recording] = [...mods, key].join('+');
+		if (recording === 'tabIndex') {
+			// Tab-by-index binds a modifier prefix; digits 1–9 are appended at
+			// runtime. The pressed key only confirms the modifiers — we drop it.
+			draft.hotkeys.tabIndex = mods.join('+');
+		} else {
+			draft.hotkeys[recording] = [...mods, key].join('+');
+		}
 		recording = null;
 	}
 
-	function clearHotkey(name: 'proxyPopup' | 'toggle') {
+	function clearHotkey(name: HotkeyName) {
 		if (!draft) return;
 		draft.hotkeys[name] = '';
 		recording = null;
@@ -466,40 +460,51 @@
 					</InfoButton>
 				</div>
 				<div class="form">
-					{#each [{ id: 'proxyPopup', label: () => m.settings_hotkey_proxy_popup() }, { id: 'toggle', label: () => m.settings_hotkey_toggle() }] as item (item.id)}
-						{@const name = item.id as 'proxyPopup' | 'toggle'}
-						<label>
-							<span>{item.label()}</span>
-							<div class="combo">
-								<input
-									class="field"
-									bind:value={draft.hotkeys[name]}
-									placeholder={m.settings_hotkey_placeholder()}
-									readonly={recording === name}
-								/>
-								<button
-									class:primary={recording === name}
-									onclick={() => (recording = recording === name ? null : name)}
-								>
-									{recording === name ? m.settings_recording() : m.settings_record()}
-								</button>
-								<button
-									class="icon-btn"
-									title={m.common_clear()}
-									aria-label={m.common_clear()}
-									disabled={draft.hotkeys[name] === ''}
-									onclick={() => clearHotkey(name)}
-								>
-									<Icon name="close" size={12} />
-								</button>
-							</div>
-						</label>
+					<p class="group-label">{m.settings_hotkeys_global()}</p>
+					{#each GLOBAL_HOTKEYS as item (item.id)}
+						{@render hotkeyRow(item)}
+					{/each}
+					<p class="group-label">{m.settings_hotkeys_inapp()}</p>
+					{#each INAPP_HOTKEYS as item (item.id)}
+						{@render hotkeyRow(item)}
 					{/each}
 				</div>
 				{#if app.hotkeyProblems.length > 0}
 					<div class="banner">{m.settings_hotkey_failed()}: {app.hotkeyProblems.join(', ')}</div>
 				{/if}
 			</section>
+
+			{#snippet hotkeyRow(item: { id: HotkeyName; label: () => string })}
+				<label>
+					<span>{item.label()}</span>
+					<div class="combo">
+						<input
+							class="field"
+							bind:value={draft!.hotkeys[item.id]}
+							placeholder={m.settings_hotkey_placeholder()}
+							readonly={recording === item.id}
+						/>
+						{#if item.id === 'tabIndex'}
+							<span class="affix" title={m.settings_hotkey_tab_index_hint()}>1…9</span>
+						{/if}
+						<button
+							class:primary={recording === item.id}
+							onclick={() => (recording = recording === item.id ? null : item.id)}
+						>
+							{recording === item.id ? m.settings_recording() : m.settings_record()}
+						</button>
+						<button
+							class="icon-btn"
+							title={m.common_clear()}
+							aria-label={m.common_clear()}
+							disabled={draft!.hotkeys[item.id] === ''}
+							onclick={() => clearHotkey(item.id)}
+						>
+							<Icon name="close" size={12} />
+						</button>
+					</div>
+				</label>
+			{/snippet}
 
 			<section class="section">
 				<div class="head">
@@ -657,5 +662,29 @@
 
 	.hint {
 		max-width: 62ch;
+	}
+
+	/* Subheader inside the hotkeys section: separates global from in-app bindings.
+	   Must span both grid columns — otherwise it shifts every row after it by one
+	   column and the labels/fields end up on opposite sides between groups. */
+	.group-label {
+		grid-column: 1 / -1;
+		margin: 0;
+		font-size: var(--fs-sm);
+		font-weight: 600;
+		color: var(--text-muted);
+	}
+
+	.group-label:not(:first-child) {
+		margin-top: var(--sp-2);
+	}
+
+	/* The "1…9" suffix on the tab-by-index row: digits are appended to the stored
+	   modifier prefix at runtime, so the field shows the prefix only. */
+	.affix {
+		flex-shrink: 0;
+		font-family: var(--mono);
+		font-size: var(--fs-sm);
+		color: var(--text-muted);
 	}
 </style>

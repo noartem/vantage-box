@@ -19,6 +19,10 @@ enum Action {
     Toggle,
     /// Show the proxy-selection popup.
     ProxyPopup,
+    /// Show and focus the main window.
+    ShowMain,
+    /// Soft restart of the current run.
+    Restart,
 }
 
 /// Re-registers all hotkeys for the current settings.
@@ -31,12 +35,25 @@ pub fn apply(app: &AppHandle, settings: &Settings) -> Vec<String> {
     let _ = shortcuts.unregister_all();
 
     let mut problems = Vec::new();
+    // Only the global actions are OS-registered here. The in-app shortcuts
+    // (go-to-settings, tab cycling, tab-by-index, close window) live in the same
+    // settings block but are matched against keydown events in the frontend.
     let bindings = [
         (settings.hotkeys.toggle.trim(), Action::Toggle, "toggle on/off"),
         (
             settings.hotkeys.proxy_popup.trim(),
             Action::ProxyPopup,
             "proxy selection popup",
+        ),
+        (
+            settings.hotkeys.show_main.trim(),
+            Action::ShowMain,
+            "show main window",
+        ),
+        (
+            settings.hotkeys.restart.trim(),
+            Action::Restart,
+            "restart current run",
         ),
     ];
 
@@ -67,10 +84,19 @@ pub fn apply(app: &AppHandle, settings: &Settings) -> Vec<String> {
 fn dispatch(app: AppHandle, action: Action) {
     match action {
         Action::ProxyPopup => window::toggle_popup(&app),
+        Action::ShowMain => window::show_main(&app),
         Action::Toggle => {
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = actions::toggle(&app).await {
                     eprintln!("toggle hotkey failed: {e}");
+                }
+                crate::tray::refresh(&app).await;
+            });
+        }
+        Action::Restart => {
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = actions::restart(&app).await {
+                    eprintln!("restart hotkey failed: {e}");
                 }
                 crate::tray::refresh(&app).await;
             });

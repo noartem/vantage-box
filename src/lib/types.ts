@@ -28,8 +28,18 @@ export interface Settings {
 		startMinimized: boolean;
 	};
 	hotkeys: {
+		/** Global — work even when the window is closed. */
 		proxyPopup: string;
 		toggle: string;
+		showMain: string;
+		restart: string;
+		/** In-app — only while the main window is focused. */
+		goToSettings: string;
+		nextTab: string;
+		prevTab: string;
+		/** Modifier prefix; digits 1–9 are appended at runtime. */
+		tabIndex: string;
+		closeWindow: string;
 	};
 	autostart: boolean;
 	guiUpdate: {

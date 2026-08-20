@@ -173,10 +173,27 @@ pub struct TraySettings {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HotkeySettings {
+    // --- Global: work even when the window is closed ---
     /// Proxy selection popup.
     pub proxy_popup: String,
     /// Toggle sing-box on/off.
     pub toggle: String,
+    /// Show and focus the main window.
+    pub show_main: String,
+    /// Soft restart of the current run (preserves selector selections).
+    pub restart: String,
+    // --- In-app: only while the main window is focused ---
+    /// Jump to the Settings tab.
+    pub go_to_settings: String,
+    /// Cycle to the next tab.
+    pub next_tab: String,
+    /// Cycle to the previous tab.
+    pub prev_tab: String,
+    /// Modifier prefix for "jump to tab by index": digits 1–9 are appended at
+    /// runtime, so `"Ctrl"` binds `Ctrl+1`…`Ctrl+9`.
+    pub tab_index: String,
+    /// Close the window (goes through the close-to-tray handler).
+    pub close_window: String,
 }
 
 impl Default for Settings {
@@ -300,8 +317,17 @@ impl Default for TraySettings {
 impl Default for HotkeySettings {
     fn default() -> Self {
         Self {
+            // Global
             proxy_popup: "Ctrl+Alt+P".into(),
             toggle: "Ctrl+Alt+O".into(),
+            show_main: "Ctrl+Alt+V".into(),
+            restart: "Ctrl+Alt+R".into(),
+            // In-app
+            go_to_settings: "Ctrl+Alt+S".into(),
+            next_tab: "Ctrl+Tab".into(),
+            prev_tab: "Ctrl+Shift+Tab".into(),
+            tab_index: "Ctrl".into(),
+            close_window: "Ctrl+Shift+W".into(),
         }
     }
 }

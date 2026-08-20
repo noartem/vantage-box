@@ -5,6 +5,7 @@
 	import RuntimeConfigModal from '$lib/components/RuntimeConfigModal.svelte';
 	import StatusBar from '$lib/components/StatusBar.svelte';
 	import TitleBar from '$lib/components/TitleBar.svelte';
+	import { acceleratorFromEvent, mainKey, modsFromEvent, sameMods } from '$lib/hotkeys';
 	import { app } from '$lib/state.svelte';
 	import { TABS, loadTab, saveTab, type TabId } from '$lib/tabs';
 	import ConfigView from '$lib/views/ConfigView.svelte';
@@ -46,46 +47,66 @@
 		opened[next] = true;
 	}
 
-	/** Ctrl+1…7 — tabs in order, like in a browser. Ctrl+Tab / Ctrl+Shift+Tab —
-	 *  cycle through tabs forward and back. Ctrl+Alt+S — settings.
-	 *  Hotkey recording in settings intercepts the press before us and cancels it —
-	 *  we respect that. */
+	/** In-app shortcuts. The bindings come from settings, so every combination
+	 *  the user sees is one they can rebind. Hotkey recording in Settings
+	 *  intercepts the press on the capture phase and cancels it — we respect
+	 *  that. Global hotkeys (popup, toggle, show, restart) are handled by the
+	 *  backend and never reach this function's actions. */
 	function onKeydown(event: KeyboardEvent) {
 		if (isPopup || event.defaultPrevented) return;
-		if (!event.ctrlKey) return;
+		const hk = app.settings?.hotkeys;
+		if (!hk) return;
 
-		// Ctrl+Alt+S — settings. Check before the general Alt filter, otherwise
-		// this hotkey never takes effect.
-		if (event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+		const acc = acceleratorFromEvent(event);
+
+		if (acc && hk.goToSettings && acc === hk.goToSettings) {
 			event.preventDefault();
 			goto('settings');
 			return;
 		}
 
-		if (event.altKey) return;
-
-		if (event.key === 'Tab') {
+		if (acc && hk.nextTab && acc === hk.nextTab) {
 			event.preventDefault();
-			const current = TABS.findIndex((t) => t.id === tab);
-			const dir = event.shiftKey ? -1 : 1;
-			const next = (current + dir + TABS.length) % TABS.length;
-			goto(TABS[next].id);
+			cycleTab(1);
+			return;
+		}
+
+		if (acc && hk.prevTab && acc === hk.prevTab) {
+			event.preventDefault();
+			cycleTab(-1);
 			return;
 		}
 
 		// Ctrl+Shift+W — close the window. close() goes through CloseRequested, so
 		// the "minimize to tray" setting keeps working.
-		if (event.shiftKey && event.code === 'KeyW') {
+		if (acc && hk.closeWindow && acc === hk.closeWindow) {
 			event.preventDefault();
 			getCurrentWindow().close();
 			return;
 		}
 
-		if (event.shiftKey) return;
-		const index = Number(event.key) - 1;
-		if (!Number.isInteger(index) || index < 0 || index >= TABS.length) return;
-		event.preventDefault();
-		goto(TABS[index].id);
+		// Tab by index: the binding is a modifier prefix (e.g. "Ctrl"); digits
+		// 1–9 are appended at runtime, so "Ctrl" binds Ctrl+1 … Ctrl+9.
+		if (hk.tabIndex) {
+			const prefixMods = hk.tabIndex.split('+').map((s) => s.trim()).filter(Boolean);
+			if (sameMods(prefixMods, modsFromEvent(event))) {
+				const key = mainKey(event.code);
+				if (key && /^\d$/.test(key)) {
+					const index = Number(key) - 1;
+					if (index >= 0 && index < TABS.length) {
+						event.preventDefault();
+						goto(TABS[index].id);
+					}
+				}
+			}
+		}
+	}
+
+	/** Cycle to the next/previous tab, wrapping around. */
+	function cycleTab(dir: 1 | -1) {
+		const current = TABS.findIndex((t) => t.id === tab);
+		const next = (current + dir + TABS.length) % TABS.length;
+		goto(TABS[next].id);
 	}
 
 	onMount(() => {

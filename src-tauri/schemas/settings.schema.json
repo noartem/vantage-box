@@ -94,10 +94,17 @@
     "hotkeys": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Global hotkeys in tauri-plugin-global-shortcut format, e.g. \"Ctrl+Alt+P\".",
+      "description": "Hotkeys in tauri-plugin-global-shortcut format, e.g. \"Ctrl+Alt+P\". Global ones work even when the window is closed; in-app ones only while the window is focused. An empty string disables a binding.",
       "properties": {
-        "proxyPopup": { "type": "string", "default": "Ctrl+Alt+P" },
-        "toggle": { "type": "string", "default": "Ctrl+Alt+O" }
+        "proxyPopup": { "type": "string", "default": "Ctrl+Alt+P", "description": "Global: show the proxy-selection popup." },
+        "toggle": { "type": "string", "default": "Ctrl+Alt+O", "description": "Global: toggle sing-box on/off." },
+        "showMain": { "type": "string", "default": "Ctrl+Alt+V", "description": "Global: show and focus the main window." },
+        "restart": { "type": "string", "default": "Ctrl+Alt+R", "description": "Global: soft restart of the current run." },
+        "goToSettings": { "type": "string", "default": "Ctrl+Alt+S", "description": "In-app: jump to the Settings tab." },
+        "nextTab": { "type": "string", "default": "Ctrl+Tab", "description": "In-app: cycle to the next tab." },
+        "prevTab": { "type": "string", "default": "Ctrl+Shift+Tab", "description": "In-app: cycle to the previous tab." },
+        "tabIndex": { "type": "string", "default": "Ctrl", "description": "In-app: modifier prefix — digits 1–9 jump to the corresponding tab." },
+        "closeWindow": { "type": "string", "default": "Ctrl+Shift+W", "description": "In-app: close the window (respects close-to-tray)." }
       }
     },
     "autostart": {
