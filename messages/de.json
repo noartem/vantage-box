@@ -204,6 +204,7 @@
 	"subs_url_hint": "Die URL kann eine sing-box-Konfiguration mit outbounds, ein bloßes Array von outbounds oder eine base64-Liste von ss:// vmess:// vless:// trojan:// hysteria2:// tuic:// zurückgeben",
 	"subs_add": "Hinzufügen",
 	"subs_applying": "Wird angewendet…",
+	"subs_apply": "Anwenden",
 	"subs_apply_save": "Anwenden und Speichern",
 	"subs_empty": "Keine Abonnements. 'Hinzufügen' erstellt ein neues — gib URL, Name und Gruppe ein.",
 	"subs_empty_title": "Keine Abonnements",

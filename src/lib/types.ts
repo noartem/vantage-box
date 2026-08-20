@@ -97,6 +97,8 @@ export interface SubscriptionsState {
 	entries: Record<string, SubStateEntry>;
 	/** Tags of groups subscriptions created (not merely filled). Internal. */
 	createdGroups?: string[];
+	/** Saved subscription settings not yet injected into the running config. */
+	applyPending?: boolean;
 }
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';

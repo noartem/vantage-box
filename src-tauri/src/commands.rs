@@ -41,6 +41,11 @@ pub fn save_settings(
     let previous = state.settings.get();
     state.settings.save(settings.clone())?;
     state::apply_settings(&app, &state, &previous, &settings)?;
+    // Saved subscription metadata is not yet in the running config — flag it
+    // so the UI's "Apply" button knows there is something pending.
+    if previous.subscriptions != settings.subscriptions {
+        subscription::mark_apply_pending();
+    }
     Ok(settings)
 }
 

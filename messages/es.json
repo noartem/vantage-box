@@ -204,6 +204,7 @@
 	"subs_url_hint": "La URL puede devolver una configuración sing-box con outbounds, un arreglo simple de outbounds, o una lista base64 de ss:// vmess:// vless:// trojan:// hysteria2:// tuic://",
 	"subs_add": "Añadir",
 	"subs_applying": "Aplicando…",
+	"subs_apply": "Aplicar",
 	"subs_apply_save": "Aplicar y Guardar",
 	"subs_empty": "No hay suscripciones. 'Añadir' crea una nueva — introduce una URL, nombre y grupo.",
 	"subs_empty_title": "Sin suscripciones",

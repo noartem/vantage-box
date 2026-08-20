@@ -9,9 +9,11 @@
 
 	let draft = $state<Settings | null>(null);
 	let saving = $state(false);
-	let refreshing = $state(false);
+	let applying = $state(false);
 	/** Subscription state from the sidecar file: time/node count/errors. */
 	let subState = $state<Record<string, SubStateEntry>>({});
+	/** Saved subscription metadata not yet injected into the running config. */
+	let applyPending = $state(false);
 
 	$effect(() => {
 		// settings.json is the source of truth. Edits to the file from outside
@@ -26,18 +28,28 @@
 			JSON.stringify($state.snapshot(draft)) !== JSON.stringify($state.snapshot(app.settings))
 	);
 
-	async function save() {
+	/** Normalize the draft and write it to settings.json. Does not touch the
+	 *  running config or restart sing-box. */
+	async function persist(): Promise<void> {
 		if (!draft) return;
+		const next = $state.snapshot(draft) as Settings;
+		// An empty string in the group field means "into all selector/urltest",
+		// and the backend expects null in that case.
+		next.subscriptions = next.subscriptions.map((s) => ({
+			...s,
+			targetGroup: s.targetGroup?.trim() ? s.targetGroup.trim() : null
+		}));
+		await app.saveSettings(next);
+	}
+
+	async function save() {
+		if (!draft || saving || applying) return;
 		saving = true;
 		try {
-			const next = $state.snapshot(draft) as Settings;
-			// An empty string in the group field means "into all selector/urltest",
-			// and the backend expects null in that case.
-			next.subscriptions = next.subscriptions.map((s) => ({
-				...s,
-				targetGroup: s.targetGroup?.trim() ? s.targetGroup.trim() : null
-			}));
-			await app.saveSettings(next);
+			await persist();
+			// persist wrote new subscription metadata to disk and flagged it
+			// pending in the sidecar — reload so the Apply button reflects that.
+			await loadState();
 		} catch (e) {
 			pushAlert('error', errorText(e));
 		} finally {
@@ -69,33 +81,41 @@
 		try {
 			const state = await api.getSubscriptionState();
 			subState = state.entries ?? {};
+			applyPending = state.applyPending ?? false;
 		} catch {
 			// The sidecar file may not exist yet — stay silent.
 		}
 	}
 
-	async function refreshNow() {
-		if (!draft) return;
-		if (dirty) {
-			pushAlert('warn', m.subs_save_first());
-			return;
+	/** Fetch every enabled subscription, inject nodes into the running config,
+	 *  and restart sing-box. Reads URLs from already-saved settings.json —
+	 *  which is why the caller persists first. */
+	async function fetchAndApply(): Promise<void> {
+		const outcome = await api.refreshSubscriptions(true);
+		const total = outcome.updates.reduce((n, u) => n + u.nodeCount, 0);
+		const failed = outcome.updates.filter((u) => u.lastError);
+		if (failed.length > 0) {
+			pushAlert('error', m.subs_refresh_failed({ names: failed.map((u) => u.name || u.id).join(', ') }));
+		} else {
+			const suffix = outcome.restarted ? m.subs_restarted_suffix() : m.subs_no_restart_suffix();
+			pushAlert('ok', `${m.subs_nodes_poured({ count: total })}${suffix}`);
 		}
-		refreshing = true;
+		await loadState();
+	}
+
+	// "Apply & Save": persist any unsaved metadata first, then fetch nodes and
+	// inject them into the running config (restarting sing-box). Saving first
+	// is what lets the backend read the URL/group list you just edited.
+	async function applyAndSave() {
+		if (!draft || saving || applying) return;
+		applying = true;
 		try {
-			const outcome = await api.refreshSubscriptions(true);
-			const total = outcome.updates.reduce((n, u) => n + u.nodeCount, 0);
-			const failed = outcome.updates.filter((u) => u.lastError);
-			if (failed.length > 0) {
-				pushAlert('error', m.subs_refresh_failed({ names: failed.map((u) => u.name || u.id).join(', ') }));
-			} else {
-				const suffix = outcome.restarted ? m.subs_restarted_suffix() : m.subs_no_restart_suffix();
-				pushAlert('ok', `${m.subs_nodes_poured({ count: total })}${suffix}`);
-			}
-			await loadState();
+			if (dirty) await persist();
+			await fetchAndApply();
 		} catch (e) {
 			pushAlert('error', errorText(e));
 		} finally {
-			refreshing = false;
+			applying = false;
 		}
 	}
 
@@ -143,9 +163,6 @@
 				<Icon name="plus" size={12} />
 				{m.subs_add()}
 			</button>
-			<button class="primary" onclick={refreshNow} disabled={refreshing}>
-				{refreshing ? m.subs_refreshing() : m.subs_refresh_now()}
-			</button>
 		</div>
 
 		<!-- Rows are edited right in the table: previously each subscription was
@@ -169,6 +186,10 @@
 						<Icon name="subscriptions" size={48} />
 						<p class="empty-title">{m.subs_empty_title()}</p>
 						<p class="hint">{m.subs_empty()}</p>
+						<button onclick={add}>
+							<Icon name="plus" size={12} />
+							{m.subs_add()}
+						</button>
 					</div>
 				</div>
 			{:else}
@@ -212,10 +233,19 @@
 		</div>
 
 		<div class="sticky-footer">
-			<button class="primary" onclick={save} disabled={!dirty || saving}>
+			<button
+				class="primary"
+				onclick={applyAndSave}
+				disabled={(!dirty && !applyPending) || saving || applying}
+			>
+				{applying ? m.subs_applying() : dirty ? m.subs_apply_save() : m.subs_apply()}
+			</button>
+			<button onclick={save} disabled={!dirty || saving || applying}>
 				{saving ? m.common_saving() : m.common_save()}
 			</button>
-			<button onclick={() => app.refreshSettings()} disabled={!dirty || saving}>{m.common_cancel()}</button>
+			<button onclick={() => app.refreshSettings()} disabled={!dirty || saving || applying}>
+				{m.common_cancel()}
+			</button>
 			{#if dirty}<span class="hint">{m.common_unsaved_changes()}</span>{/if}
 		</div>
 	{:else}

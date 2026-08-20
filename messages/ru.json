@@ -204,6 +204,7 @@
 	"subs_url_hint": "URL может возвращать конфиг sing-box с outbounds, простой массив outbounds или список base64 из ss:// vmess:// vless:// trojan:// hysteria2:// tuic://",
 	"subs_add": "Добавить",
 	"subs_applying": "Применение…",
+	"subs_apply": "Применить",
 	"subs_apply_save": "Применить и Сохранить",
 	"subs_empty": "Подписок нет. Кнопка «Добавить» создаёт новую — укажите URL, имя и группу.",
 	"subs_empty_title": "Подписок нет",

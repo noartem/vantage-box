@@ -155,10 +155,13 @@ pub async fn apply(app: &AppHandle, force: bool) -> Result<ApplyOutcome> {
             restarted = true;
         }
 
-        // Save the new signature and the groups we created this round.
+        // Save the new signature and the groups we created this round. The
+        // saved settings are now reflected in the running config, so there is
+        // nothing pending to apply.
         let mut next = stored.clone();
         next.signature = Some(new_signature);
         next.created_groups = created;
+        next.apply_pending = false;
         let _ = save_state(&next);
     }
 
@@ -1258,6 +1261,9 @@ pub struct SubscriptionsState {
     /// subscription's groups disappear. Groups the user owns and we only filled
     /// are not listed here and are left in place.
     pub created_groups: Vec<String>,
+    /// True when subscription settings were saved but have not yet been
+    /// injected into the running config — drives the "Apply" button state.
+    pub apply_pending: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1292,6 +1298,20 @@ pub fn load_state() -> Result<SubscriptionsState> {
         return Ok(SubscriptionsState::default());
     }
     serde_json::from_str(&raw).map_err(|e| Error::parse(path.display().to_string(), e))
+}
+
+/// Record that subscription settings changed on disk and have not yet been
+/// injected into the running config. Called from `save_settings` when the
+/// `subscriptions` field differs from the previous value.
+pub fn mark_apply_pending() {
+    let mut state = match load_state() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    if !state.apply_pending {
+        state.apply_pending = true;
+        let _ = save_state(&state);
+    }
 }
 
 pub fn save_state(state: &SubscriptionsState) -> Result<()> {

@@ -204,6 +204,7 @@
 	"subs_url_hint": "L'URL peut renvoyer une config sing-box avec des outbounds, un tableau brut d'outbounds, ou une liste base64 de ss:// vmess:// vless:// trojan:// hysteria2:// tuic://",
 	"subs_add": "Ajouter",
 	"subs_applying": "Application…",
+	"subs_apply": "Appliquer",
 	"subs_apply_save": "Appliquer et Enregistrer",
 	"subs_empty": "Aucun abonnement. « Ajouter » en crée un nouveau — saisissez une URL, un nom et un groupe.",
 	"subs_empty_title": "Aucun abonnement",
