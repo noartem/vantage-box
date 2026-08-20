@@ -6,254 +6,81 @@
 
 <p align="center">
   A minimal desktop GUI for <a href="https://github.com/SagerNet/sing-box">sing-box</a>.<br/>
-  Takes your existing <code>config.json</code> and drives the runtime through the Clash API — no config format of its own.
+  Bring your own <code>config.json</code>.
 </p>
 
 <p align="center">
   <a href="https://github.com/noartem/vantage-box/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/noartem/vantage-box/actions/workflows/ci.yml/badge.svg"/></a>
-  <a href="https://github.com/noartem/vantage-box/releases"><img alt="Release" src="https://github.com/noartem/vantage-box/actions/workflows/release.yml/badge.svg"/></a>
+  <a href="https://github.com/noartem/vantage-box/actions/workflows/build.yml"><img alt="Build" src="https://github.com/noartem/vantage-box/actions/workflows/build.yml/badge.svg"/></a>
+  <a href="https://github.com/noartem/vantage-box/releases"><img alt="Release" src="https://img.shields.io/github/v/release/noartem/vantage-box?include_prereleases"/></a>
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-blue"/>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green"/>
-  <img alt="sing-box" src="https://img.shields.io/badge/sing--box-%E2%89%A51.10.7-orange"/>
-  <img alt="Languages" src="https://img.shields.io/badge/i18n-6%20languages-9cf"/>
+  <img alt="sing-box" src="https://img.shields.io/badge/sing--box-1.10.7%E2%80%931.13.x-orange"/>
 </p>
 
 ---
 
-> **TL;DR** — Vantage Box is a thin, opinionated remote control for sing-box. It never rewrites your
-> `config.json`, speaks to the Clash API over localhost, and runs the GUI without admin privileges —
-> elevation is only ever needed to install the sing-box service (once).
-
-## Contents
-
-- [Features](#features)
-- [Status](#status)
-- [Requirements](#requirements)
-- [Development](#development)
-- [Integration test against a real sing-box](#integration-test-against-a-real-sing-box)
-- [App smoke test](#app-smoke-test)
-- [sing-box compatibility matrix](#sing-box-compatibility-matrix)
-- [Release](#release)
-- [Settings](#settings)
-- [sing-box compatibility](#sing-box-compatibility)
-
 ## Features
 
-<table>
-<tr>
-<td width="50%" valign="top">
+**Bring your own config.** Point Vantage Box at any existing sing-box `config.json`. It never
+rewrites your file — it works through the Clash API and keeps a separate runtime copy.
 
-### 🖥️ Core runtime
-- **Tauri 2 + SvelteKit** (SPA, adapter-static) + TypeScript.
-- `settings.json` in the standard OS config directory: **JSONC** reading, **atomic** writes,
-  **live-reload** via a file watcher, JSON Schema for editor autocomplete.
-- `ClashApiClient`: HTTP (`/version`, `/proxies`, `/group/{name}/delay`, `/configs`) and three
-  WebSocket streams (`/traffic`, `/logs`, `/memory`) with reconnection.
-- **Two launch modes.** A config with TUN requires administrator privileges — for it, sing-box is
-  registered as a service (a single UAC prompt, then start/stop needs no privileges: they are granted
-  to the account via SDDL). A config without TUN runs as an ordinary child process; no service
-  installation is needed.
-- A **runtime copy** of the config with a one-time secret. The user's `config.json` is never modified;
-  the copy differs from it minimally: key order is preserved, our block is appended at the end or
-  replaces an existing value.
-- **Built-in config editor**: CodeMirror 6, JSON Schema, `sing-box check` before saving, a `.bak`
-  backup, and watching for external edits.
-- **sing-box version manager**: the GitHub release catalog is cached to disk and shown from cache,
-  each version is stored as a separate file, switching validates the config against the new version
-  and restarts sing-box.
-- **Soft restart**: selector-group selections are dropped before stopping and restored afterwards.
-- **UI**: dashboard, config, logs, service, settings.
+**Control it from the tray.** Start, stop, soft-restart and switch proxy groups straight from the
+tray icon — no need to open the window. The icon's color reflects the running state.
 
-</td>
-<td width="50%" valign="top">
+**Hotkeys & a cursor popup.** Bind global shortcuts for the actions you use most. A frameless
+proxy-selection popup appears right at the cursor for a one-key node switch; it closes on Esc or
+focus loss.
 
-### 🗂️ Tray & hotkeys
-- **Tray icon**: color reflects state (running — normal, otherwise grey and semi-transparent), a menu
-  with selector groups, start/stop, soft restart, and quit.
-- **Global hotkeys** from `settings.json`, re-registered on the fly. Conflicting combinations are
-  shown in settings instead of failing silently.
-- A **proxy-selection popup** at the cursor: a separate frameless window, closes on Esc and on focus
-  loss.
-- **Autostart**, single instance (a second launch brings the already-open window to the front),
-  minimizing to the tray on window close, starting minimized.
+**See what's happening, live.** Real-time traffic, logs and memory streams, plus an active
+connections table you can filter and close — one connection or all at once.
 
-### 📦 CI & auto-update
-- **NSIS installer** (Tauri, `installMode: currentUser`); the sing-box binary is **not** bundled into
-  the installer — the app downloads its own or the user provides a path.
-- **Auto-update** via `tauri-plugin-updater`: signature verification, "don't check / notify / install
-  automatically" modes in `settings.json` (`guiUpdate.policy`).
-- Builds via **GitHub Actions**: `ci.yml` (check + test + build on every push), `release.yml`
-  (NSIS + `.sig` + `latest.json` + portable zip on the `v*` tag). Windows-only.
+**Edit the config in the app.** A built-in editor with JSON Schema autocomplete, `sing-box check`
+validation before saving, automatic `.bak` backups, and live reload when the file changes externally.
 
-### 🔌 Connections, subscriptions, fallback
-- **Active connections** table with filtering and closing one-by-one or all at once (WS
-  `/connections`).
-- **Subscriptions**: a URL returns sing-box JSON or a base64 list of URIs
-  (`ss`/`vmess`/`vless`/`trojan`/`hysteria2`/`tuic`). Nodes are injected into `config.json` under
-  `sub:<id>:` tags, appended to selector/urltest groups, and applied via a soft restart. Updates run
-  on an interval or manually; redundant restarts are avoided by signing the node set.
-- **Fallback**: periodic pinging of the active node of a selector group and automatic switching to a
-  backup on failure or latency threshold breach. `urltest` groups are not affected.
+**Manage sing-box versions.** Browse the GitHub release catalog, install any version with one click,
+and switch — the config is re-validated against the new version and sing-box is restarted for you.
 
-</td>
-</tr>
-</table>
+**Subscriptions.** Add a subscription URL (sing-box JSON or a base64 list of `ss`/`vmess`/`vless`/
+`trojan`/`hysteria2`/`tuic` URIs). Nodes are injected into your selector/urltest groups and kept
+updated on a schedule or on demand — without redundant restarts.
 
-The development plan and requirements decisions are in [PLAN.md](PLAN.md).
+**Automatic fallback.** The active node of a selector group is pinged periodically; on failure or a
+latency breach Vantage Box switches to a backup automatically. `urltest` groups are left alone.
 
-## Status
+**Lives in the background.** Autostart, start minimized, single instance (a second launch just
+focuses the open window), and minimize-to-tray on close.
 
-- ✅ **M0 — skeleton** and most of **M1 — MVP core**
-- ✅ **M2 — tray and hotkeys**
-- ✅ **M3 — CI and auto-update** and **M4 — connections, subscriptions, fallback**
-- ⏳ Not done yet: Linux/macOS builds in CI (the runtime service control there is stubbed out).
+**Updates itself.** Signed, signature-verified auto-updates — choose "don't check / notify / install
+automatically" in settings.
 
-## Requirements
+## Installation
 
-- **Rust** (stable) and the Tauri 2 system dependencies.
-- **Node.js 20+**.
-- A running **sing-box** with `experimental.clash_api` enabled.
+> The sing-box binary is **not** bundled. On first run Vantage Box downloads its own, or you point it
+> at an existing one.
 
-The minimal sing-box config snippet the app needs:
-
-```json
-{
-  "experimental": {
-    "clash_api": {
-      "external_controller": "127.0.0.1:9797",
-      "secret": ""
-    }
-  }
-}
-```
-
-If `secret` is set — enter it in Vantage Box settings. An empty secret means Vantage Box will generate
-its own on each launch.
-
-> **Why port 9797, not 9090?** On 9090 the app is very likely to connect to a sing-box it did not
-> start itself. An `…:9090` address in `settings.json` is rewritten to the app's own on read.
-
-## Development
+### Scoop (recommended)
 
 ```bash
-npm install
-npm run tauri dev
+scoop bucket add noartem https://github.com/noartem/bucket
+scoop install noartem/vantage-box
 ```
 
-<details>
-<summary><b>Checks</b></summary>
+Scoop keeps it up to date.
 
-```bash
-npm run check
-cargo test --manifest-path src-tauri/Cargo.toml
-```
-</details>
+### From a release
 
-### Integration test against a real sing-box
-
-```bash
-powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/integration-test.ps1
-```
-
-The test starts a **separate** sing-box process and never touches an already-running one: different
-ports (19090/19080), a config without TUN (so no admin privileges and no network-stack
-interference), all state kept in a temp folder via `VANTAGE_BOX_CONFIG_DIR`. Only its own child
-process is killed. The script finds the binary on its own (including resolving scoop shims) and
-writes output to `test-results/`.
-
-What is checked: version detection, runtime config build, immutability of the user's file,
-`sing-box check`, `/version`, `/proxies`, selector switching, and the `/traffic` and `/logs`
-streams. Without the environment variable, a plain `cargo test` skips this test.
-
-### App smoke test
-
-```bash
-powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/smoke-test.ps1
-```
-
-This checks what is invisible from the outside: whether the tray icon came up, whether global
-hotkeys could be claimed, whether settings were read, and whether the popup opens. The app prints a
-line like
-
-```
-vantage-box startup tray=ok hotkeys=ok window=shown settings=ok
-```
-
-and the `--self-test` flag makes it open the popup, wait for a signal from the loaded webview, and
-exit. A debug build pulls the frontend from the Vite dev server — the script starts it on its own.
-To check a release build with the bundled frontend: `-Release`.
-
-### sing-box compatibility matrix
-
-```bash
-powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/compat-matrix.ps1
-```
-
-Downloads the latest sing-box releases (one per minor branch), runs the same probe set as the
-integration test against each, and writes `test-results/compat-matrix.md` and `compat-matrix.json`.
-At the end it prints the version range derived **from the measurements** — that is what should go
-into `SINGBOX_MIN` / `SINGBOX_MAX_EXCLUSIVE`.
-
-Each version is checked in its own sandbox; binaries are cached. A specific list of versions:
-`-Versions 1.11.15,1.12.9,1.13.16`.
-
-## Release
-
-Releases are built by GitHub Actions (Windows-only) on the `v*` tag — see
-[release.yml](.github/workflows/release.yml). `tauri-action` builds the NSIS installer, signs it, and
-uploads the installer + `.sig` + `latest.json` (for auto-update) to the release; a separate step
-builds the portable zip. CI on every push/PR — [ci.yml](.github/workflows/ci.yml).
-
-<details>
-<summary><b>🔧 Update signing key</b></summary>
-
-Auto-update verifies the package signature against the public key embedded in
-[tauri.conf.json](src-tauri/tauri.conf.json) → `plugins.updater.pubkey`. The paired private key is a
-secret and must not be in the repo.
-
-To sign releases, add two secrets to the repository settings (`noartem/vantage-box` → Secrets and
-variables → Actions):
-
-- `TAURI_SIGNING_PRIVATE_KEY` — the private key contents (the file `~/.tauri/vantage-box.key`,
-  generated by `tauri signer generate`).
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — the key password. The current key was generated without a
-  password, so the secret is left empty.
-
-Generate a new pair locally (e.g. when changing the password):
-
-```bash
-npx tauri signer generate --ci -w ~/.tauri/vantage-box.key --password "your-password"
-```
-
-Put the public key from `.key.pub` into `tauri.conf.json`. Note: rotating the key means copies
-installed with the old key will no longer update.
-</details>
-
-## Settings
-
-The file is the **single source of truth**. The UI and manual edits in the editor are equal: changes
-are picked up on the fly.
-
-| OS | Path |
-|---|---|
-| Windows | `%APPDATA%\vantage-box\settings.json` |
-| Linux | `~/.config/vantage-box/settings.json` |
-| macOS | `~/Library/Application Support/vantage-box/settings.json` |
-
-The schema lives next to it (`settings.schema.json`) and is wired up via `$schema`, so autocomplete
-works offline. Comments and trailing commas are allowed in the file.
+Grab the **NSIS installer** (`*-setup.exe`) or the **portable zip** (a single `vantage-box.exe` with
+no installation) from the [Releases](https://github.com/noartem/vantage-box/releases) page. Installer
+builds are signed and self-update; the portable build checks for updates and notifies you.
 
 ## sing-box compatibility
 
-A release declares the tested sing-box version range (`SINGBOX_MIN` / `SINGBOX_MAX_EXCLUSIVE` in
-[client.rs](src-tauri/src/clash/client.rs)). Outside the range the app keeps working but shows a
-warning, and binary auto-update never crosses the range boundaries.
+Vantage Box works with sing-box **1.10.7 – 1.13.x**. Outside the range it keeps running but shows a
+warning, and built-in version auto-update never crosses the range boundaries.
 
-The range is not picked by eye: it comes from `scripts/compat-matrix.ps1` (see above). The probes for
-the matrix and for the integration test are the same and live in
-[compat.rs](src-tauri/src/compat.rs), so they cannot drift apart.
-
-Last run (August 7, 2026) — all 10 probes passed on every version:
+The range is measured, not guessed: a compatibility matrix script runs the same probe set against
+every minor release. Last run (August 7, 2026) — all 10 probes passed on every version:
 
 | version | result |
 |---|---|
@@ -268,6 +95,6 @@ Last run (August 7, 2026) — all 10 probes passed on every version:
 ---
 
 <p align="center">
-  <strong>MIT License</strong><br/>
+  <strong>MIT License</strong> · Development docs in <a href="CONTRIBUTING.md">CONTRIBUTING.md</a><br/>
   Not affiliated with <a href="https://github.com/SagerNet/sing-box">sing-box</a>.
 </p>
