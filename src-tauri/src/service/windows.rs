@@ -31,7 +31,10 @@ const ERROR_CANCELLED: i32 = 1223;
 fn winerr(e: &windows_service::Error) -> String {
     match e {
         windows_service::Error::Winapi(io) => {
-            format!("winapi error (code {}): {io}", io.raw_os_error().unwrap_or(-1))
+            format!(
+                "winapi error (code {}): {io}",
+                io.raw_os_error().unwrap_or(-1)
+            )
         }
         other => other.to_string(),
     }
@@ -71,9 +74,8 @@ pub fn status() -> Result<ServiceInfo> {
         supported: true,
         state: map_state(status.current_state),
         can_control,
-        detail: (!can_control).then(|| {
-            "no rights to manage the service — reinstall it to grant them".to_string()
-        }),
+        detail: (!can_control)
+            .then(|| "no rights to manage the service — reinstall it to grant them".to_string()),
     })
 }
 
@@ -99,7 +101,10 @@ fn open(access: ServiceAccess) -> Result<Option<windows_service::service::Servic
         {
             Ok(None)
         }
-        Err(e) => Err(Error::Other(format!("failed to open the service: {}", winerr(&e)))),
+        Err(e) => Err(Error::Other(format!(
+            "failed to open the service: {}",
+            winerr(&e)
+        ))),
     }
 }
 
@@ -182,8 +187,7 @@ pub fn install(settings: &Settings) -> Result<()> {
     // Prepare the runtime config in advance: the service will point straight at it.
     let prepared = runtime::prepare(settings)?;
     let data_dir = binary::data_dir()?;
-    std::fs::create_dir_all(&data_dir)
-        .map_err(|e| Error::io(data_dir.display().to_string(), e))?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| Error::io(data_dir.display().to_string(), e))?;
 
     // We register not sing-box as the service (it does not speak to SCM — that
     // yields error 1053), but ourselves with the `--scm` flag: the wrapper
@@ -285,9 +289,7 @@ fn current_user_sid() -> Result<String> {
     ]);
     hide_console(&mut command);
 
-    let output = command
-        .output()
-        .map_err(|e| Error::io("powershell", e))?;
+    let output = command.output().map_err(|e| Error::io("powershell", e))?;
 
     let sid = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if !sid.starts_with("S-1-") {
@@ -358,12 +360,16 @@ fn elevate(script: &Path) -> Result<()> {
     );
 
     let mut outer = Command::new("powershell");
-    outer.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &command]);
+    outer.args([
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        &command,
+    ]);
     hide_console(&mut outer);
 
-    let status = outer
-        .status()
-        .map_err(|e| Error::io("powershell", e))?;
+    let status = outer.status().map_err(|e| Error::io("powershell", e))?;
 
     match status.code() {
         Some(0) => Ok(()),
@@ -373,7 +379,9 @@ fn elevate(script: &Path) -> Result<()> {
         Some(code) => Err(Error::Other(format!(
             "the service install script exited with code {code}"
         ))),
-        None => Err(Error::Other("the service install script was interrupted".into())),
+        None => Err(Error::Other(
+            "the service install script was interrupted".into(),
+        )),
     }
 }
 

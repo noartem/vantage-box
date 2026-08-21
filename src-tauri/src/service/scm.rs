@@ -57,7 +57,8 @@ pub struct ScmArgs {
 fn parse_args() -> Result<ScmArgs> {
     let mut it = std::env::args().skip_while(|a| a != FLAG).skip(1);
     let mut nth = |label: &str| {
-        it.next().ok_or_else(|| Error::Other(format!("--scm: argument \"{label}\" was not provided")))
+        it.next()
+            .ok_or_else(|| Error::Other(format!("--scm: argument \"{label}\" was not provided")))
     };
     Ok(ScmArgs {
         sing_box: PathBuf::from(nth("sing-box path")?),
@@ -93,7 +94,10 @@ pub fn dispatch() {
         // 1063 and the like — the process was not started by SCM as a service.
         // Log it: this is the only way to see the cause if the wrapper was
         // started manually or SCM refused to connect.
-        let _ = scm_log(&format!("dispatch: could not connect to SCM — {}", winerr(&e)));
+        let _ = scm_log(&format!(
+            "dispatch: could not connect to SCM — {}",
+            winerr(&e)
+        ));
         eprintln!("vantage-box scm dispatch: {e}");
     }
     let _ = scm_log("dispatch: returning from the dispatcher");
@@ -125,8 +129,12 @@ fn run() -> Result<()> {
         }
     };
 
-    let status = register(SERVICE_NAME, handler)
-        .map_err(|e| Error::Other(format!("SCM: could not register the handler — {}", winerr(&e))))?;
+    let status = register(SERVICE_NAME, handler).map_err(|e| {
+        Error::Other(format!(
+            "SCM: could not register the handler — {}",
+            winerr(&e)
+        ))
+    })?;
 
     let report = |state: ServiceState, checkpoint: u32, wait_hint: Duration| -> Result<()> {
         status
@@ -199,7 +207,9 @@ fn run() -> Result<()> {
     if exit_code == 0 {
         Ok(())
     } else {
-        Err(Error::Other(format!("sing-box exited with code {exit_code}")))
+        Err(Error::Other(format!(
+            "sing-box exited with code {exit_code}"
+        )))
     }
 }
 
@@ -209,7 +219,10 @@ fn run() -> Result<()> {
 fn winerr(e: &windows_service::Error) -> String {
     match e {
         windows_service::Error::Winapi(io) => {
-            format!("winapi error (code {}): {io}", io.raw_os_error().unwrap_or(-1))
+            format!(
+                "winapi error (code {}): {io}",
+                io.raw_os_error().unwrap_or(-1)
+            )
         }
         other => other.to_string(),
     }

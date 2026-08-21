@@ -75,11 +75,13 @@ impl ClashClient {
     // -- endpoints ---------------------------------------------------------
 
     pub async fn version(&self) -> Result<VersionInfo> {
-        self.send(self.request(reqwest::Method::GET, "/version")).await
+        self.send(self.request(reqwest::Method::GET, "/version"))
+            .await
     }
 
     pub async fn proxies(&self) -> Result<ProxiesResponse> {
-        self.send(self.request(reqwest::Method::GET, "/proxies")).await
+        self.send(self.request(reqwest::Method::GET, "/proxies"))
+            .await
     }
 
     /// Switches a selector group to a specific outbound.
@@ -118,13 +120,15 @@ impl ClashClient {
 
     /// The current sing-box runtime config (what is actually applied).
     pub async fn configs(&self) -> Result<serde_json::Value> {
-        self.send(self.request(reqwest::Method::GET, "/configs")).await
+        self.send(self.request(reqwest::Method::GET, "/configs"))
+            .await
     }
 
     /// A snapshot of active connections. Duplicates the WebSocket `/connections`,
     /// but is needed for a one-off request (for example, when opening a tab).
     pub async fn connections(&self) -> Result<ConnectionsSnapshot> {
-        self.send(self.request(reqwest::Method::GET, "/connections")).await
+        self.send(self.request(reqwest::Method::GET, "/connections"))
+            .await
     }
 
     /// Closes one connection. sing-box ids can contain characters that need
@@ -143,7 +147,10 @@ impl ClashClient {
 
     // -- transport ---------------------------------------------------------
 
-    async fn send<T: serde::de::DeserializeOwned>(&self, req: reqwest::RequestBuilder) -> Result<T> {
+    async fn send<T: serde::de::DeserializeOwned>(
+        &self,
+        req: reqwest::RequestBuilder,
+    ) -> Result<T> {
         let resp = self.check(req).await?;
         let body = resp.text().await?;
         serde_json::from_str(&body).map_err(|e| Error::parse("Clash API response", e))
@@ -278,12 +285,18 @@ mod tests {
     #[test]
     fn normalizes_urls() {
         assert_eq!(normalize_base_url(""), "http://127.0.0.1:9090");
-        assert_eq!(normalize_base_url("127.0.0.1:9090"), "http://127.0.0.1:9090");
+        assert_eq!(
+            normalize_base_url("127.0.0.1:9090"),
+            "http://127.0.0.1:9090"
+        );
         assert_eq!(
             normalize_base_url(" http://127.0.0.1:9090/ "),
             "http://127.0.0.1:9090"
         );
-        assert_eq!(normalize_base_url("https://localhost:9"), "https://localhost:9");
+        assert_eq!(
+            normalize_base_url("https://localhost:9"),
+            "https://localhost:9"
+        );
     }
 
     #[test]

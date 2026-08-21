@@ -98,7 +98,10 @@ async fn main() {
     println!();
     print_recommendation(&results);
     println!();
-    println!("JSON:     {}", args.out.join("compat-matrix.json").display());
+    println!(
+        "JSON:     {}",
+        args.out.join("compat-matrix.json").display()
+    );
     println!("Markdown: {}", args.out.join("compat-matrix.md").display());
 
     // A non-zero code only if not a single version passed: individual failures
@@ -121,7 +124,9 @@ struct Target {
 async fn select_versions(args: &Args) -> Result<Vec<Target>, String> {
     // Take with a margin: there are many releases, but we need the latest patches
     // per minor.
-    let releases = binary::fetch_releases(60).await.map_err(|e| e.to_string())?;
+    let releases = binary::fetch_releases(60)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut available: Vec<Target> = releases
         .into_iter()
@@ -172,7 +177,11 @@ async fn select_versions(args: &Args) -> Result<Vec<Target>, String> {
 /// Downloads and unpacks a version if it is not yet in the cache.
 async fn ensure_binary(cache: &Path, target: &Target) -> Result<PathBuf, String> {
     let dir = cache.join(&target.version);
-    let exe = dir.join(if cfg!(windows) { "sing-box.exe" } else { "sing-box" });
+    let exe = dir.join(if cfg!(windows) {
+        "sing-box.exe"
+    } else {
+        "sing-box"
+    });
     if exe.is_file() {
         return Ok(exe);
     }

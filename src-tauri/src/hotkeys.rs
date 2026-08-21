@@ -39,7 +39,11 @@ pub fn apply(app: &AppHandle, settings: &Settings) -> Vec<String> {
     // (go-to-settings, tab cycling, tab-by-index, close window) live in the same
     // settings block but are matched against keydown events in the frontend.
     let bindings = [
-        (settings.hotkeys.toggle.trim(), Action::Toggle, "toggle on/off"),
+        (
+            settings.hotkeys.toggle.trim(),
+            Action::Toggle,
+            "toggle on/off",
+        ),
         (
             settings.hotkeys.proxy_popup.trim(),
             Action::ProxyPopup,

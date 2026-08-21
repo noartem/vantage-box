@@ -227,7 +227,11 @@ fn any_due(app: &AppHandle) -> bool {
             if interval_ms == 0 {
                 return false;
             }
-            let last = stored.entries.get(&s.id).map(|e| e.last_updated).unwrap_or(0);
+            let last = stored
+                .entries
+                .get(&s.id)
+                .map(|e| e.last_updated)
+                .unwrap_or(0);
             now >= last + interval_ms
         })
 }
@@ -273,7 +277,13 @@ fn prepare_outbounds(fetched: &[(SubscriptionSettings, ParsedConfig, Option<Stri
         for (i, ob) in cfg.nodes.iter().enumerate() {
             let (node, orig) = retag_item(ob, &id_prefix, &format!("node-{i}"), &mut all_tags);
             if !orig.is_empty() {
-                retag.insert(orig, node.get("tag").and_then(|t| t.as_str()).unwrap().to_string());
+                retag.insert(
+                    orig,
+                    node.get("tag")
+                        .and_then(|t| t.as_str())
+                        .unwrap()
+                        .to_string(),
+                );
             }
             nodes.push(node);
         }
@@ -282,7 +292,10 @@ fn prepare_outbounds(fetched: &[(SubscriptionSettings, ParsedConfig, Option<Stri
         for (i, ep) in cfg.endpoints.iter().enumerate() {
             let (ep, orig) = retag_item(ep, &id_prefix, &format!("endpoint-{i}"), &mut all_tags);
             if !orig.is_empty() {
-                retag.insert(orig, ep.get("tag").and_then(|t| t.as_str()).unwrap().to_string());
+                retag.insert(
+                    orig,
+                    ep.get("tag").and_then(|t| t.as_str()).unwrap().to_string(),
+                );
             }
             endpoints.push(ep);
         }
@@ -305,7 +318,14 @@ fn prepare_outbounds(fetched: &[(SubscriptionSettings, ParsedConfig, Option<Stri
             groups.push(group);
         }
 
-        result.push((sub.id.clone(), ParsedSub { nodes, endpoints, groups }));
+        result.push((
+            sub.id.clone(),
+            ParsedSub {
+                nodes,
+                endpoints,
+                groups,
+            },
+        ));
     }
 
     result
@@ -313,7 +333,12 @@ fn prepare_outbounds(fetched: &[(SubscriptionSettings, ParsedConfig, Option<Stri
 
 /// Clones `item`, rewrites its `tag` to a unique `sub:`-prefixed tag, and returns
 /// it together with the original tag (empty if the item had none).
-fn retag_item(item: &Value, id_prefix: &str, fallback: &str, all_tags: &mut Vec<String>) -> (Value, String) {
+fn retag_item(
+    item: &Value,
+    id_prefix: &str,
+    fallback: &str,
+    all_tags: &mut Vec<String>,
+) -> (Value, String) {
     let mut node = item.clone();
     let orig = node.get("tag").and_then(|t| t.as_str()).map(String::from);
     let remark = orig.clone().unwrap_or_else(|| fallback.to_string());
@@ -331,7 +356,7 @@ fn unique_tag(base: &str, existing: &[String]) -> String {
     let mut n = 2;
     loop {
         let candidate = format!("{base}-{n}");
-        if !existing.iter().any(|t| *t == candidate) {
+        if !existing.contains(&candidate) {
             return candidate;
         }
         n += 1;
@@ -377,10 +402,8 @@ fn sort_object_keys(value: &mut Value) {
     match value {
         Value::Object(map) => {
             // preserve_order is enabled, so we sort keys explicitly for the signature.
-            let mut entries: Vec<(String, Value)> = map
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
+            let mut entries: Vec<(String, Value)> =
+                map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
             entries.sort_by(|a, b| a.0.cmp(&b.0));
             map.clear();
             for (k, mut v) in entries {
@@ -436,7 +459,11 @@ fn inject_into_config(
     // conflicts (outbounds + endpoints are touched together in the inject loop).
     let mut outbounds: Vec<Value> = match root.remove("outbounds") {
         Some(Value::Array(a)) => a,
-        Some(_) => return Err(Error::Other("outbounds in the config is not an array".into())),
+        Some(_) => {
+            return Err(Error::Other(
+                "outbounds in the config is not an array".into(),
+            ))
+        }
         None => Vec::new(),
     };
     let any_endpoints = prepared.iter().any(|(_, s)| !s.endpoints.is_empty());
@@ -448,7 +475,9 @@ fn inject_into_config(
         Some(Value::Array(a)) => endpoints = a,
         Some(other) => {
             if any_endpoints {
-                return Err(Error::Other("endpoints in the config is not an array".into()));
+                return Err(Error::Other(
+                    "endpoints in the config is not an array".into(),
+                ));
             }
             // We do not touch endpoints — keep the original value as-is.
             preserve_endpoints = Some(other);
@@ -525,14 +554,22 @@ fn inject_into_config(
             // Group-aware: insert each group, or fill an existing one with the
             // same name.
             for g in &s.groups {
-                let tag = g.get("tag").and_then(|t| t.as_str()).unwrap_or("").to_string();
+                let tag = g
+                    .get("tag")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 if tag.is_empty() {
                     continue;
                 }
                 let new_refs: Vec<String> = g
                     .get("outbounds")
                     .and_then(|v| v.as_array())
-                    .map(|a| a.iter().filter_map(|e| e.as_str().map(String::from)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|e| e.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 if group_exists(&outbounds, &tag) {
                     append_refs_to_group(&mut outbounds, &tag, &new_refs)?;
@@ -630,7 +667,11 @@ fn append_refs_to_group(outbounds: &mut [Value], group_tag: &str, refs: &[String
         let list = o
             .get_mut("outbounds")
             .and_then(|v| v.as_array_mut())
-            .ok_or_else(|| Error::Other(format!("group {group_tag}: outbounds field is not an array")))?;
+            .ok_or_else(|| {
+                Error::Other(format!(
+                    "group {group_tag}: outbounds field is not an array"
+                ))
+            })?;
         for new_tag in refs {
             let exists = list.iter().any(|t| t.as_str() == Some(new_tag.as_str()));
             if !exists {
@@ -646,12 +687,10 @@ fn append_refs_to_group(outbounds: &mut [Value], group_tag: &str, refs: &[String
 fn write_config_atomic(path: &Path, body: &str) -> Result<()> {
     if path.is_file() {
         let backup = path.with_extension("json.bak");
-        std::fs::copy(path, &backup)
-            .map_err(|e| Error::io(backup.display().to_string(), e))?;
+        std::fs::copy(path, &backup).map_err(|e| Error::io(backup.display().to_string(), e))?;
     }
     let tmp = path.with_extension("json.vbtmp");
-    std::fs::write(&tmp, body.as_bytes())
-        .map_err(|e| Error::io(tmp.display().to_string(), e))?;
+    std::fs::write(&tmp, body.as_bytes()).map_err(|e| Error::io(tmp.display().to_string(), e))?;
     std::fs::rename(&tmp, path).map_err(|e| Error::io(path.display().to_string(), e))?;
     Ok(())
 }
@@ -679,11 +718,11 @@ async fn fetch(url: &str) -> Result<String> {
         .map_err(|e| Error::Transport(format!("subscription unavailable: {e}")))?;
     let status = resp.status();
     if !status.is_success() {
-        return Err(Error::Other(format!(
-            "subscription returned {status}"
-        )));
+        return Err(Error::Other(format!("subscription returned {status}")));
     }
-    resp.text().await.map_err(|e| Error::Transport(e.to_string()))
+    resp.text()
+        .await
+        .map_err(|e| Error::Transport(e.to_string()))
 }
 
 fn parse_content(text: &str) -> Result<ParsedConfig> {
@@ -929,8 +968,7 @@ fn parse_ss(rest: &str) -> Result<Value> {
 }
 
 fn parse_vmess(rest: &str) -> Result<Value> {
-    let decoded = b64_decode(rest)
-        .ok_or_else(|| Error::Other("vmess: expected base64".into()))?;
+    let decoded = b64_decode(rest).ok_or_else(|| Error::Other("vmess: expected base64".into()))?;
     let v: Value = serde_json::from_str(&decoded)
         .map_err(|e| Error::Other(format!("vmess: invalid JSON — {e}")))?;
 
@@ -939,7 +977,10 @@ fn parse_vmess(rest: &str) -> Result<Value> {
     // string — accept both.
     let i = |k: &str| {
         v.get(k)
-            .and_then(|x| x.as_i64().or_else(|| x.as_str().and_then(|s| s.parse::<i64>().ok())))
+            .and_then(|x| {
+                x.as_i64()
+                    .or_else(|| x.as_str().and_then(|s| s.parse::<i64>().ok()))
+            })
             .unwrap_or(0)
     };
 
@@ -977,7 +1018,10 @@ fn parse_vmess(rest: &str) -> Result<Value> {
         }
         let alpn = s("alpn");
         if !alpn.is_empty() {
-            tls.insert("alpn".into(), json!(alpn.split(',').map(String::from).collect::<Vec<_>>()));
+            tls.insert(
+                "alpn".into(),
+                json!(alpn.split(',').map(String::from).collect::<Vec<_>>()),
+            );
         }
         outbound["tls"] = Value::Object(tls);
     }
@@ -1219,7 +1263,10 @@ fn parse_tuic(rest: &str) -> Result<Value> {
     }
     let alpn = q.get("alpn").cloned().unwrap_or_default();
     if !alpn.is_empty() {
-        tls.insert("alpn".into(), json!(alpn.split(',').map(String::from).collect::<Vec<_>>()));
+        tls.insert(
+            "alpn".into(),
+            json!(alpn.split(',').map(String::from).collect::<Vec<_>>()),
+        );
     }
 
     let mut outbound = json!({
@@ -1266,22 +1313,12 @@ pub struct SubscriptionsState {
     pub apply_pending: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SubStateEntry {
     pub last_updated: u64,
     pub node_count: usize,
     pub last_error: Option<String>,
-}
-
-impl Default for SubStateEntry {
-    fn default() -> Self {
-        Self {
-            last_updated: 0,
-            node_count: 0,
-            last_error: None,
-        }
-    }
 }
 
 fn state_path() -> Result<std::path::PathBuf> {
@@ -1293,7 +1330,8 @@ pub fn load_state() -> Result<SubscriptionsState> {
     if !path.exists() {
         return Ok(SubscriptionsState::default());
     }
-    let raw = std::fs::read_to_string(&path).map_err(|e| Error::io(path.display().to_string(), e))?;
+    let raw =
+        std::fs::read_to_string(&path).map_err(|e| Error::io(path.display().to_string(), e))?;
     if raw.trim().is_empty() {
         return Ok(SubscriptionsState::default());
     }
@@ -1317,13 +1355,11 @@ pub fn mark_apply_pending() {
 pub fn save_state(state: &SubscriptionsState) -> Result<()> {
     let path = state_path()?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| Error::io(parent.display().to_string(), e))?;
+        std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.display().to_string(), e))?;
     }
     let body = serde_json::to_string_pretty(state).unwrap_or_default();
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, body.as_bytes())
-        .map_err(|e| Error::io(tmp.display().to_string(), e))?;
+    std::fs::write(&tmp, body.as_bytes()).map_err(|e| Error::io(tmp.display().to_string(), e))?;
     std::fs::rename(&tmp, &path).map_err(|e| Error::io(path.display().to_string(), e))?;
     Ok(())
 }
@@ -1355,7 +1391,10 @@ mod tests {
     use crate::settings::SingBoxSettings;
 
     fn tag(v: &Value) -> String {
-        v.get("tag").and_then(|t| t.as_str()).unwrap_or("").to_string()
+        v.get("tag")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string()
     }
 
     #[test]
@@ -1502,7 +1541,11 @@ mod tests {
     fn refs_of(o: &Value) -> Vec<String> {
         o.get("outbounds")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|e| e.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|e| e.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -1510,7 +1553,9 @@ mod tests {
     fn signature_stable_regardless_of_order() {
         // Two subscriptions, one node each. Changing the order — the signature
         // of the set must not depend on the order the subscriptions came in.
-        let ob_a = vec![json!({"type":"trojan","tag":"X","server":"h","server_port":1,"password":"p","tls":{"enabled":true}})];
+        let ob_a = vec![
+            json!({"type":"trojan","tag":"X","server":"h","server_port":1,"password":"p","tls":{"enabled":true}}),
+        ];
         let ob_b = vec![json!({"type":"vless","tag":"Y","server":"h2","server_port":1,"uuid":"u"})];
         let p1 = prepare_outbounds(&[
             (mksub("a"), cfg_nodes(ob_a.clone()), None),
@@ -1525,7 +1570,9 @@ mod tests {
 
     #[test]
     fn signature_detects_change() {
-        let ob = vec![json!({"type":"trojan","tag":"X","server":"h","server_port":1,"password":"p","tls":{"enabled":true}})];
+        let ob = vec![
+            json!({"type":"trojan","tag":"X","server":"h","server_port":1,"password":"p","tls":{"enabled":true}}),
+        ];
         let p = prepare_outbounds(&[(mksub("a"), cfg_nodes(ob), None)]);
         let ob2 = vec![json!({"type":"vless","tag":"X","server":"h","server_port":1,"uuid":"u"})];
         let p2 = prepare_outbounds(&[(mksub("a"), cfg_nodes(ob2), None)]);
@@ -1536,7 +1583,9 @@ mod tests {
     fn signature_detects_group_change() {
         // Same nodes, but one has a group and the other does not — the signature
         // must differ, otherwise a group-only change would not trigger re-inject.
-        let node = vec![json!({"type":"trojan","tag":"X","server":"h","server_port":1,"password":"p","tls":{"enabled":true}})];
+        let node = vec![
+            json!({"type":"trojan","tag":"X","server":"h","server_port":1,"password":"p","tls":{"enabled":true}}),
+        ];
         let with_group = ParsedConfig {
             nodes: node.clone(),
             endpoints: Vec::new(),
@@ -1549,7 +1598,9 @@ mod tests {
 
     #[test]
     fn prepare_outbounds_tags_with_prefix() {
-        let ob = vec![json!({"type":"trojan","tag":"MyNode","server":"h","server_port":1,"password":"p","tls":{"enabled":true}})];
+        let ob = vec![
+            json!({"type":"trojan","tag":"MyNode","server":"h","server_port":1,"password":"p","tls":{"enabled":true}}),
+        ];
         let prepared = prepare_outbounds(&[(mksub("a"), cfg_nodes(ob), None)]);
         let (_, s) = &prepared[0];
         assert_eq!(s.nodes.len(), 1);
@@ -1565,7 +1616,9 @@ mod tests {
         // an auto urltest referencing the node + endpoint, and a manual selector
         // referencing the auto group + node + endpoint.
         let cfg = ParsedConfig {
-            nodes: vec![json!({"type":"trojan","tag":"A","server":"h","server_port":1,"password":"p","tls":{"enabled":true}})],
+            nodes: vec![
+                json!({"type":"trojan","tag":"A","server":"h","server_port":1,"password":"p","tls":{"enabled":true}}),
+            ],
             endpoints: vec![json!({"type":"wireguard","tag":"wg","system":false})],
             groups: vec![
                 json!({"type":"urltest","tag":"auto","outbounds":["A","wg"]}),
@@ -1587,22 +1640,30 @@ mod tests {
         // auto: node + endpoint refs rewritten to the retagged tags.
         assert_eq!(refs_of(&s.groups[0]), vec![a_tag.clone(), wg_tag.clone()]);
         // manual: the nested "auto" group ref stays; node + endpoint refs rewritten.
-        assert_eq!(refs_of(&s.groups[1]), vec!["auto".to_string(), a_tag, wg_tag]);
+        assert_eq!(
+            refs_of(&s.groups[1]),
+            vec!["auto".to_string(), a_tag, wg_tag]
+        );
     }
 
     #[test]
     fn inject_creates_new_groups_and_fills_existing() {
         let path = tmp_config_path("create_fill");
         // Base config: a "proxy" selector and a pre-created empty "manual".
-        std::fs::write(&path, r#"{"outbounds":[
+        std::fs::write(
+            &path,
+            r#"{"outbounds":[
             {"type":"direct","tag":"direct"},
             {"type":"selector","tag":"proxy","outbounds":["direct"]},
             {"type":"selector","tag":"manual","outbounds":[]}
-        ]}"#)
+        ]}"#,
+        )
         .unwrap();
 
         let cfg = ParsedConfig {
-            nodes: vec![json!({"type":"trojan","tag":"A","server":"h","server_port":1,"password":"p","tls":{"enabled":true}})],
+            nodes: vec![
+                json!({"type":"trojan","tag":"A","server":"h","server_port":1,"password":"p","tls":{"enabled":true}}),
+            ],
             endpoints: vec![json!({"type":"wireguard","tag":"wg","system":false})],
             groups: vec![
                 json!({"type":"urltest","tag":"auto","outbounds":["A","wg"]}),
@@ -1651,7 +1712,9 @@ mod tests {
         .unwrap();
 
         let cfg = ParsedConfig {
-            nodes: vec![json!({"type":"trojan","tag":"A","server":"h","server_port":1,"password":"p","tls":{"enabled":true}})],
+            nodes: vec![
+                json!({"type":"trojan","tag":"A","server":"h","server_port":1,"password":"p","tls":{"enabled":true}}),
+            ],
             endpoints: vec![json!({"type":"wireguard","tag":"wg","system":false})],
             groups: vec![
                 json!({"type":"urltest","tag":"auto","outbounds":["A","wg"]}),
@@ -1663,8 +1726,7 @@ mod tests {
 
         let (_, created1) = inject_into_config(&settings, &prepared, &[]).unwrap();
         // Second pass feeds back the groups we created, as `apply` would persist.
-        let (_, created2) =
-            inject_into_config(&settings, &prepared, &created1).unwrap();
+        let (_, created2) = inject_into_config(&settings, &prepared, &created1).unwrap();
         let written: Value =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         let obs = written["outbounds"].as_array().unwrap();
@@ -1673,15 +1735,16 @@ mod tests {
         assert_eq!(obs.iter().filter(|o| tag(o) == "auto").count(), 1);
         assert_eq!(obs.iter().filter(|o| tag(o) == "manual").count(), 1);
         // Still exactly one managed node and one managed endpoint.
-        assert_eq!(
-            obs.iter().filter(|o| tag(o).starts_with("sub:")).count(),
-            1
-        );
+        assert_eq!(obs.iter().filter(|o| tag(o).starts_with("sub:")).count(), 1);
         let manual = obs.iter().find(|o| tag(o) == "manual").unwrap();
         // manual refs do not duplicate on a second pass.
         assert_eq!(
             refs_of(manual),
-            vec!["auto".to_string(), "sub:s:A".to_string(), "sub:s:wg".to_string()]
+            vec![
+                "auto".to_string(),
+                "sub:s:A".to_string(),
+                "sub:s:wg".to_string()
+            ]
         );
         // The created set is stable across passes.
         assert_eq!(created1, created2);

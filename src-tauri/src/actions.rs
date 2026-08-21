@@ -11,10 +11,10 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::clash::ClashClient;
 use crate::error::{Error, Result};
 use crate::process;
+use crate::runtime;
 use crate::service::{self, ServiceInfo, ServiceState};
 use crate::settings::Settings;
 use crate::state::{self, AppState};
-use crate::runtime;
 
 /// Event for the UI: sing-box state changed (including from the tray).
 pub const EVENT_SERVICE: &str = "service://changed";
@@ -266,10 +266,7 @@ pub async fn restart(app: &AppHandle) -> Result<RestartOutcome> {
 }
 
 pub async fn select_proxy(app: &AppHandle, group: &str, name: &str) -> Result<()> {
-    app.state::<AppState>()
-        .client()
-        .select(group, name)
-        .await?;
+    app.state::<AppState>().client().select(group, name).await?;
     let _ = app.emit(EVENT_PROXIES, ());
     Ok(())
 }

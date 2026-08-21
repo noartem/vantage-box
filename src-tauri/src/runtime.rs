@@ -106,8 +106,8 @@ pub fn prepare_in(dir: &Path, settings: &Settings) -> Result<PreparedConfig> {
     }
 
     let raw = std::fs::read_to_string(source).map_err(|e| Error::io(source, e))?;
-    let mut config: Value = serde_json::from_str(&strip_jsonc(&raw))
-        .map_err(|e| Error::parse(source, e))?;
+    let mut config: Value =
+        serde_json::from_str(&strip_jsonc(&raw)).map_err(|e| Error::parse(source, e))?;
 
     if !config.is_object() {
         return Err(Error::Other(format!(
@@ -151,7 +151,10 @@ pub fn prepare_in(dir: &Path, settings: &Settings) -> Result<PreparedConfig> {
     clash_api["secret"] = json!(secret.clone());
 
     let path = dir.join(RUNTIME_CONFIG);
-    write_private(&path, &serde_json::to_vec_pretty(&config).unwrap_or_default())?;
+    write_private(
+        &path,
+        &serde_json::to_vec_pretty(&config).unwrap_or_default(),
+    )?;
 
     write_private(
         &dir.join(RUNTIME_STATE),
@@ -231,8 +234,7 @@ pub fn effective_api_settings(settings: &Settings) -> ClashApiSettings {
 /// ensured by the user profile ACL; on Unix the mode must be set explicitly.
 fn write_private(path: &Path, body: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| Error::io(parent.display().to_string(), e))?;
+        std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.display().to_string(), e))?;
     }
     std::fs::write(path, body).map_err(|e| Error::io(path.display().to_string(), e))?;
 
@@ -338,7 +340,10 @@ mod tests {
             .into_iter()
             .filter(|key| written.contains(&format!("\"{key}\"")))
             .collect();
-        assert_eq!(keys, ["log", "dns", "inbounds", "outbounds", "experimental"]);
+        assert_eq!(
+            keys,
+            ["log", "dns", "inbounds", "outbounds", "experimental"]
+        );
         assert!(written.find("\"log\"").unwrap() < written.find("\"experimental\"").unwrap());
     }
 

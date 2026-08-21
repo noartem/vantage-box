@@ -8,8 +8,7 @@ use crate::settings::Settings;
 
 fn not_supported() -> Error {
     Error::Other(
-        "service management is not yet implemented on this OS — start sing-box yourself"
-            .into(),
+        "service management is not yet implemented on this OS — start sing-box yourself".into(),
     )
 }
 

@@ -69,7 +69,7 @@ pub fn downloaded_versions() -> Vec<String> {
         .filter(|version| parse_version(version).is_some())
         .collect();
 
-    versions.sort_by(|a, b| version_key(b).cmp(&version_key(a)));
+    versions.sort_by_key(|b| std::cmp::Reverse(version_key(b)));
     versions
 }
 
@@ -157,7 +157,11 @@ pub fn detect_version(path: &Path) -> Result<String> {
     output
         .split_whitespace()
         .find_map(|token| parse_version(token).map(|_| token.trim_start_matches('v').to_string()))
-        .ok_or_else(|| Error::Other(format!("could not parse `sing-box version` output: {output}")))
+        .ok_or_else(|| {
+            Error::Other(format!(
+                "could not parse `sing-box version` output: {output}"
+            ))
+        })
 }
 
 /// `sing-box check -c <config>` — syntactic and semantic validation.
@@ -408,8 +412,7 @@ fn read_cache() -> CachedCatalog {
 fn write_cache(cache: &CachedCatalog) -> Result<()> {
     let path = catalog_path()?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| Error::io(parent.display().to_string(), e))?;
+        std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.display().to_string(), e))?;
     }
     let body = serde_json::to_vec_pretty(cache).unwrap_or_default();
     std::fs::write(&path, body).map_err(|e| Error::io(path.display().to_string(), e))
@@ -472,7 +475,7 @@ fn finish(cache: CachedCatalog, active_version: Option<&str>) -> ReleaseCatalog 
         });
     }
 
-    releases.sort_by(|a, b| version_key(&b.version).cmp(&version_key(&a.version)));
+    releases.sort_by_key(|b| std::cmp::Reverse(version_key(&b.version)));
 
     ReleaseCatalog {
         stale: releases.is_empty()
@@ -511,8 +514,7 @@ pub async fn download(url: &str, dest: &Path) -> Result<String> {
     use sha2::{Digest, Sha256};
 
     if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| Error::io(parent.display().to_string(), e))?;
+        std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.display().to_string(), e))?;
     }
 
     let http = reqwest::Client::builder()
@@ -528,8 +530,8 @@ pub async fn download(url: &str, dest: &Path) -> Result<String> {
         )));
     }
 
-    let mut file = std::fs::File::create(dest)
-        .map_err(|e| Error::io(dest.display().to_string(), e))?;
+    let mut file =
+        std::fs::File::create(dest).map_err(|e| Error::io(dest.display().to_string(), e))?;
     let mut hasher = Sha256::new();
     let mut stream = response.bytes_stream();
 
@@ -580,8 +582,8 @@ pub fn extract(archive_path: &Path, dest: &Path) -> Result<()> {
             std::fs::create_dir_all(parent)
                 .map_err(|e| Error::io(parent.display().to_string(), e))?;
         }
-        let mut out = std::fs::File::create(dest)
-            .map_err(|e| Error::io(dest.display().to_string(), e))?;
+        let mut out =
+            std::fs::File::create(dest).map_err(|e| Error::io(dest.display().to_string(), e))?;
         std::io::copy(&mut entry, &mut out)
             .map_err(|e| Error::io(dest.display().to_string(), e))?;
 
@@ -594,9 +596,7 @@ pub fn extract(archive_path: &Path, dest: &Path) -> Result<()> {
         return Ok(());
     }
 
-    Err(Error::Other(format!(
-        "no {EXE_NAME} file in the archive"
-    )))
+    Err(Error::Other(format!("no {EXE_NAME} file in the archive")))
 }
 
 /// On Windows a child process would otherwise flash a console window.

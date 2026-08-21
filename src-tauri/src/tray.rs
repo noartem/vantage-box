@@ -139,9 +139,7 @@ struct TrayGroup {
     hidden: usize,
 }
 
-fn collect_groups(
-    proxies: HashMap<String, crate::clash::models::Proxy>,
-) -> Vec<TrayGroup> {
+fn collect_groups(proxies: HashMap<String, crate::clash::models::Proxy>) -> Vec<TrayGroup> {
     let mut groups: Vec<TrayGroup> = proxies
         .iter()
         .filter(|(name, proxy)| {
@@ -293,7 +291,13 @@ fn rebuild_menu(
             None::<&str>,
         )?)
         .separator()
-        .item(&MenuItem::with_id(app, ID_QUIT, "Quit", true, None::<&str>)?)
+        .item(&MenuItem::with_id(
+            app,
+            ID_QUIT,
+            "Quit",
+            true,
+            None::<&str>,
+        )?)
         .build()?;
 
     *registry.selections.lock().expect("tray selections lock") = selections;
@@ -425,6 +429,10 @@ fn icon_for(active: bool) -> Image<'static> {
     }
     // Icon not available — draw a solid square so at least something is
     // visible in the tray. Colors match the accents of the original icons.
-    let fill = if active { [0x4d, 0xbf, 0x45, 0xff] } else { [0x7b, 0x84, 0x94, 0xb0] };
+    let fill = if active {
+        [0x4d, 0xbf, 0x45, 0xff]
+    } else {
+        [0x7b, 0x84, 0x94, 0xb0]
+    };
     Image::new_owned(fill.repeat(16 * 16), 16, 16)
 }

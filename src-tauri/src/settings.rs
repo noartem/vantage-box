@@ -405,11 +405,9 @@ pub fn read_from_disk(path: &Path) -> Result<Settings> {
 pub fn write_to_disk(path: &Path, settings: &Settings) -> Result<()> {
     let display = path.display().to_string();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| Error::io(parent.display().to_string(), e))?;
+        std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.display().to_string(), e))?;
     }
-    let mut body = serde_json::to_string_pretty(settings)
-        .map_err(|e| Error::parse(&display, e))?;
+    let mut body = serde_json::to_string_pretty(settings).map_err(|e| Error::parse(&display, e))?;
     body.push('\n');
 
     let tmp = path.with_extension("json.tmp");
@@ -491,17 +489,16 @@ pub fn spawn_watcher(path: &Path, tx: ChangeTx) -> Result<notify::RecommendedWat
 
     let (raw_tx, raw_rx) = std::sync::mpsc::channel::<()>();
 
-    let mut watcher = notify::recommended_watcher(
-        move |res: std::result::Result<Event, notify::Error>| {
+    let mut watcher =
+        notify::recommended_watcher(move |res: std::result::Result<Event, notify::Error>| {
             let Ok(event) = res else { return };
             // The temp file of the atomic write is not interesting.
             let touches_target = event.paths.iter().any(|p| p == &target);
             if touches_target {
                 let _ = raw_tx.send(());
             }
-        },
-    )
-    .map_err(|e| Error::Other(format!("failed to create watcher: {e}")))?;
+        })
+        .map_err(|e| Error::Other(format!("failed to create watcher: {e}")))?;
 
     watcher
         .watch(&dir, RecursiveMode::NonRecursive)
@@ -543,9 +540,6 @@ mod tests {
     fn keeps_deliberate_port() {
         let mut settings = Settings::default();
         settings.clash_api.url = "http://127.0.0.1:18080".into();
-        assert_eq!(
-            normalize(settings).clash_api.url,
-            "http://127.0.0.1:18080"
-        );
+        assert_eq!(normalize(settings).clash_api.url, "http://127.0.0.1:18080");
     }
 }

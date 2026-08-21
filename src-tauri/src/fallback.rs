@@ -66,13 +66,17 @@ async fn tick(app: &AppHandle) -> u64 {
     };
 
     for group in groups {
-        let Some(g) = proxies.get(&group) else { continue };
+        let Some(g) = proxies.get(&group) else {
+            continue;
+        };
         // urltest manages itself — we do not interfere. And "select" is
         // meaningless for it.
         if !g.is_selectable() {
             continue;
         }
-        let Some(active) = g.now.as_ref() else { continue };
+        let Some(active) = g.now.as_ref() else {
+            continue;
+        };
         let members = g.all.clone().unwrap_or_default();
 
         if is_ok(&client, active, &url, timeout, max_delay).await {

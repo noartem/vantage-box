@@ -124,16 +124,16 @@ pub fn hide_popup(app: &AppHandle) {
 /// page would open — the window is there, but the contents are not.
 fn build_popup(app: &AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     let window = WebviewWindowBuilder::new(app, POPUP, WebviewUrl::App("index.html".into()))
-    .title("Vantage Box")
-    .inner_size(POPUP_WIDTH, POPUP_HEIGHT)
-    .decorations(false)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .resizable(false)
-    .shadow(true)
-    // Show only after positioning, otherwise the window flashes in the corner.
-    .visible(false)
-    .build()?;
+        .title("Vantage Box")
+        .inner_size(POPUP_WIDTH, POPUP_HEIGHT)
+        .decorations(false)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(true)
+        // Show only after positioning, otherwise the window flashes in the corner.
+        .visible(false)
+        .build()?;
 
     // The popup lives as long as it has focus: a click outside — and it is gone.
     //
@@ -181,8 +181,10 @@ fn position_at_cursor(app: &AppHandle, window: &tauri::WebviewWindow) {
     let max_x = area_position.x + area_size.width - POPUP_WIDTH - POPUP_MARGIN;
     let max_y = area_position.y + area_size.height - POPUP_HEIGHT - POPUP_MARGIN;
 
-    let x = (cursor.x - POPUP_WIDTH / 2.0).clamp(area_position.x + POPUP_MARGIN, max_x.max(area_position.x));
-    let y = (cursor.y - POPUP_HEIGHT - POPUP_MARGIN).clamp(area_position.y + POPUP_MARGIN, max_y.max(area_position.y));
+    let x = (cursor.x - POPUP_WIDTH / 2.0)
+        .clamp(area_position.x + POPUP_MARGIN, max_x.max(area_position.x));
+    let y = (cursor.y - POPUP_HEIGHT - POPUP_MARGIN)
+        .clamp(area_position.y + POPUP_MARGIN, max_y.max(area_position.y));
 
     let _ = window.set_position(LogicalPosition::new(x, y));
 }

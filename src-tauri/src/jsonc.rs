@@ -114,14 +114,20 @@ mod tests {
         let src = "{\n  \"a\": 1 // hello\n}";
         let out = strip_jsonc(src);
         assert_eq!(out.len(), src.len());
-        assert_eq!(serde_json::from_str::<serde_json::Value>(&out).unwrap()["a"], 1);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&out).unwrap()["a"],
+            1
+        );
     }
 
     #[test]
     fn removes_block_comments() {
         let src = "{/* note\n   more */ \"a\": 1}";
         let out = strip_jsonc(src);
-        assert_eq!(serde_json::from_str::<serde_json::Value>(&out).unwrap()["a"], 1);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&out).unwrap()["a"],
+            1
+        );
     }
 
     #[test]

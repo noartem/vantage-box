@@ -116,7 +116,10 @@ pub async fn probe(options: &ProbeOptions) -> ProbeReport {
     let mut version = None;
 
     if let Err(e) = std::fs::create_dir_all(&options.workdir) {
-        checks.push(fail(CHECK_PORTS, format!("could not create the working folder: {e}")));
+        checks.push(fail(
+            CHECK_PORTS,
+            format!("could not create the working folder: {e}"),
+        ));
         return finish(version, checks);
     }
 
@@ -126,7 +129,10 @@ pub async fn probe(options: &ProbeOptions) -> ProbeReport {
         .filter(|port| !port_is_free(*port))
         .collect();
     if busy.is_empty() {
-        checks.push(pass(CHECK_PORTS, format!("{}, {} are free", options.api_port, options.mixed_port)));
+        checks.push(pass(
+            CHECK_PORTS,
+            format!("{}, {} are free", options.api_port, options.mixed_port),
+        ));
     } else {
         checks.push(fail(CHECK_PORTS, format!("ports busy: {busy:?}")));
         return finish(version, checks);
@@ -148,7 +154,10 @@ pub async fn probe(options: &ProbeOptions) -> ProbeReport {
     let user_config = options.workdir.join("user-config.json");
     let sample = sample_config(options.mixed_port);
     if let Err(e) = std::fs::write(&user_config, &sample) {
-        checks.push(fail(CHECK_RUNTIME_CONFIG, format!("could not write the config: {e}")));
+        checks.push(fail(
+            CHECK_RUNTIME_CONFIG,
+            format!("could not write the config: {e}"),
+        ));
         return finish(version, checks);
     }
 
@@ -239,16 +248,25 @@ pub async fn probe(options: &ProbeOptions) -> ProbeReport {
             Some(group) if group.is_group() && group.is_selectable() => {
                 checks.push(pass(
                     CHECK_PROXIES,
-                    format!("group choose, selected {}", group.now.as_deref().unwrap_or("—")),
+                    format!(
+                        "group choose, selected {}",
+                        group.now.as_deref().unwrap_or("—")
+                    ),
                 ));
                 true
             }
             Some(_) => {
-                checks.push(fail(CHECK_PROXIES, "choose not recognized as a selector".into()));
+                checks.push(fail(
+                    CHECK_PROXIES,
+                    "choose not recognized as a selector".into(),
+                ));
                 false
             }
             None => {
-                checks.push(fail(CHECK_PROXIES, "no choose group in the response".into()));
+                checks.push(fail(
+                    CHECK_PROXIES,
+                    "no choose group in the response".into(),
+                ));
                 false
             }
         },
@@ -291,7 +309,12 @@ pub async fn probe(options: &ProbeOptions) -> ProbeReport {
     match client.connections().await {
         Ok(snap) => checks.push(pass(
             CHECK_CONNECTIONS,
-            format!("{} connections, ↓{} ↑{}", snap.connections.len(), snap.download_total, snap.upload_total),
+            format!(
+                "{} connections, ↓{} ↑{}",
+                snap.connections.len(),
+                snap.download_total,
+                snap.upload_total
+            ),
         )),
         Err(e) => checks.push(fail(CHECK_CONNECTIONS, e.to_string())),
     }
@@ -386,11 +409,7 @@ type WsStream =
 
 /// Connects to a WebSocket and waits for the first text message. If `poke_port`
 /// is set, after subscribing it pokes it — so an entry appears in the log.
-async fn first_message(
-    url: &str,
-    secret: &str,
-    poke_port: Option<u16>,
-) -> Result<String, String> {
+async fn first_message(url: &str, secret: &str, poke_port: Option<u16>) -> Result<String, String> {
     let mut stream = connect_ws(url, secret).await?;
 
     if let Some(port) = poke_port {
@@ -471,10 +490,7 @@ async fn close_one_connection(
     let listener = TcpListener::bind(("127.0.0.1", 0))
         .await
         .map_err(|e| format!("could not open the target: {e}"))?;
-    let target_port = listener
-        .local_addr()
-        .map_err(|e| e.to_string())?
-        .port();
+    let target_port = listener.local_addr().map_err(|e| e.to_string())?.port();
 
     // 1. Open a tunnel through the mixed inbound to our target.
     let mut sock = tokio::net::TcpStream::connect(("127.0.0.1", mixed_port))
@@ -541,7 +557,10 @@ async fn close_one_connection(
     }
 
     // 4. Kill it and verify it disappeared.
-    client.close_connection(&id).await.map_err(|e| e.to_string())?;
+    client
+        .close_connection(&id)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let gone = tokio::time::timeout(Duration::from_secs(5), async {
         loop {

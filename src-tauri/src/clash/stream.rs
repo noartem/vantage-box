@@ -211,9 +211,8 @@ where
     })
 }
 
-type WsStream = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type WsStream =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn connect(url: &str, secret: &str) -> Result<WsStream, String> {
     let mut request = url.into_client_request().map_err(|e| e.to_string())?;

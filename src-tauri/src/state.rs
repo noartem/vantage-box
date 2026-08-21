@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::clash::{ClashClient, StreamManager};
 use crate::error::Result;
-use crate::settings::{ChangeTx, SettingsStore, Settings, SharedSettings};
+use crate::settings::{ChangeTx, Settings, SettingsStore, SharedSettings};
 
 fn digest(content: &str) -> [u8; 32] {
     let mut hasher = Sha256::new();
