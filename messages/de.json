@@ -195,7 +195,6 @@
 	"runtime_config_not_found": "Die laufende Konfiguration existiert noch nicht — starte sing-box mindestens einmal.",
 	"runtime_config_loading": "Lese laufende Konfiguration…",
 
-	"subs_save_first": "Speichere zuerst deine Änderungen — die Aktualisierung liest die bereits gespeicherten Abonnements.",
 	"subs_refresh_failed": "Aktualisierung fehlgeschlagen: {names}",
 	"subs_nodes_poured": "{count} Nodes geladen.",
 	"subs_restarted_suffix": " sing-box wurde neu gestartet.",

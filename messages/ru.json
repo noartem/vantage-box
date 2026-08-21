@@ -195,7 +195,6 @@
 	"runtime_config_not_found": "Рабочий конфиг ещё не существует — запустите sing-box хотя бы один раз.",
 	"runtime_config_loading": "Чтение рабочего конфига…",
 
-	"subs_save_first": "Сначала сохраните изменения — обновление читает уже сохранённые подписки.",
 	"subs_refresh_failed": "Не удалось обновить: {names}",
 	"subs_nodes_poured": "Загружено {count} узлов.",
 	"subs_restarted_suffix": " sing-box был перезапущен.",

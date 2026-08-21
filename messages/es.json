@@ -195,7 +195,6 @@
 	"runtime_config_not_found": "La configuración en ejecución aún no existe — inicia sing-box al menos una vez.",
 	"runtime_config_loading": "Leyendo la configuración en ejecución…",
 
-	"subs_save_first": "Guarda tus cambios primero — la actualización lee las suscripciones ya guardadas.",
 	"subs_refresh_failed": "Error al actualizar: {names}",
 	"subs_nodes_poured": "Cargados {count} nodos.",
 	"subs_restarted_suffix": " sing-box se reinició.",

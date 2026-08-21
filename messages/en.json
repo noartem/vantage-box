@@ -195,7 +195,6 @@
 	"runtime_config_not_found": "The running config does not exist yet — start sing-box at least once.",
 	"runtime_config_loading": "Reading the running config…",
 
-	"subs_save_first": "Save your changes first — refresh reads the already saved subscriptions.",
 	"subs_refresh_failed": "Failed to refresh: {names}",
 	"subs_nodes_poured": "Loaded {count} nodes.",
 	"subs_restarted_suffix": " sing-box was restarted.",
