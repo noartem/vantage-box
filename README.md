@@ -92,6 +92,17 @@ every minor release. Last run (August 7, 2026) — all 10 probes passed on every
 > The lower bound is the oldest **verified** version, not the oldest working one: we don't promise
 > what we haven't measured.
 
+## Scripting & integrations
+
+Vantage Box can be driven from outside the GUI — by system utilities, Raycast, browser bookmarks,
+shortcuts, or your own scripts. Two surfaces reach the same actions as the tray:
+
+- **CLI** — `vantage-box.exe cli …`, the reference client for the local control bus. Start, stop,
+  switch nodes, check status, with `--json` output and reliable exit codes for scripting. See
+  [CLI.md](CLI.md).
+- **`vantage://` URI scheme + control bus** — fire-and-forget links from browsers/launchers, plus
+  the JSON-RPC API for native integrations (PowerShell, MCP, …). See [API.md](API.md).
+
 ---
 
 <p align="center">

@@ -42,9 +42,20 @@ tauri-plugin-autostart = "2.5.1"
 tauri-plugin-dialog = "2.7.2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# CLI subcommand (`vantage-box.exe cli …`): typed args, --json/--wait/--help.
+clap = { version = "4", features = ["derive", "string"] }
 
 [target."cfg(windows)".dependencies]
 windows-service = "0.8.1"
+# Raw Win32 bindings for the named-pipe ACL (current-user + LocalSystem DACL).
+# `windows-sys` mirrors the `windows` version `windows-service` already pulls in,
+# so this stays light and avoids a second copy of the high-level crate.
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_System_Threading",
+] }
 
 # `desktop` is a cfg from tauri-build; cargo does not know it for dependency
 # selection, so we list the platforms explicitly.

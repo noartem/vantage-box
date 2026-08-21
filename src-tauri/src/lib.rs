@@ -14,10 +14,16 @@ pub mod subscription;
 mod actions;
 mod commands;
 mod hotkeys;
+mod ipc;
 mod selftest;
 mod state;
 mod tray;
 mod window;
+
+#[cfg(windows)]
+mod cli;
+#[cfg(windows)]
+mod uri;
 
 use std::sync::Arc;
 
@@ -29,6 +35,14 @@ use state::{AppState, EVENT_CONFIG_CHANGED, EVENT_SETTINGS_ERROR};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // `vantage-box.exe cli …` — the control-bus client. Must branch before
+    // `tauri::Builder`: the CLI never starts the GUI, the single-instance
+    // plugin, or the tray, and exits with its own code contract.
+    #[cfg(windows)]
+    if cli::is_invocation() {
+        std::process::exit(cli::run());
+    }
+
     // SCM may have started this same binary as a service (`--scm`). In this
     // mode Tauri is not needed: we only report state to SCM and keep sing-box
     // as a child process. We check this branch before `tauri::Builder` —
@@ -46,10 +60,25 @@ pub fn run() {
     let mut builder = tauri::Builder::default();
 
     // The single-instance plugin must go first: it decides whether a second
-    // process lives or hands control to the already running one.
+    // process lives or hands control to the already running one. A second
+    // launch is one of two URI entry points: the OS starts us with
+    // `vantage-box.exe "uri" "<url>"`, and the plugin forwards those args here.
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            #[cfg(windows)]
+            if let Some(u) = uri::extract_uri(args.into_iter()) {
+                let handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    uri::dispatch(&handle, &u).await;
+                });
+                return;
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = args;
+            }
+            // No URI — a plain second launch just brings the window forward.
             window::show_main(app);
         }));
     }
@@ -100,6 +129,11 @@ pub fn run() {
 
             app.manage(app_state);
 
+            // Local control bus: a named pipe hosting JSON-RPC, so the CLI and
+            // the URI handler can drive the app like the GUI does. No-op stub
+            // on non-Windows until the unix-socket transport lands (M3).
+            ipc::start_server(handle.clone());
+
             let hotkey_problems = hotkeys::apply(&handle, &initial);
             state::sync_autostart(&handle, initial.autostart);
 
@@ -120,7 +154,13 @@ pub fn run() {
             };
 
             let window_shown = setup_main_window(&handle, &initial);
-            report_startup(&initial, tray_ready, &hotkey_problems, window_shown, &load_error);
+            report_startup(
+                &initial,
+                tray_ready,
+                &hotkey_problems,
+                window_shown,
+                &load_error,
+            );
 
             let watch_handle = handle.clone();
             tauri::async_runtime::spawn(async move {
@@ -184,6 +224,19 @@ pub fn run() {
 
             if selftest::requested() {
                 selftest::spawn(handle.clone());
+            }
+
+            // Cold-start URI: the OS launched us with `vantage-box.exe "uri"
+            // "<url>"` while the app was not running. The binary started
+            // normally; now that setup is done, run the requested action. The
+            // hot case (app already running) is handled by the single-instance
+            // callback above.
+            #[cfg(windows)]
+            if let Some(u) = uri::cold_start_uri() {
+                let h = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    uri::dispatch(&h, &u).await;
+                });
             }
 
             Ok(())

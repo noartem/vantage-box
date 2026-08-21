@@ -8,7 +8,8 @@ use tauri::{AppHandle, State};
 
 use crate::actions::{self, blocking, RestartOutcome, RunStatus};
 use crate::binary::{self, BinaryInfo, CheckResult, ReleaseCatalog};
-use crate::clash::models::{ConnectionStatus, ConnectionsSnapshot, Proxy};
+use crate::clash::models::{ConnectionStatus, ConnectionsSnapshot};
+use crate::clash::{build_overview, ProxyOverview};
 use crate::error::{Error, Result};
 use crate::jsonc::strip_jsonc;
 use crate::process;
@@ -64,7 +65,10 @@ pub fn read_settings_file(state: State<'_, AppState>) -> Result<SettingsFileView
     let path = state.settings.path().to_path_buf();
     let display = path.display().to_string();
     let content = std::fs::read_to_string(&path).map_err(|e| Error::io(&display, e))?;
-    Ok(SettingsFileView { path: display, content })
+    Ok(SettingsFileView {
+        path: display,
+        content,
+    })
 }
 
 /// Writes the editor contents to `settings.json`. The text is parsed as JSONC
@@ -98,37 +102,8 @@ pub fn get_status(state: State<'_, AppState>) -> ConnectionStatus {
 // Proxies
 // ---------------------------------------------------------------------------
 
-/// The flat `/proxies` response is inconvenient for the UI, so we break it down
-/// into groups with nodes already filled in and the latest latency measurements.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProxyOverview {
-    pub groups: Vec<GroupView>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct GroupView {
-    pub name: String,
-    /// `Selector`, `URLTest`, …
-    pub kind: String,
-    pub now: Option<String>,
-    /// Whether the selection can be changed by hand.
-    pub selectable: bool,
-    pub items: Vec<NodeView>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NodeView {
-    pub name: String,
-    pub kind: String,
-    /// Latest known measurement, ms. `None` — not measured or the node did not respond.
-    pub delay: Option<u32>,
-    pub udp: bool,
-    /// Nested group: clicking it should go inside, not just select.
-    pub is_group: bool,
-}
+// `ProxyOverview` / `GroupView` / `NodeView` and `build_overview` live in
+// `clash::overview` now, shared with the IPC bus. They are imported above.
 
 #[tauri::command]
 pub async fn get_proxies(state: State<'_, AppState>) -> Result<ProxyOverview> {
@@ -571,7 +546,9 @@ pub async fn use_singbox_release(
         }
 
         let was_running = process::running()
-            || service::status().map(|info| info.is_running()).unwrap_or(false);
+            || service::status()
+                .map(|info| info.is_running())
+                .unwrap_or(false);
         if was_running {
             process::stop()?;
             if service::status()
@@ -630,8 +607,7 @@ async fn active_version(state: &State<'_, AppState>) -> Option<String> {
 /// must stay on disk.
 fn replace_binary(source: &std::path::Path, target: &std::path::Path) -> Result<()> {
     if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| Error::io(parent.display().to_string(), e))?;
+        std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.display().to_string(), e))?;
     }
 
     let previous = target.with_extension("old");
@@ -655,64 +631,6 @@ fn replace_binary(source: &std::path::Path, target: &std::path::Path) -> Result<
             Err(Error::io(target.display().to_string(), e))
         }
     }
-}
-
-fn build_overview(proxies: HashMap<String, Proxy>) -> ProxyOverview {
-    // Take the group order from GLOBAL, if sing-box returned it: it reflects
-    // the outbound order in the config, not a random hash-table traversal.
-    let global_order: Vec<String> = proxies
-        .get("GLOBAL")
-        .and_then(|p| p.all.clone())
-        .unwrap_or_default();
-
-    // Take the name from the map key: sing-box does not always return the
-    // `name` field inside the object, but the key is always there.
-    let mut groups: Vec<GroupView> = proxies
-        .iter()
-        .filter(|(name, p)| p.is_group() && name.as_str() != "GLOBAL")
-        .map(|(group_name, group)| {
-            let items = group
-                .all
-                .clone()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|name| {
-                    let node = proxies.get(&name);
-                    NodeView {
-                        delay: node
-                            .and_then(|n| n.history.last())
-                            .map(|h| h.delay)
-                            // Zero means "the node did not respond", not an instant reply.
-                            .filter(|d| *d > 0),
-                        kind: node.map(|n| n.kind.clone()).unwrap_or_default(),
-                        udp: node.is_some_and(|n| n.udp),
-                        is_group: node.is_some_and(|n| n.is_group()),
-                        name,
-                    }
-                })
-                .collect();
-
-            GroupView {
-                name: group_name.clone(),
-                kind: group.kind.clone(),
-                now: group.now.clone(),
-                selectable: group.is_selectable(),
-                items,
-            }
-        })
-        .collect();
-
-    // Order from GLOBAL, everything else alphabetically after it. Without the
-    // second key the order would drift from call to call: the source is a HashMap.
-    groups.sort_by_key(|g| {
-        let rank = global_order
-            .iter()
-            .position(|n| n == &g.name)
-            .unwrap_or(usize::MAX);
-        (rank, g.name.clone())
-    });
-
-    ProxyOverview { groups }
 }
 
 // ---------------------------------------------------------------------------
