@@ -261,7 +261,7 @@ mod tests {
             a,
             UriAction::Select {
                 group: "proxy".into(),
-                name: "Café".into()
+                name: "Café".into() // i18n-allow-non-english
             }
         );
     }

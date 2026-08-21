@@ -33,8 +33,9 @@ const ALLOW_PATHS = [
 	/^src\/lib\/singbox-schema\.generated\.json$/ // generated official schema (upstream micro/mu)
 ];
 
-// Binary or generated file types we never scan as text.
-const SKIP_EXT = /\.(png|ico|icns|jpg|jpeg|gif|webp|svg|woff2?|ttf|otf|exe|dll|pdb|zip|gz|tar|lock|toml\.lock)$/i;
+// File types we never scan as text: binaries, generated files, and Markdown
+// (docs may quote non-English examples without belonging in localization files).
+const SKIP_EXT = /\.(png|ico|icns|jpg|jpeg|gif|webp|svg|woff2?|ttf|otf|exe|dll|pdb|zip|gz|tar|lock|toml\.lock|md)$/i;
 const SKIP_FILES = /^(package-lock\.json|pnpm-lock\.yaml|Cargo\.lock|yarn\.lock)$/;
 
 function isAllowlisted(p) {
