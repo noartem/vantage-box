@@ -47,7 +47,12 @@ pub fn run() -> i32 {
     // Strip everything up to and including the `cli` token, then let clap own
     // the rest. If `cli` is absent (should not happen — `is_invocation` gated
     // us) clap sees the full argv and prints a usage error.
-    let rest: Vec<String> = std::env::args().skip_while(|a| a != FLAG).skip(1).collect();
+    //
+    // `try_parse_from` treats the first element as argv[0] (the binary name).
+    // Without a placeholder it swallows the real subcommand and exits 2 with a
+    // misleading `Usage: <command> [OPTIONS] <COMMAND>` — so prepend one.
+    let mut rest: Vec<String> = std::env::args().skip_while(|a| a != FLAG).skip(1).collect();
+    rest.insert(0, "vantage-box cli".to_string());
 
     let cli = match Cli::try_parse_from(rest) {
         Ok(cli) => cli,
@@ -79,16 +84,16 @@ pub fn run() -> i32 {
 )]
 struct Cli {
     /// Emit machine-readable JSON to stdout (the integration contract).
-    #[arg(long)]
+    #[arg(long, global = true)]
     json: bool,
 
     /// For start/stop/toggle/restart: poll `status` until the target state is
     /// reached instead of returning the moment the call is accepted.
-    #[arg(long)]
+    #[arg(long, global = true)]
     wait: bool,
 
     /// Seconds to wait when `--wait` is set before giving up (exit 5).
-    #[arg(long, default_value_t = 30)]
+    #[arg(long, global = true, default_value_t = 30)]
     timeout: u64,
 
     #[command(subcommand)]
