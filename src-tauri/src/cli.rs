@@ -41,60 +41,186 @@ pub fn is_invocation() -> bool {
     std::env::args().any(|a| a == FLAG)
 }
 
-/// Attach to the parent process's console and re-point stdio at it.
+/// Attach to an ancestor's console and re-point stdout/stderr at it.
 ///
-/// The binary is built with `windows_subsystem = "windows"` (the GUI needs no
-/// console), so when launched from a console host that doesn't hand us working
-/// std handles — notably PowerShell — `println!`/`eprintln!` go nowhere and the
-/// call silently returns nothing. `AttachConsole(ATTACH_PARENT_PROCESS)` borrows
-/// the parent's console; we then reopen `CONOUT$`/`CONIN$` as the std handles so
-/// output (including clap's `--help`/error text) reaches the terminal.
+/// The binary is built with `windows_subsystem = "windows"` (the tray app needs
+/// no console), so a console host that doesn't hand a GUI-subsystem child
+/// working std handles — notably PowerShell, and the scoop shim path — gets
+/// silent returns: `println!` writes to a NULL handle. `AttachConsole` borrows
+/// a console and we reopen `CONOUT$` as stdout/stderr so output (including
+/// clap's `--help`/error text) reaches the terminal.
 ///
-/// No-op when we already have a console (cmd, ConPTY/pty shells): `AttachConsole`
-/// then fails with `ERROR_ACCESS_DENIED` and we leave the inherited handles
-/// untouched.
+/// `ATTACH_PARENT_PROCESS` only reaches the *immediate* parent. When the app is
+/// launched through a handle-less GUI-subsystem launcher — the scoop shim is
+/// itself a `windows_subsystem = "windows"` binary with no console — the parent
+/// has nothing to lend, so we walk up the process tree and attach to the
+/// nearest ancestor that owns a console (the shell the user actually typed in).
+///
+/// Returns `true` if we borrowed a console (so the caller can `FreeConsole`
+/// before exiting). No-op when we already have one (console-subsystem builds,
+/// cmd/ConPTY shells that passed usable handles): `GetConsoleWindow` is set,
+/// we touch nothing.
 #[cfg(windows)]
-fn attach_parent_console() {
-    use std::fs::OpenOptions;
-    use std::os::windows::io::AsRawHandle;
+fn attach_parent_console() -> bool {
     use windows_sys::Win32::System::Console::{
-        AttachConsole, SetStdHandle, ATTACH_PARENT_PROCESS, STD_ERROR_HANDLE, STD_INPUT_HANDLE,
-        STD_OUTPUT_HANDLE,
+        AttachConsole, GetConsoleWindow, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE,
+        ATTACH_PARENT_PROCESS,
     };
+    use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 
-    // SAFETY: `AttachConsole` only reads the parent PID; `SetStdHandle` swaps
-    // thread-local std handle slots. Neither has preconditions we can violate.
     unsafe {
-        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
-            // Already attached to a console, or no parent console to borrow.
-            return;
+        if !GetConsoleWindow().is_null() {
+            return false;
         }
-        reopen("CONOUT$", STD_OUTPUT_HANDLE, /* write */ true);
-        reopen("CONOUT$", STD_ERROR_HANDLE, /* write */ true);
-        reopen("CONIN$", STD_INPUT_HANDLE, /* write */ false);
-    }
-
-    /// Open the console device and install it as the given std handle. The
-    /// `File` is forgotten so the OS handle lives until process exit.
-    unsafe fn reopen(name: &str, std_handle: u32, write: bool) {
-        let mut opts = OpenOptions::new();
-        if write {
-            opts.write(true);
-        } else {
-            opts.read(true);
+        if AttachConsole(ATTACH_PARENT_PROCESS) != 0 {
+            reopen("CONOUT$", STD_OUTPUT_HANDLE, true);
+            reopen("CONOUT$", STD_ERROR_HANDLE, true);
+            return true;
         }
-        if let Ok(f) = opts.open(name) {
-            let h = f.as_raw_handle();
-            std::mem::forget(f);
-            SetStdHandle(std_handle, h as *mut _);
+        // The immediate parent had no console (e.g. the scoop shim). Walk up
+        // to the nearest ancestor that does — typically the user's shell.
+        let mut pid = match parent_pid(GetCurrentProcessId()) {
+            Some(p) => p,
+            None => return false,
+        };
+        for _ in 0..64 {
+            if pid == 0 {
+                return false;
+            }
+            if AttachConsole(pid) != 0 {
+                reopen("CONOUT$", STD_OUTPUT_HANDLE, true);
+                reopen("CONOUT$", STD_ERROR_HANDLE, true);
+                return true;
+            }
+            pid = match parent_pid(pid) {
+                Some(p) => p,
+                None => return false,
+            };
         }
+        false
     }
 }
+
+/// First ancestor (parent) PID of `pid`, via a process snapshot. `None` if the
+/// snapshot can't be taken.
+#[cfg(windows)]
+unsafe fn parent_pid(pid: u32) -> Option<u32> {
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if snap == INVALID_HANDLE_VALUE {
+        return None;
+    }
+    let mut entry: PROCESSENTRY32W = std::mem::zeroed();
+    entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
+    let mut found = None;
+    if Process32FirstW(snap, &mut entry) != 0 {
+        loop {
+            if entry.th32ProcessID == pid {
+                found = Some(entry.th32ParentProcessID);
+                break;
+            }
+            if Process32NextW(snap, &mut entry) == 0 {
+                break;
+            }
+        }
+    }
+    CloseHandle(snap);
+    found
+}
+
+/// Open the console screen buffer and install it as the given std handle. The
+/// `File` is forgotten so the OS handle lives until process exit.
+#[cfg(windows)]
+unsafe fn reopen(name: &str, std_handle: u32, write: bool) {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::Console::SetStdHandle;
+
+    let mut opts = std::fs::OpenOptions::new();
+    if write {
+        opts.write(true);
+    } else {
+        opts.read(true);
+    }
+    if let Ok(f) = opts.open(name) {
+        let h = f.as_raw_handle();
+        std::mem::forget(f);
+        SetStdHandle(std_handle, h as *mut _);
+    }
+}
+
+
+/// Detach from a console we borrowed with `attach_parent_console`.
+#[cfg(windows)]
+unsafe fn free_console() {
+    use windows_sys::Win32::System::Console::FreeConsole;
+    FreeConsole();
+}
+
+/// Inject an Enter key into the borrowed console's input buffer.
+///
+/// `AttachConsole` from a GUI-subsystem process leaves the parent's console in
+/// a state where, after we exit, the host's pending `ReadConsole` (PSReadLine,
+/// cmd) stays blocked until the user manually presses Enter — the classic
+/// "printed then doesn't release the prompt" hang. Feeding one Enter to the
+/// input buffer completes that read for it, so the prompt returns on its own.
+/// Only called when we actually borrowed a console.
+#[cfg(windows)]
+unsafe fn release_parent_console() {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::Console::{
+        WriteConsoleInputW, INPUT_RECORD, KEY_EVENT, KEY_EVENT_RECORD,
+    };
+
+    // Open the console input buffer with write access.
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true);
+    let Ok(f) = opts.open("CONIN$") else {
+        return;
+    };
+    let handle = f.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
+    std::mem::forget(f);
+
+    const VK_RETURN: u16 = 0x0D;
+    const SC_RETURN: u16 = 0x1C;
+    // One key-down + key-up Enter event. Zeroed first: every field defaults to
+    // a harmless value (no modifiers, no char).
+    let mut records: [INPUT_RECORD; 2] = std::mem::zeroed();
+    // Build a key-down then key-up Enter event. Zeroed first: every field
+    // defaults to a harmless value (no modifiers, no char).
+    for (idx, &down) in [true, false].iter().enumerate() {
+        records[idx].EventType = KEY_EVENT as u16;
+        let ke: &mut KEY_EVENT_RECORD = &mut records[idx].Event.KeyEvent;
+        ke.bKeyDown = if down { 1 } else { 0 };
+        ke.wRepeatCount = 1;
+        ke.wVirtualKeyCode = VK_RETURN;
+        ke.wVirtualScanCode = SC_RETURN;
+        ke.uChar.UnicodeChar = VK_RETURN;
+        ke.dwControlKeyState = 0;
+    }
+
+    let mut written: u32 = 0;
+    WriteConsoleInputW(handle, records.as_ptr(), records.len() as u32, &mut written);
+}
+
+#[cfg(not(windows))]
+fn attach_parent_console() -> bool {
+    false
+}
+#[cfg(not(windows))]
+unsafe fn free_console() {}
+#[cfg(not(windows))]
+unsafe fn release_parent_console() {}
+
 
 /// Entry point for the CLI branch. Runs its own one-shot current-thread tokio
 /// runtime (Tauri has not started yet) and returns a process exit code.
 pub fn run() -> i32 {
-    attach_parent_console();
+    let attached = attach_parent_console();
 
     // Strip everything up to and including the `cli` token, then let clap own
     // the rest. If `cli` is absent (should not happen — `is_invocation` gated
@@ -126,7 +252,26 @@ pub fn run() -> i32 {
         }
     };
 
-    runtime.block_on(run_cli(cli))
+    let code = runtime.block_on(run_cli(cli));
+    // Flush, then release the borrowed console and exit hard. We do NOT drop
+    // the runtime: dropping a current-thread tokio runtime on the way out can
+    // block (driver shutdown) after we've already produced all output, leaving
+    // the console attached and the shell waiting on a live process. A one-shot
+    // CLI has nothing to clean up — `process::exit` reclaims everything.
+    use std::io::Write;
+    let _ = std::io::stdout().flush();
+    let _ = std::io::stderr().flush();
+    if attached {
+        // Release the parent's blocked console read (the "printed but the
+        // prompt doesn't come back" hang) by feeding it an Enter, then detach.
+        // SAFETY: `release_parent_console` writes to the borrowed console's
+        // input buffer; `FreeConsole` detaches us. Neither has preconditions.
+        unsafe {
+            release_parent_console();
+            free_console();
+        }
+    }
+    std::process::exit(code);
 }
 
 #[derive(Parser)]
