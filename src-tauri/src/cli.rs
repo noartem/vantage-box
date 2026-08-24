@@ -41,9 +41,61 @@ pub fn is_invocation() -> bool {
     std::env::args().any(|a| a == FLAG)
 }
 
+/// Attach to the parent process's console and re-point stdio at it.
+///
+/// The binary is built with `windows_subsystem = "windows"` (the GUI needs no
+/// console), so when launched from a console host that doesn't hand us working
+/// std handles — notably PowerShell — `println!`/`eprintln!` go nowhere and the
+/// call silently returns nothing. `AttachConsole(ATTACH_PARENT_PROCESS)` borrows
+/// the parent's console; we then reopen `CONOUT$`/`CONIN$` as the std handles so
+/// output (including clap's `--help`/error text) reaches the terminal.
+///
+/// No-op when we already have a console (cmd, ConPTY/pty shells): `AttachConsole`
+/// then fails with `ERROR_ACCESS_DENIED` and we leave the inherited handles
+/// untouched.
+#[cfg(windows)]
+fn attach_parent_console() {
+    use std::fs::OpenOptions;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::Console::{
+        AttachConsole, SetStdHandle, ATTACH_PARENT_PROCESS, STD_ERROR_HANDLE, STD_INPUT_HANDLE,
+        STD_OUTPUT_HANDLE,
+    };
+
+    // SAFETY: `AttachConsole` only reads the parent PID; `SetStdHandle` swaps
+    // thread-local std handle slots. Neither has preconditions we can violate.
+    unsafe {
+        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
+            // Already attached to a console, or no parent console to borrow.
+            return;
+        }
+        reopen("CONOUT$", STD_OUTPUT_HANDLE, /* write */ true);
+        reopen("CONOUT$", STD_ERROR_HANDLE, /* write */ true);
+        reopen("CONIN$", STD_INPUT_HANDLE, /* write */ false);
+    }
+
+    /// Open the console device and install it as the given std handle. The
+    /// `File` is forgotten so the OS handle lives until process exit.
+    unsafe fn reopen(name: &str, std_handle: u32, write: bool) {
+        let mut opts = OpenOptions::new();
+        if write {
+            opts.write(true);
+        } else {
+            opts.read(true);
+        }
+        if let Ok(f) = opts.open(name) {
+            let h = f.as_raw_handle();
+            std::mem::forget(f);
+            SetStdHandle(std_handle, h as *mut _);
+        }
+    }
+}
+
 /// Entry point for the CLI branch. Runs its own one-shot current-thread tokio
 /// runtime (Tauri has not started yet) and returns a process exit code.
 pub fn run() -> i32 {
+    attach_parent_console();
+
     // Strip everything up to and including the `cli` token, then let clap own
     // the rest. If `cli` is absent (should not happen — `is_invocation` gated
     // us) clap sees the full argv and prints a usage error.
