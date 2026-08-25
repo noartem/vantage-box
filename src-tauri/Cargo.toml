@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "A minimalist desktop GUI for sing-box"
 authors = ["Vantage Box"]
 edition = "2021"
+# tauri-action needs to know the main binary now that there is a second `[[bin]]
+# (`vantage-box-cli`); without this it errors "failed to find main binary".
+default-run = "vantage-box"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
