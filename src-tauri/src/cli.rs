@@ -217,22 +217,22 @@ unsafe fn free_console() {}
 unsafe fn release_parent_console() {}
 
 
-/// Entry point for the CLI branch. Runs its own one-shot current-thread tokio
-/// runtime (Tauri has not started yet) and returns a process exit code.
-pub fn run() -> i32 {
-    let attached = attach_parent_console();
+/// Parse argv (with `program_name` as argv[0] / the displayed binary name), run
+/// the command on a one-shot current-thread tokio runtime, flush stdout/stderr,
+/// and return the exit code.
+///
+/// Shared by the GUI `cli` subcommand path and the console `vantage-box-cli`
+/// binary. It does NOT touch the console (AttachConsole / FreeConsole is the
+/// caller's concern) and does NOT exit — the caller decides the exit strategy
+/// so it can release a borrowed console first. A one-shot CLI has nothing to
+/// clean up, so callers `std::process::exit(code)` (a runtime drop on the way
+/// out can block after all output is done).
+fn execute(program_name: &str, args: Vec<String>) -> i32 {
+    let mut argv: Vec<String> = Vec::with_capacity(args.len() + 1);
+    argv.push(program_name.to_string());
+    argv.extend(args);
 
-    // Strip everything up to and including the `cli` token, then let clap own
-    // the rest. If `cli` is absent (should not happen — `is_invocation` gated
-    // us) clap sees the full argv and prints a usage error.
-    //
-    // `try_parse_from` treats the first element as argv[0] (the binary name).
-    // Without a placeholder it swallows the real subcommand and exits 2 with a
-    // misleading `Usage: <command> [OPTIONS] <COMMAND>` — so prepend one.
-    let mut rest: Vec<String> = std::env::args().skip_while(|a| a != FLAG).skip(1).collect();
-    rest.insert(0, "vantage-box cli".to_string());
-
-    let cli = match Cli::try_parse_from(rest) {
+    let cli = match Cli::try_parse_from(argv) {
         Ok(cli) => cli,
         Err(e) => {
             // clap renders help/version/errors itself and picks the exit code
@@ -247,20 +247,38 @@ pub fn run() -> i32 {
     {
         Ok(rt) => rt,
         Err(e) => {
-            eprintln!("vantage-box cli: could not start runtime: {e}");
+            eprintln!("{program_name}: could not start runtime: {e}");
             return EXIT_ERROR;
         }
     };
 
     let code = runtime.block_on(run_cli(cli));
-    // Flush, then release the borrowed console and exit hard. We do NOT drop
-    // the runtime: dropping a current-thread tokio runtime on the way out can
-    // block (driver shutdown) after we've already produced all output, leaving
-    // the console attached and the shell waiting on a live process. A one-shot
-    // CLI has nothing to clean up — `process::exit` reclaims everything.
     use std::io::Write;
     let _ = std::io::stdout().flush();
     let _ = std::io::stderr().flush();
+    code
+}
+
+/// GUI binary's `cli` subcommand entry (`vantage-box.exe cli …`).
+///
+/// The binary is `windows_subsystem = "windows"` (the tray app needs no
+/// console), so it has no console of its own; `attach_parent_console` borrows
+/// one (walking the process tree to the shell when launched through the GUI
+/// scoop shim). On exit we feed the host's blocked read an Enter and detach
+/// before exiting hard. Prefer the dedicated `vantage-box-cli` console binary
+/// when a terminal is available — it has a real console and none of these
+/// workarounds. This path remains as a fallback for invoking the CLI through
+/// the full path to the GUI binary.
+pub fn run() -> i32 {
+    let attached = attach_parent_console();
+
+    // Strip everything up to and including the `cli` token, then let clap own
+    // the rest. `try_parse_from` treats the first element as argv[0] (the
+    // binary name shown in usage); without a placeholder it swallows the real
+    // subcommand and exits 2 with a misleading usage line — so prepend one.
+    let rest: Vec<String> = std::env::args().skip_while(|a| a != FLAG).skip(1).collect();
+    let code = execute("vantage-box cli", rest);
+
     if attached {
         // Release the parent's blocked console read (the "printed but the
         // prompt doesn't come back" hang) by feeding it an Enter, then detach.
@@ -271,6 +289,22 @@ pub fn run() -> i32 {
             free_console();
         }
     }
+    std::process::exit(code);
+}
+
+/// Console binary's entry (`vantage-box-cli.exe …`).
+///
+/// A dedicated console-subsystem binary: the host (PowerShell/cmd) attaches a
+/// real console and *waits* for it, so stdout/stderr work natively, output
+/// lands in the right place, and the prompt returns on its own — no
+/// AttachConsole, no Enter injection, no hang. A leading `cli` token is
+/// tolerated (muscle memory from `vantage-box cli …`).
+pub fn run_console() -> i32 {
+    let mut rest: Vec<String> = std::env::args().skip(1).collect();
+    if rest.first().is_some_and(|a| a == FLAG) {
+        rest.remove(0);
+    }
+    let code = execute("vantage-box-cli", rest);
     std::process::exit(code);
 }
 

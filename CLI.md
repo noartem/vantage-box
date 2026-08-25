@@ -1,15 +1,23 @@
-# CLI — `vantage-box cli`
+# CLI — `vantage-box-cli`
 
-Control Vantage Box from the command line. The CLI is a **subcommand of the same
-binary** — `vantage-box.exe cli …` — and is the reference client for the app's
-local control bus. It drives the exact same actions as the tray and the GUI, so
-anything you can click you can also script.
+Control Vantage Box from the command line. The CLI is a **dedicated
+console-subsystem binary**, `vantage-box-cli.exe`, and is the reference client
+for the app's local control bus. It drives the exact same actions as the tray
+and the GUI, so anything you can click you can also script.
 
 ```bash
-vantage-box.exe cli status
-vantage-box.exe cli start --wait
-vantage-box.exe cli select proxy hk-01
+vantage-box-cli status
+vantage-box-cli start --wait
+vantage-box-cli select proxy hk-01
 ```
+
+> The CLI is also reachable as the `cli` subcommand of the GUI binary —
+> `vantage-box.exe cli …`. That path uses `AttachConsole` to borrow the parent's
+> console and is noticeably less clean in a terminal (output can land out of
+> order, and the prompt may need an Enter to return). Prefer `vantage-box-cli`
+> in scripts and terminals; the `cli` subcommand exists as a fallback for
+> invoking through the full path to the GUI binary. Both accept the same
+> options and commands.
 
 ## Prerequisites
 
@@ -19,15 +27,18 @@ CLI call exits `3` (bus unavailable). This is the documented lifetime limitation
 see [Headless / always-on](#headless--always-on) below for the recipe that keeps
 the tunnel up without the GUI.
 
-There is nothing extra to install: the CLI is the same `vantage-box.exe` you
-already have (Scoop, NSIS installer, or the portable build). It does **not**
-initialize Tauri, the tray, the single-instance plugin, or any window — it
-connects to the pipe, does one call, and exits.
+There is nothing extra to install: `vantage-box-cli.exe` ships next to
+`vantage-box.exe` in the Scoop package and the portable build (the NSIS
+installer is GUI-only — use Scoop or the portable zip for the CLI). It does
+**not** initialize Tauri, the tray, the single-instance plugin, or any window —
+it connects to the pipe, does one call, and exits. (Scoop exposes it on PATH as
+`vantage-box-cli`; the GUI binary's `vantage-box cli …` subcommand needs no
+separate file.)
 
 ## Usage
 
 ```
-vantage-box.exe cli [OPTIONS] <COMMAND>
+vantage-box-cli [OPTIONS] <COMMAND>
 ```
 
 ### Options
@@ -59,7 +70,7 @@ vantage-box.exe cli [OPTIONS] <COMMAND>
 | `subs` | `subscriptions.state` | Show subscription state. |
 | `show` | `ui.showMain` | Bring the main window to the front. |
 
-Run `vantage-box.exe cli --help` for the canonical list generated from the binary
+Run `vantage-box-cli --help` for the canonical list generated from the binary
 itself.
 
 ## Exit codes
@@ -102,7 +113,7 @@ With `--json`, the result is printed as **compact JSON to stdout** — one objec
 no surrounding text. Parse this in scripts; do not scrape the human output.
 
 ```bash
-vantage-box.exe cli status --json
+vantage-box-cli status --json
 ```
 ```json
 {"run":{"mode":"service","running":true,"service":{"installed":true,"running":true},"processPid":null,"tun":true,"configProblem":null},"connection":{"state":"connected","version":"1.12.25","error":null,"compatibility":"supported"}}
@@ -255,19 +266,19 @@ what you usually want when chaining commands yourself.
 
 ```bash
 # Read-only checks — safe any time the app is running, no tunnel state change.
-vantage-box.exe cli status
-vantage-box.exe cli status --json | jq -r '.run.running'
-vantage-box.exe cli proxies
+vantage-box-cli status
+vantage-box-cli status --json | jq -r '.run.running'
+vantage-box-cli proxies
 
 # Switch node, then confirm it took.
-vantage-box.exe cli select proxy hk-01
-vantage-box.exe cli proxies
+vantage-box-cli select proxy hk-01
+vantage-box-cli proxies
 
 # Start and block until the tunnel is actually up.
-vantage-box.exe cli start --wait --timeout 60
+vantage-box-cli start --wait --timeout 60
 
 # Scripting: branch on the exit code.
-if vantage-box.exe cli status >/dev/null 2>&1; then
+if vantage-box-cli status >/dev/null 2>&1; then
   echo "app is running"
 elif [ $? -eq 3 ]; then
   echo "app is not running"
@@ -278,12 +289,12 @@ fi
 
 - **Shell aliases / functions:** wrap the long path in a function:
   ```bash
-  vb() { "/c/Program Files/Vantage Box/vantage-box.exe" cli "$@"; }
+  vb() { vantage-box-cli "$@"; }
   vb status
   ```
 - **PowerShell:** call with `--json` and convert:
   ```powershell
-  $s = vantage-box.exe cli status --json | ConvertFrom-Json
+  $s = vantage-box-cli status --json | ConvertFrom-Json
   $s.run.running
   ```
 - **Exit-code driven logic** is more robust than parsing text — use the

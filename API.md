@@ -9,8 +9,9 @@ that both reach the exact same handlers as the tray and the GUI:
 | **`vantage://` URI scheme** | The OS launches the app with the URI | Fire-and-forget triggers from web pages, launchers, shortcuts. No response channel. |
 | **JSON-RPC control bus** | Windows named pipe, line-delimited JSON-RPC 2.0 | Native clients that want a reply: the CLI, a future PowerShell module, an MCP server. |
 
-The CLI (`vantage-box.exe cli …`) is the reference client for the bus — see
-[CLI.md](CLI.md). This document is the complete reference for both surfaces.
+The CLI (`vantage-box-cli …`; also reachable as the GUI binary's `cli`
+subcommand) is the reference client for the bus — see [CLI.md](CLI.md). This
+document is the complete reference for both surfaces.
 
 ## Architecture
 
@@ -216,8 +217,7 @@ missing `jsonrpc` field on input.
 | `ui.togglePopup` | — | `null` | Toggle the cursor popup. |
 | `ui.closePopup` | — | `null` | Close the cursor popup. |
 
-Result shapes are documented with examples in [CLI.md → Result shapes](CLI.md#result-shapes)
-(run `vantage-box.exe cli <cmd> --json` to see any of them verbatim).
+(run `vantage-box-cli <cmd> --json` to see any of them verbatim).
 
 ### Notifications
 
@@ -306,18 +306,18 @@ works even before the scheme is registered (it calls the binary directly).
 
 Use the CLI with `--json` when you want to branch on the outcome:
 ```powershell
-$status = vantage-box.exe cli status --json | ConvertFrom-Json
+$status = vantage-box-cli status --json | ConvertFrom-Json
 if ($status.run.running) {
-    vantage-box.exe cli stop --wait
+    vantage-box-cli stop --wait
 } else {
-    vantage-box.exe cli start --wait
+    vantage-box-cli start --wait
 }
 
 # Switch to the lowest-latency node in a group.
 $group = "proxy"
-$delays = vantage-box.exe cli test-group-delay $group --json | ConvertFrom-Json
+$delays = vantage-box-cli test-group-delay $group --json | ConvertFrom-Json
 $best  = $delays.PSObject.Properties | Where-Object Value -gt 0 | Sort-Object Value | Select-Object -First 1
-vantage-box.exe cli select $group $best.Name
+vantage-box-cli select $group $best.Name
 ```
 
 ### Raycast / launcher
@@ -350,6 +350,6 @@ pipe and method catalogue above, no new server-side work required.
 
 ## See also
 
-- [CLI.md](CLI.md) — the reference bus client (`vantage-box.exe cli …`), with
+- [CLI.md](CLI.md) — the reference bus client (`vantage-box-cli …`), with
   every command, flag, exit code, and `--json` result shape.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — development setup.

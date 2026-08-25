@@ -99,15 +99,26 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: npm run tauri build
 
-      - name: Locate built exe
+      # The console-subsystem CLI binary. Tauri only builds `mainBinaryName`
+      # (`vantage-box`), so the dedicated `vantage-box-cli` bin is compiled
+      # separately and shipped alongside it in the portable zip. The NSIS
+      # installer stays GUI-only (the CLI is distributed via scoop/zip).
+      - name: Build console CLI binary
+        run: cargo build --release --manifest-path src-tauri/Cargo.toml --bin vantage-box-cli
+
+      - name: Locate built exes
         id: exe
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path src-tauri/target/release -Filter 'vantage-box.exe' -File |
+          $gui = Get-ChildItem -Path src-tauri/target/release -Filter 'vantage-box.exe' -File |
             Select-Object -First 1
-          if (-not $exe) { throw "vantage-box.exe not found in src-tauri/target/release" }
-          Write-Host "Portable from $($exe.FullName)"
-          "path=$($exe.FullName)" >> $env:GITHUB_OUTPUT
+          if (-not $gui) { throw "vantage-box.exe not found in src-tauri/target/release" }
+          $cli = Get-ChildItem -Path src-tauri/target/release -Filter 'vantage-box-cli.exe' -File |
+            Select-Object -First 1
+          if (-not $cli) { throw "vantage-box-cli.exe not found in src-tauri/target/release" }
+          Write-Host "Portable from $($gui.FullName) + $($cli.FullName)"
+          "gui=$($gui.FullName)" >> $env:GITHUB_OUTPUT
+          "cli=$($cli.FullName)" >> $env:GITHUB_OUTPUT
 
       # The installer is always available as a run artifact — both on a release and on a manual run.
       - name: Upload NSIS installer artifact
@@ -125,7 +136,9 @@ jobs:
             $env:GITHUB_REF -replace '^refs/tags/v', ''
           } else { 'manual' }
           $zip = "vantage-box-portable-$ver.zip"
-          Compress-Archive -Path ${{ steps.exe.outputs.path }} -DestinationPath $zip
+          # Both the GUI binary and the console CLI binary ship in the zip;
+          # the scoop manifest exposes each as its own shim.
+          Compress-Archive -Path ${{ steps.exe.outputs.gui }},${{ steps.exe.outputs.cli }} -DestinationPath $zip
           "zip=$zip" >> $env:GITHUB_OUTPUT
 
       # Release: the portable zip is uploaded to the same draft release.

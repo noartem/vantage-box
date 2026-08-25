@@ -14,6 +14,14 @@ edition = "2021"
 name = "vantage_box_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[[bin]]
+# A dedicated console-subsystem CLI binary. Unlike `vantage-box.exe` (GUI
+# subsystem, `src/main.rs`), this one has a real console, so shells wait for
+# it and stdout/stderr work natively — no `AttachConsole` workarounds. The
+# path is outside `src/bin/` so cargo does not also auto-detect it as `cli`.
+name = "vantage-box-cli"
+path = "src/cli_main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

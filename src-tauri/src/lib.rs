@@ -33,6 +33,16 @@ use clash::{ClashClient, StreamManager};
 use settings::{Settings, SettingsStore};
 use state::{AppState, EVENT_CONFIG_CHANGED, EVENT_SETTINGS_ERROR};
 
+/// Entry point for the dedicated console CLI binary `vantage-box-cli.exe`.
+///
+/// That binary is console-subsystem, so it has a real console and none of the
+/// `AttachConsole` workarounds the GUI `cli` subcommand needs. Windows-only,
+/// like the rest of the CLI module.
+#[cfg(windows)]
+pub fn run_cli_console() -> i32 {
+    cli::run_console()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // `vantage-box.exe cli …` — the control-bus client. Must branch before
