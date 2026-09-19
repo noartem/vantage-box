@@ -180,6 +180,10 @@
 		font-family: 'Segoe Fluent Icons', 'Segoe MDL2 Assets', sans-serif;
 		font-size: 10px;
 		line-height: 1;
+		/* The global button rule is inline-flex without justify-content, so the
+		   caption glyph sticks to the left edge of the 46px cell instead of
+		   sitting in the middle, like a native Windows caption button. */
+		justify-content: center;
 	}
 
 	.win-btn:hover:not(:disabled) {
