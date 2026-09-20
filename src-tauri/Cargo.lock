@@ -5091,7 +5091,7 @@ dependencies = [
 
 [[package]]
 name = "vantage-box"
-version = "0.1.1"
+version = "1.4.6"
 dependencies = [
  "base64 0.22.1",
  "clap",

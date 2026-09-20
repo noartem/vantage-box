@@ -1,6 +1,6 @@
 {
   "name": "vantage-box",
-  "version": "0.1.1",
+  "version": "1.4.6",
   "description": "A minimalist desktop GUI for sing-box",
   "type": "module",
   "scripts": {
