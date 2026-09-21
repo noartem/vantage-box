@@ -68,9 +68,10 @@
 	</div>
 
 	{#if groups.length > 0}
-		<!-- Groups flow in columns, not a single stack: in one column a card with
-			 three nodes would leave three quarters of the window empty on the right. -->
-		<div class="groups">
+		<!-- One full-width block: every group is a section inside it, separated
+			 by a divider line — a column of small cards wasted the width and
+			 hid short groups behind long ones. -->
+		<div class="groups card">
 			{#each groups as group (group.name)}
 				<GroupCard {group} onchanged={refresh} onjump={jump} />
 			{/each}
@@ -89,8 +90,11 @@
 	<div class="minis">
 		<MiniConnections {active} onopen={() => ongoto('connections')} />
 		<MiniLogs {active} onopen={() => ongoto('logs')} />
-		<MiniProcess {active} />
 	</div>
+
+	<!-- The raw process output is a startup log: lines are long, so it lives on
+		 its own full-width row, never squeezed between two neighbor cards. -->
+	<MiniProcess {active} />
 </div>
 
 <style>
@@ -125,11 +129,24 @@
 		}
 	}
 
+	/* One card, groups stacked inside it: the divider between neighbors is
+		 the separator, the card edges come from .card. The first group must
+		 not carry the divider — it opens the block. */
 	.groups {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-		align-items: start;
-		gap: var(--sp-4);
+	}
+
+	/* The child keeps .section's padding and gap, but its own card chrome is
+		 replaced by the shared edges of the wrapper. :global is the only way to
+		 reach into a child component's scoped styles. */
+	.groups :global(section.section) {
+		background: transparent;
+		border: none;
+		border-radius: 0;
+	}
+
+	.groups :global(section.section + section.section) {
+		border-top: 1px solid var(--border);
 	}
 
 	/* 380px, not 300: any narrower and a connection row with host, process and

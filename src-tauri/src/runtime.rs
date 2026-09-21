@@ -150,6 +150,17 @@ pub fn prepare_in(dir: &Path, settings: &Settings) -> Result<PreparedConfig> {
     clash_api["external_controller"] = json!(external_controller);
     clash_api["secret"] = json!(secret.clone());
 
+    // The console (stdout, which we redirect into sing-box.log) gets a level
+    // of its own, one step stricter than the API feed: the per-connection
+    // INFO lines are the bulk of the output and are pure noise in the raw
+    // journal, while the Clash API /logs stream is level-independent — it
+    // receives every entry and filters by the level requested in settings.
+    // A level the user set explicitly in their config is their decision.
+    let log_options = root.entry("log").or_insert_with(|| json!({}));
+    if log_options.is_object() && log_options.get("level").is_none() {
+        log_options["level"] = json!("warn");
+    }
+
     let path = dir.join(RUNTIME_CONFIG);
     write_private(
         &path,
@@ -345,6 +356,25 @@ mod tests {
             ["log", "dns", "inbounds", "outbounds", "experimental"]
         );
         assert!(written.find("\"log\"").unwrap() < written.find("\"experimental\"").unwrap());
+    }
+
+    /// The console log level is ours to quiet down — but only when the user
+    /// did not set one. The Clash API feed stays untouched either way.
+    #[test]
+    fn injects_console_log_level() {
+        let (dir, settings) = sandbox("log-inject", r#"{"inbounds":[],"outbounds":[]}"#);
+        prepare_in(&dir, &settings).unwrap();
+        let written = std::fs::read_to_string(dir.join(RUNTIME_CONFIG)).unwrap();
+        assert!(written.contains(r#""level": "warn""#));
+
+        // An explicit level in the user's config wins over the injection.
+        let (dir, settings) = sandbox(
+            "log-respect",
+            r#"{"log":{"level":"trace"},"inbounds":[],"outbounds":[]}"#,
+        );
+        prepare_in(&dir, &settings).unwrap();
+        let written = std::fs::read_to_string(dir.join(RUNTIME_CONFIG)).unwrap();
+        assert!(written.contains(r#""level": "trace""#));
     }
 
     /// An already-set external_controller is patched in place, not added a second time.

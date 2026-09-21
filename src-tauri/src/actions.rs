@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::clash::models::ConnectionState;
 use crate::clash::ClashClient;
 use crate::error::{Error, Result};
 use crate::process;
@@ -69,11 +70,32 @@ impl RunStatus {
 }
 
 pub async fn run_status(app: &AppHandle) -> Result<RunStatus> {
-    let settings = app.state::<AppState>().settings.get();
-    blocking(move || build_status(&settings)).await
+    let state = app.state::<AppState>();
+    let settings = state.settings.get();
+    // The Clash API answers only while sing-box is alive. SCM can lie (the
+    // wrapper process may have died without stopping its child), and our own
+    // process slot knows only what we started — the API is the one signal that
+    // covers a sing-box started outside our control.
+    let api_up = state.streams.status().state == ConnectionState::Connected;
+    blocking(move || build_status(&settings, api_up)).await
 }
 
-fn build_status(settings: &Settings) -> Result<RunStatus> {
+/// The tunnel is up, but Vantage Box has no handle to the sing-box behind it:
+/// the service says stopped, our process slot is empty, yet the API answers.
+/// Such a process (an orphan from a crashed session, or a foreign one) cannot
+/// be stopped from here — the UI must say so instead of pretending.
+fn orphan_error() -> Error {
+    Error::Other(
+        "sing-box is running, but outside Vantage Box's control (an orphaned \
+         process from an earlier session). Stop it in Task Manager and start \
+         the service again."
+            .into(),
+    )
+}
+
+/// Same contract, but with an explicit `api_up` signal: `run_status` reads it
+/// from the stream manager, the action paths probe it live before they decide.
+fn build_status(settings: &Settings, api_up: bool) -> Result<RunStatus> {
     let service = service::status()?;
     let installed = service.state != ServiceState::NotInstalled;
 
@@ -90,7 +112,7 @@ fn build_status(settings: &Settings) -> Result<RunStatus> {
         } else {
             RunMode::Process
         },
-        running: service.is_running() || process_pid.is_some(),
+        running: service.is_running() || process_pid.is_some() || api_up,
         service,
         process_pid,
         tun,
@@ -104,11 +126,26 @@ fn build_status(settings: &Settings) -> Result<RunStatus> {
 /// A registered service takes priority: since the user installed it, it is
 /// the one that should manage sing-box. Without a service we start as a
 /// process — but only if the config does not need TUN.
+///
+/// When the API answers but neither the service nor our slot owns sing-box,
+/// starting a second instance would only collide on the API port — the state
+/// is reported as-is instead.
 pub async fn start(app: &AppHandle) -> Result<RunStatus> {
     let settings = app.state::<AppState>().settings.get();
 
+    // Live probe, not the cached stream status: the start decision must not
+    // depend on a snapshot that is up to 3 s stale.
+    let api_up = app.state::<AppState>().client().version().await.is_ok();
+
     blocking(move || {
-        let status = build_status(&settings)?;
+        let status = build_status(&settings, api_up)?;
+
+        if status.running {
+            // Already up — under our control or not. Starting a second
+            // instance would only collide on the API port; the state is
+            // reported as-is.
+            return Ok(());
+        }
 
         if status.mode == RunMode::Service {
             runtime::prepare(&settings)?;
@@ -133,6 +170,10 @@ pub async fn start(app: &AppHandle) -> Result<RunStatus> {
 
 /// Stop both: the service may have been installed after we started the
 /// process — then "stop" must take down both.
+///
+/// If the API keeps answering after our own handles are closed, a sing-box we
+/// do not own is still up. Saying "stopped" there would be a lie; the user is
+/// told how to take the orphan down instead.
 pub async fn stop(app: &AppHandle) -> Result<RunStatus> {
     blocking(|| {
         process::stop()?;
@@ -143,6 +184,11 @@ pub async fn stop(app: &AppHandle) -> Result<RunStatus> {
         Ok(())
     })
     .await?;
+
+    if app.state::<AppState>().client().version().await.is_ok() {
+        return Err(orphan_error());
+    }
+
     announce(app).await
 }
 
@@ -216,8 +262,19 @@ pub async fn restart(app: &AppHandle) -> Result<RestartOutcome> {
     // Take the snapshot before stopping — after that there is no one to ask.
     let snapshot = snapshot_selection(&app.state::<AppState>().client()).await;
 
+    // Same live probe as in start: a sing-box we do not own must fail fast,
+    // not after 20 s of waiting for a service that will never come up.
+    let api_up = app.state::<AppState>().client().version().await.is_ok();
+
     blocking(move || {
-        let status = build_status(&settings)?;
+        let status = build_status(&settings, api_up)?;
+
+        // The tunnel is up, but neither the service nor our slot owns it —
+        // a "restart" has nothing to stop and would only spawn a second,
+        // colliding instance.
+        if status.running && !status.service.is_running() && status.process_pid.is_none() {
+            return Err(orphan_error());
+        }
 
         if status.mode == RunMode::Service {
             runtime::prepare(&settings)?;
