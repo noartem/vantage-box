@@ -2,6 +2,7 @@
 pub mod binary;
 pub mod clash;
 pub mod compat;
+pub mod corelog;
 pub mod error;
 pub mod fallback;
 pub mod jsonc;
@@ -118,6 +119,9 @@ pub fn run() {
 
             let streams = Arc::new(StreamManager::new(handle.clone()));
             let client = ClashClient::new(&runtime::effective_api_settings(&initial))?;
+
+            // Raw sing-box stdout/stderr → the dashboard "Process" panel.
+            corelog::start(handle.clone());
             streams.restart(client.clone(), initial.clash_api.log_level);
 
             let (config_tx, mut config_rx) = tokio::sync::mpsc::unbounded_channel::<()>();

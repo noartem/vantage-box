@@ -377,5 +377,9 @@
 	"jsonc_unquoted_key": "Une clé non entre guillemets est du JSON5. Entourez le nom de guillemets doubles.",
 	"jsonc_single_quote_string": "Une chaîne entre guillemets simples est du JSON5. Les guillemets doubles sont requis.",
 	"jsonc_invalid_token": "`{raw}` n'existe pas en JSON — supprimez-le ou remplacez-le par un nombre.",
-	"jsonc_json5_number": "`{raw}` est du JSON5. Un nombre décimal simple est attendu, par ex. 1.5 au lieu de .5."
+	"jsonc_json5_number": "`{raw}` est du JSON5. Un nombre décimal simple est attendu, par ex. 1.5 au lieu de .5.",
+	"json_parse_error": "JSON invalide : {detail}",
+	"jsonc_trailing_comma": "Une virgule finale est autorisée ici (JSONC), mais ce n'est pas du JSON standard.",
+	"mini_process_title": "Processus",
+	"mini_process_empty": "La sortie du processus apparaît ici après le démarrage de sing-box."
 }

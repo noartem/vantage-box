@@ -9,6 +9,7 @@ import type {
 	CheckResult,
 	ConnectionStatus,
 	ConnectionsSnapshot,
+	CoreLogChunk,
 	InstallOutcome,
 	LogEntry,
 	Memory,
@@ -88,6 +89,8 @@ export const events = {
 	log: (fn: (value: LogEntry) => void) => on('clash://log', fn),
 	settingsChanged: (fn: (value: Settings) => void) => on('settings://changed', fn),
 	settingsError: (fn: (value: string) => void) => on('settings://error', fn),
+	/** Raw sing-box process output (stdout/stderr), tailed from its log file. */
+	coreLog: (fn: (value: CoreLogChunk) => void) => on('process://log', fn),
 	configChanged: (fn: (path: string) => void) => on('singbox://config-changed', fn),
 	/** sing-box started/stopped — including from the tray or via a hotkey. */
 	runStatus: (fn: (value: RunStatus) => void) => on('service://changed', fn),

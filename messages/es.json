@@ -377,5 +377,9 @@
 	"jsonc_unquoted_key": "Una clave sin comillas es JSON5. Envuelve el nombre entre comillas dobles.",
 	"jsonc_single_quote_string": "Una cadena entre comillas simples es JSON5. Se requieren comillas dobles.",
 	"jsonc_invalid_token": "`{raw}` no existe en JSON — elimínalo o sustitúyelo por un número.",
-	"jsonc_json5_number": "`{raw}` es JSON5. Se espera un número decimal simple, p. ej. 1.5 en lugar de .5."
+	"jsonc_json5_number": "`{raw}` es JSON5. Se espera un número decimal simple, p. ej. 1.5 en lugar de .5.",
+	"json_parse_error": "JSON no válido: {detail}",
+	"jsonc_trailing_comma": "Una coma final está permitida aquí (JSONC), pero no es JSON estándar.",
+	"mini_process_title": "Proceso",
+	"mini_process_empty": "La salida del proceso aparece aquí cuando sing-box se inicia."
 }

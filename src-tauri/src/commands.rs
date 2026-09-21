@@ -1,7 +1,7 @@
 //! Commands available to the frontend via `invoke`.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -191,10 +191,48 @@ pub fn read_runtime_config() -> Result<runtime::RuntimeConfigView> {
     runtime::read_runtime_config()
 }
 
+/// Runs `sing-box check` on the *stripped* text: the binary then validates
+/// exactly the JSON that `runtime::prepare_in` will re-serialize and run —
+/// older sing-box versions reject raw JSONC (comments), which produced
+/// confusing failures on configs that work fine in production.
+///
+/// The text goes to a scratch file; its path is scrubbed from the output —
+/// the user never sees a file they do not own.
+fn check_stripped(binary: &Path, raw: &str) -> Result<CheckResult> {
+    let scratch = config_dir()?.join("check.json");
+    if let Some(parent) = scratch.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| Error::io(parent.display().to_string(), e))?;
+    }
+    std::fs::write(&scratch, strip_jsonc(raw).as_bytes())
+        .map_err(|e| Error::io(scratch.display().to_string(), e))?;
+
+    let result = binary::check_config(binary, &scratch);
+    let _ = std::fs::remove_file(&scratch);
+    result.map(clean_check_output)
+}
+
+/// Rewrites `decode config at C:\...\check.json: …` into
+/// `decode config at config: …`. Windows paths cannot contain `: ` after the
+/// drive colon, so the first `: ` always ends the path.
+fn clean_check_output(mut result: CheckResult) -> CheckResult {
+    const NEEDLE: &str = "decode config at ";
+    if let Some(start) = result.output.find(NEEDLE) {
+        let rest = &result.output[start + NEEDLE.len()..];
+        if let Some(end) = rest.find(": ") {
+            result.output = format!(
+                "{}config{}",
+                &result.output[..start + NEEDLE.len()],
+                &rest[end..]
+            );
+        }
+    }
+    result
+}
+
 /// Validates the editor contents without touching the user's file.
 ///
 /// First JSON, then — if the binary is available — a full `sing-box check`
-/// on a temporary copy.
+/// on the stripped text in a temporary copy.
 #[tauri::command]
 pub async fn check_singbox_config(
     state: State<'_, AppState>,
@@ -207,21 +245,13 @@ pub async fn check_singbox_config(
                 available: false,
                 ok: false,
                 output: format!("invalid JSON: {e}"),
+                row: None,
+                column: None,
             });
         }
 
-        let scratch = config_dir()?.join("check.json");
-        if let Some(parent) = scratch.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| Error::io(parent.display().to_string(), e))?;
-        }
-        std::fs::write(&scratch, content.as_bytes())
-            .map_err(|e| Error::io(scratch.display().to_string(), e))?;
-
         let choice = binary::resolve(&settings)?;
-        let mut result = binary::check_config(&choice.path, &scratch)?;
-        let _ = std::fs::remove_file(&scratch);
-
+        let mut result = check_stripped(&choice.path, &content)?;
         if !result.available {
             // JSON was already parsed above, so syntactically everything is fine.
             result.ok = true;
@@ -533,9 +563,14 @@ pub async fn use_singbox_release(
                 available: false,
                 ok: true,
                 output: "config path is not set, check skipped".into(),
+                row: None,
+                column: None,
             }
         } else {
-            binary::check_config(&source, std::path::Path::new(&config))?
+            // The file may contain JSONC — validate the same stripped text a
+            // run would use, with this specific version.
+            let raw = std::fs::read_to_string(&config).map_err(|e| Error::io(config.clone(), e))?;
+            check_stripped(&source, &raw)?
         };
 
         if !check.ok {

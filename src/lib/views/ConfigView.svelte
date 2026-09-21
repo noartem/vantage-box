@@ -18,17 +18,23 @@
 	let needsRestart = $state(false);
 	let showOutput = $state(false);
 
-	/** Editor diagnostics (schema + JSON5 linter) — for the chip and the error list. */
+	/** Editor diagnostics (schema + JSON syntax linter) — for the chip and the error list. */
 	let diags = $state<EditorDiagnostic[]>([]);
 	let showErrors = $state(false);
+	/** A failed `sing-box check` with a known position — one more error row. */
+	let checkDiag = $state<EditorDiagnostic | null>(null);
 	/** Reference to the editor, to jump to a line from the error list. */
 	let editor = $state<{ jumpTo: (from: number, to: number) => void } | null>(null);
 
 	const path = $derived((app.settings?.singBox.configPath ?? '').trim());
 	const dirty = $derived(content !== saved);
 
+	/** All rows for the error list: editor diagnostics plus a positioned
+	 *  `sing-box check` failure, if it has one. */
+	const allDiags = $derived(checkDiag ? [...diags, checkDiag] : diags);
+
 	/** Whether there are real value errors — those not filtered out as version noise. */
-	const errorCount = $derived(diags.filter((d) => d.severity === 'error').length);
+	const errorCount = $derived(allDiags.filter((d) => d.severity === 'error').length);
 
 	function goto(diag: EditorDiagnostic) {
 		editor?.jumpTo(diag.from, diag.to);
@@ -73,6 +79,19 @@
 		return text.split('\n')[0] ?? text;
 	}
 
+	/**
+	 * Editor offset of a 1-based line/column, for jumping from `sing-box check`
+	 * output into the text. The column is a 1-based offset within the line and is
+	 * clamped: a byte-based column from the backend must never overshoot the line.
+	 */
+	function offsetAt(text: string, line: number, column: number): number {
+		const lines = text.split('\n');
+		let offset = 0;
+		for (let i = 0; i < line - 1 && i < lines.length; i++) offset += (lines[i]?.length ?? 0) + 1;
+		const lineText = lines[line - 1] ?? '';
+		return offset + Math.min(Math.max(column - 1, 0), lineText.length);
+	}
+
 	async function load() {
 		busy = 'load';
 		try {
@@ -80,6 +99,7 @@
 			content = text;
 			saved = text;
 			check = null;
+			checkDiag = null;
 			showOutput = false;
 			app.configChangedExternally = null;
 			loaded = true;
@@ -95,6 +115,21 @@
 		busy = 'check';
 		try {
 			check = await api.checkSingboxConfig(content);
+			if (!check.ok && check.row && check.column) {
+				const from = offsetAt(content, check.row, check.column);
+				checkDiag = {
+					from,
+					to: from + 1,
+					line: check.row,
+					col: check.column,
+					message: firstLine(check.output),
+					severity: 'error',
+					source: 'sing-box'
+				};
+			} else {
+				// A stale jump target is worse than none.
+				checkDiag = null;
+			}
 			return check;
 		} catch (e) {
 			pushAlert('error', errorText(e));
@@ -267,20 +302,21 @@
 						content = next;
 						needsRestart = false;
 						check = null;
+						checkDiag = null;
 						showOutput = false;
 					}}
 					ondiagnostics={(next) => {
 						diags = next;
 						// If errors collapsed — close the popup so it does not hang empty.
-						if (next.length === 0) showErrors = false;
+						if (next.length === 0 && !checkDiag) showErrors = false;
 					}}
 					onsave={save}
 				/>
 
-				{#if showErrors && diags.length > 0}
+				{#if showErrors && allDiags.length > 0}
 					<div class="err-popup card">
 						<div class="err-head">
-							<span>{m.config_editor_errors_title()}: {diags.length}</span>
+							<span>{m.config_editor_errors_title()}: {allDiags.length}</span>
 							<button
 								class="act"
 								aria-label={m.config_close_list()}
@@ -290,7 +326,7 @@
 							</button>
 						</div>
 						<div class="err-list">
-							{#each diags as diag, i (i)}
+							{#each allDiags as diag, i (i)}
 								<button class="err-row" onclick={() => goto(diag)}>
 									<span class="err-loc">{diag.line}:{diag.col}</span>
 									<span class="err-msg selectable">{diag.message}</span>

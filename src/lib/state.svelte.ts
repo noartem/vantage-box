@@ -8,6 +8,7 @@ import type {
 	BinaryInfo,
 	Connection,
 	ConnectionStatus,
+	CoreLogChunk,
 	LogEntry,
 	Memory,
 	ReleaseCatalog,
@@ -21,6 +22,8 @@ import type {
 const TRAFFIC_POINTS = 60;
 /** Log feed cap. Ring buffer, so we do not eat memory over a day of uptime. */
 const LOG_LIMIT = 2000;
+/** Same cap for the raw process output feed. */
+const CORE_LOG_LIMIT = 2000;
 /** How often we re-read sing-box state if no events have arrived. */
 const RUN_STATUS_MS = 5000;
 /** How often we re-check for app updates if the window stays open a long time. */
@@ -79,11 +82,16 @@ class AppState {
 	configChangedExternally = $state<string | null>(null);
 	/** Hotkeys that failed to register. */
 	hotkeyProblems = $state<string[]>([]);
-
 	logs = $state<LogEntry[]>([]);
 	logsPaused = $state(false);
 	/** While the feed is paused, entries accumulate here and are not lost. */
 	private pendingLogs: LogEntry[] = [];
+
+	/** Raw sing-box process output (stdout/stderr) — the dashboard "Process" panel. */
+	coreLogs = $state<string[]>([]);
+	coreLogsPaused = $state(false);
+	/** While the process feed is paused, lines accumulate here. */
+	private pendingCoreLogs: string[] = [];
 
 	private started = false;
 
@@ -99,6 +107,7 @@ class AppState {
 			this.connections = value.connections;
 			this.connectionTotals = { down: value.downloadTotal, up: value.uploadTotal };
 		});
+		events.coreLog((value) => this.pushCoreLog(value));
 		events.log((value) => this.pushLog(value));
 		events.settingsChanged((value) => {
 			this.settings = value;
@@ -251,6 +260,32 @@ class AppState {
 	clearLogs() {
 		this.logs = [];
 		this.pendingLogs = [];
+	}
+
+	setCoreLogsPaused(paused: boolean) {
+		this.coreLogsPaused = paused;
+		if (!paused && this.pendingCoreLogs.length > 0) {
+			this.coreLogs = trim([...this.coreLogs, ...this.pendingCoreLogs], CORE_LOG_LIMIT);
+			this.pendingCoreLogs = [];
+		}
+	}
+
+	clearCoreLogs() {
+		this.coreLogs = [];
+		this.pendingCoreLogs = [];
+	}
+
+	private pushCoreLog(value: CoreLogChunk) {
+		if (value.reset) {
+			this.coreLogs = trim(value.lines, CORE_LOG_LIMIT);
+			this.pendingCoreLogs = [];
+			return;
+		}
+		if (this.coreLogsPaused) {
+			this.pendingCoreLogs = trim([...this.pendingCoreLogs, ...value.lines], CORE_LOG_LIMIT);
+			return;
+		}
+		this.coreLogs = trim([...this.coreLogs, ...value.lines], CORE_LOG_LIMIT);
 	}
 
 	private pushTraffic(value: Traffic) {

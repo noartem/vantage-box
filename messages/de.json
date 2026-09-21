@@ -377,5 +377,9 @@
 	"jsonc_unquoted_key": "Ein Schlüssel ohne Anführungszeichen ist JSON5. Setze den Namen in doppelte Anführungszeichen.",
 	"jsonc_single_quote_string": "Ein String in einfachen Anführungszeichen ist JSON5. Doppelte Anführungszeichen sind erforderlich.",
 	"jsonc_invalid_token": "`{raw}` existiert nicht in JSON — entferne es oder ersetze es durch eine Zahl.",
-	"jsonc_json5_number": "`{raw}` ist JSON5. Eine einfache Dezimalzahl wird erwartet, z. B. 1.5 statt .5."
+	"jsonc_json5_number": "`{raw}` ist JSON5. Eine einfache Dezimalzahl wird erwartet, z. B. 1.5 statt .5.",
+	"json_parse_error": "Ungültiges JSON: {detail}",
+	"jsonc_trailing_comma": "Ein abschließendes Komma ist hier erlaubt (JSONC), aber kein Standard-JSON.",
+	"mini_process_title": "Prozess",
+	"mini_process_empty": "Die Prozessausgabe erscheint hier, sobald sing-box startet."
 }

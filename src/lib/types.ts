@@ -269,6 +269,16 @@ export interface CheckResult {
 	available: boolean;
 	ok: boolean;
 	output: string;
+	/** 1-based position of the failure, when the output names one. */
+	row?: number;
+	column?: number;
+}
+
+/** A chunk of raw sing-box process output from the backend file tailer. */
+export interface CoreLogChunk {
+	/** `true` — sing-box restarted: the shown lines are stale, start over. */
+	reset: boolean;
+	lines: string[];
 }
 
 /** The runtime config sing-box was last started with — the user's config.json

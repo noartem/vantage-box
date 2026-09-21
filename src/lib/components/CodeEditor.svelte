@@ -11,7 +11,6 @@
 		syntaxHighlighting
 	} from '@codemirror/language';
 	import {
-		diagnosticCount,
 		forEachDiagnostic,
 		forceLinting,
 		lintGutter,
@@ -32,7 +31,7 @@
 	} from '@codemirror/view';
 	import { tags } from '@lezer/highlight';
 	import type { JSONSchema7 } from 'json-schema';
-	import { json5, json5ParseLinter } from 'codemirror-json5';
+	import { json5 } from 'codemirror-json5';
 	import { json5SchemaHover } from 'codemirror-json-schema/json5';
 	import { stateExtensions } from 'codemirror-json-schema';
 	import { jsoncLinter } from '$lib/jsonc-lint';
@@ -189,13 +188,13 @@
 				// completion source recomputed on every keystroke and froze typing.
 				hoverTooltip(json5SchemaHover()),
 				stateExtensions(schema ?? autocompleteSchema),
-				linter(json5ParseLinter()),
 				// The schema linter is asynchronous; validation runs in a Web worker
 				// (schema-lint-worker.ts). The schema for the sing-box version is sent
 				// there in a separate message in the $effect below. CodeMirror discards
 				// stale results itself if the document changed in the meantime.
 				linter(async (v) => lintAsync(v.state.doc.toString())),
-				// JSON5 allows more than serde will digest on the Rust side.
+				// The single JSON syntax linter: JSON5-isms serde rejects, strict-JSON
+				// parse errors with exact position, trailing-comma warnings.
 				jsoncLinter,
 				keymap.of([
 					{
@@ -216,11 +215,11 @@
 				]),
 				EditorView.updateListener.of((update) => {
 					if (update.docChanged) onchange?.(update.state.doc.toString());
-					// Recompute the error list when the document changed or lint
-					// completed (its result arrives as a separate transaction).
-					const countChanged =
-						diagnosticCount(update.state) !== diagnosticCount(update.startState);
-					if (update.docChanged || countChanged) emitDiagnostics(update.state);
+					// Recompute on every transaction: lint results arrive as separate
+					// transactions, and a swap with the same count (error → warning)
+					// must still reach the error list. The signature inside
+					// emitDiagnostics filters out the no-op recomputes.
+					emitDiagnostics(update.state);
 				})
 			);
 		} else {
@@ -263,10 +262,11 @@
 		});
 		// The signature suppresses redundant calls: cursor movement does not change
 		// either the set or the positions of diagnostics, so there is nothing to
-		// forward to the parent.
-		const first = diags[0]?.from ?? -1;
-		const last = diags[diags.length - 1]?.from ?? -1;
-		const sig = `${diags.length}:${first}:${last}:${state.doc.length}`;
+		// forward to the parent. Severity is part of it — an error replaced by a
+		// warning at the same spot is exactly the change worth reporting.
+		const sig =
+			`${state.doc.length}|` +
+			diags.map((d) => `${d.severity[0]}:${d.from}:${d.to}:${d.message.length}`).join(',');
 		if (sig === lastDiagSig) return;
 		lastDiagSig = sig;
 		ondiagnostics(diags);

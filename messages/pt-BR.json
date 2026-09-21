@@ -377,5 +377,9 @@
 	"jsonc_unquoted_key": "Uma chave sem aspas é JSON5. Coloque o nome entre aspas duplas.",
 	"jsonc_single_quote_string": "Uma string entre aspas simples é JSON5. Aspas duplas são obrigatórias.",
 	"jsonc_invalid_token": "`{raw}` não existe em JSON — remova-o ou substitua por um número.",
-	"jsonc_json5_number": "`{raw}` é JSON5. Espera-se um número decimal comum, ex. 1.5 em vez de .5."
+	"jsonc_json5_number": "`{raw}` é JSON5. Espera-se um número decimal comum, ex. 1.5 em vez de .5.",
+	"json_parse_error": "JSON inválido: {detail}",
+	"jsonc_trailing_comma": "Uma vírgula final é permitida aqui (JSONC), mas não é JSON padrão.",
+	"mini_process_title": "Processo",
+	"mini_process_empty": "A saída do processo aparece aqui após o sing-box iniciar."
 }

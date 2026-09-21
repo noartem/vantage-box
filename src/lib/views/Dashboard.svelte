@@ -3,6 +3,7 @@
 	import GroupCard from '$lib/components/GroupCard.svelte';
 	import MiniConnections from '$lib/components/MiniConnections.svelte';
 	import MiniLogs from '$lib/components/MiniLogs.svelte';
+	import MiniProcess from '$lib/components/MiniProcess.svelte';
 	import MiniService from '$lib/components/MiniService.svelte';
 	import TrafficChart from '$lib/components/TrafficChart.svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -88,6 +89,7 @@
 	<div class="minis">
 		<MiniConnections {active} onopen={() => ongoto('connections')} />
 		<MiniLogs {active} onopen={() => ongoto('logs')} />
+		<MiniProcess {active} />
 	</div>
 </div>
 

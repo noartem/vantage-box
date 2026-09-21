@@ -2,6 +2,7 @@ import { syntaxTree } from '@codemirror/language';
 import { linter, type Diagnostic } from '@codemirror/lint';
 import type { EditorState } from '@codemirror/state';
 import { m } from '$lib/paraglide/messages.js';
+import { findTrailingCommas, stripJsonc } from '$lib/jsonc';
 
 /**
  * Catches JSON5 constructs that the backend will not accept.
@@ -84,7 +85,52 @@ export function jsoncDiagnostics(state: EditorState): Diagnostic[] {
 		}
 	});
 
+	// Trailing commas are valid JSONC but not standard JSON — warn, don't error.
+	const doc = state.doc.toString();
+	for (const offset of findTrailingCommas(doc)) {
+		diagnostics.push({
+			from: offset,
+			to: offset + 1,
+			severity: 'warning',
+			message: m.jsonc_trailing_comma()
+		});
+	}
+
+	// Strict-JSON gate: what the backend actually parses is stripJsonc() +
+	// serde_json, so run the same pipeline here. stripJsonc is length-preserving,
+	// therefore V8's "at position N" is a valid editor offset.
+	const strict = strictJsonError(stripJsonc(doc));
+	if (strict && !diagnostics.some((d) => d.from < strict.to && strict.from < d.to)) {
+		diagnostics.push(strict);
+	}
+
 	return diagnostics;
+}
+
+/**
+ * Parses the stripped text and turns a JSON.parse failure into a positioned
+ * diagnostic. Returns null when the text parses. V8 (WebView2 and Node) reports
+ * "… at position N"; other engines degrade to offset 0 with the full message.
+ */
+function strictJsonError(stripped: string): Diagnostic | null {
+	try {
+		JSON.parse(stripped);
+		return null;
+	} catch (e) {
+		const message = e instanceof Error ? e.message : String(e);
+		const match = /position (\d+)/.exec(message);
+		if (!match) {
+			return { from: 0, to: 0, severity: 'error', message: m.json_parse_error({ detail: message }) };
+		}
+		const from = Number(match[1]);
+		const detail = message.replace(/\s*in JSON at position.*$/, '');
+		return {
+			from,
+			to: Math.min(from + 1, stripped.length),
+			severity: 'error',
+			message: m.json_parse_error({ detail })
+		};
+	}
 }
 
 export const jsoncLinter = linter((view) => jsoncDiagnostics(view.state));

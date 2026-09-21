@@ -377,5 +377,9 @@
 	"jsonc_unquoted_key": "An unquoted key is JSON5. Wrap the name in double quotes.",
 	"jsonc_single_quote_string": "A string in single quotes is JSON5. Double quotes are required.",
 	"jsonc_invalid_token": "`{raw}` does not exist in JSON — remove it or replace with a number.",
-	"jsonc_json5_number": "`{raw}` is JSON5. A plain decimal number is expected, e.g. 1.5 instead of .5."
+	"jsonc_json5_number": "`{raw}` is JSON5. A plain decimal number is expected, e.g. 1.5 instead of .5.",
+	"json_parse_error": "Invalid JSON: {detail}",
+	"jsonc_trailing_comma": "A trailing comma is allowed here (JSONC), but it is not standard JSON.",
+	"mini_process_title": "Process",
+	"mini_process_empty": "Process output appears here after sing-box starts."
 }

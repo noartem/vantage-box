@@ -176,6 +176,8 @@ pub fn check_config(binary: &Path, config: &Path) -> Result<CheckResult> {
                 "sing-box file not found ({}), so only JSON syntactic validity was checked",
                 binary.display()
             ),
+            row: None,
+            column: None,
         });
     }
 
@@ -185,14 +187,39 @@ pub fn check_config(binary: &Path, config: &Path) -> Result<CheckResult> {
             available: true,
             ok: true,
             output: String::new(),
+            row: None,
+            column: None,
         }),
-        Err(Error::Other(message)) => Ok(CheckResult {
-            available: true,
-            ok: false,
-            output: message,
-        }),
+        Err(Error::Other(message)) => {
+            let (row, column) = parse_position(&message);
+            Ok(CheckResult {
+                available: true,
+                ok: false,
+                output: message,
+                row,
+                column,
+            })
+        }
         Err(other) => Err(other),
     }
+}
+
+/// Extracts the error position from `sing-box check` output: `row N, column M`
+/// (sing-box ≥ 1.13) or `line N column M` (older Go decoder, 1-based). First
+/// match only — `None`s when the output names no position.
+fn parse_position(output: &str) -> (Option<u32>, Option<u32>) {
+    let tokens: Vec<&str> = output.split_whitespace().collect();
+    for w in tokens.windows(4) {
+        if (w[0] == "row" || w[0] == "line") && w[2] == "column" {
+            if let (Ok(row), Ok(column)) = (
+                w[1].trim_end_matches(',').parse::<u32>(),
+                w[3].trim_end_matches(',').parse::<u32>(),
+            ) {
+                return (Some(row), Some(column));
+            }
+        }
+    }
+    (None, None)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -202,6 +229,12 @@ pub struct CheckResult {
     pub available: bool,
     pub ok: bool,
     pub output: String,
+    /// 1-based line/column of the failure from `sing-box check`, when the
+    /// output names one — the editor jumps there.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub row: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column: Option<u32>,
 }
 
 /// Runs the binary and returns stdout+stderr. A non-zero exit code is an
@@ -609,3 +642,42 @@ fn hide_console(command: &mut Command) {
 
 #[cfg(not(windows))]
 fn hide_console(_command: &mut Command) {}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_position;
+
+    #[test]
+    fn parses_row_column_from_new_singbox() {
+        let (row, column) = parse_position(
+            "decode config at config: invalid character '\"' looking for beginning of value, row 1, column 30",
+        );
+        assert_eq!((row, column), (Some(1), Some(30)));
+    }
+
+    #[test]
+    fn parses_line_column_from_older_decoder() {
+        let (row, column) =
+            parse_position("FATAL decode config: invalid character 'x', line 3 column 17");
+        assert_eq!((row, column), (Some(3), Some(17)));
+    }
+
+    #[test]
+    fn no_position_when_output_has_none() {
+        assert_eq!(
+            parse_position("FATAL[0] bootstrap: port 2080 is already in use"),
+            (None, None)
+        );
+    }
+
+    #[test]
+    fn first_match_wins() {
+        let (row, column) = parse_position("row 2, column 5 then row 9, column 9");
+        assert_eq!((row, column), (Some(2), Some(5)));
+    }
+
+    #[test]
+    fn similar_words_do_not_match() {
+        assert_eq!(parse_position("browser column 3"), (None, None));
+    }
+}
