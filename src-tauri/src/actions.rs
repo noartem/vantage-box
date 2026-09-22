@@ -137,34 +137,39 @@ pub async fn start(app: &AppHandle) -> Result<RunStatus> {
     // depend on a snapshot that is up to 3 s stale.
     let api_up = app.state::<AppState>().client().version().await.is_ok();
 
-    blocking(move || {
+    let was_running = blocking(move || {
         let status = build_status(&settings, api_up)?;
 
         if status.running {
-            // Already up — under our control or not. Starting a second
-            // instance would only collide on the API port; the state is
-            // reported as-is.
-            return Ok(());
+            return Ok(true);
         }
 
         if status.mode == RunMode::Service {
             runtime::prepare(&settings)?;
-            return service::start();
-        }
+            service::start()?;
+        } else {
+            if status.tun {
+                return Err(Error::Other(
+                    "the config needs TUN — that requires administrator rights. \
+                     Install the service on the \"Service\" tab."
+                        .into(),
+                ));
+            }
 
-        if status.tun {
-            return Err(Error::Other(
-                "the config needs TUN — that requires administrator rights. \
-                 Install the service on the \"Service\" tab."
-                    .into(),
-            ));
+            process::start(&settings)?;
         }
-
-        process::start(&settings)
+        Ok(false)
     })
     .await?;
 
-    state::reconnect(&app.state::<AppState>())?;
+    // A fresh start gets a fresh secret: the client must be rebuilt before we
+    // hit the API. When the tunnel was already up, reconnecting would only
+    // reset the streams (a `Connecting` gap right before the announce) — the
+    // client is already correct, so the state is announced as-is.
+    if !was_running {
+        state::reconnect(&app.state::<AppState>())?;
+    }
+
     announce(app).await
 }
 
