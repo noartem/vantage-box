@@ -289,7 +289,7 @@
 		{/if}
 
 		{#if showOutput && check && !check.ok}
-			<pre class="output selectable bounce">{check.output}</pre>
+			<pre class="output selectable">{check.output}</pre>
 		{/if}
 
 		{#if loaded}

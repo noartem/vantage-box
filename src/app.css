@@ -102,22 +102,17 @@
 
 * {
 	box-sizing: border-box;
-	/* The app window is not a web page: edge "rubber-banding" (pull-to-refresh)
-	   is disabled everywhere by default. A nested list where the effect is
-	   appropriate re-enables it for itself with the .bounce class. */
-	overscroll-behavior: none;
-}
-
-.bounce {
-	overscroll-behavior: auto;
 }
 
 html,
 body {
 	height: 100%;
 	margin: 0;
-	/* Only inner areas scroll — the document itself does not move, so there is
-	   nothing to pull. */
+	/* The document itself never scrolls or rubber-bands — only inner areas do.
+	   This must NOT be a `*` blanket: every `overflow: hidden` box (buttons,
+	   ellipsis spans, feeds) is a scroll container, and `none` on it makes the
+	   wheel die right there instead of chaining up to the page scroller. */
+	overscroll-behavior: none;
 	overflow: hidden;
 }
 

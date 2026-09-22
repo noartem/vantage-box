@@ -92,9 +92,11 @@
 		<MiniLogs {active} onopen={() => ongoto('logs')} />
 	</div>
 
-	<!-- The raw process output is a startup log: lines are long, so it lives on
-		 its own full-width row, never squeezed between two neighbor cards. -->
-	<MiniProcess {active} />
+	<!-- The raw process output is a startup log: half the width is enough for
+		 it, the rest of the row stays free. -->
+	<div class="process-row">
+		<MiniProcess {active} />
+	</div>
 </div>
 
 <style>
@@ -129,11 +131,14 @@
 		}
 	}
 
-	/* One card, groups stacked inside it: the divider between neighbors is
-		 the separator, the card edges come from .card. The first group must
-		 not carry the divider — it opens the block. */
+	/* Groups flow left to right and wrap, each sized to what it needs: a
+		 selector with three nodes does not need a third of the window. The
+		 edges stay shared — it is still one block, not several cards. */
 	.groups {
-		display: grid;
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--sp-4);
+		align-content: flex-start;
 	}
 
 	/* The child keeps .section's padding and gap, but its own card chrome is
@@ -143,10 +148,20 @@
 		background: transparent;
 		border: none;
 		border-radius: 0;
+		flex: 1 1 280px;
+		max-width: 440px;
+		min-width: 0;
 	}
 
-	.groups :global(section.section + section.section) {
-		border-top: 1px solid var(--border);
+	.process-row {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	@media (max-width: 720px) {
+		.process-row {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	/* 380px, not 300: any narrower and a connection row with host, process and

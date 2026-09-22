@@ -106,7 +106,7 @@
 		/>
 	{/if}
 
-	<ul class="bounce">
+	<ul>
 		{#each items as item (item.name)}
 			<li class:active={item.name === group.now}>
 				<button

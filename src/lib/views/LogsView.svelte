@@ -17,7 +17,9 @@
 	const ROW = 22;
 	const OVERSCAN = 12;
 
-	let minLevel = $state<(typeof LEVELS)[number]>('trace');
+	/** The journal opens quiet: the per-connection info chatter is one selector
+	 *  click away, the important lines are here without it. */
+	let minLevel = $state<(typeof LEVELS)[number]>('warn');
 	let query = $state('');
 	let copied = $state(false);
 	/** Wrap long messages. At the cost of disabling virtualization: rows of
@@ -171,7 +173,7 @@
 		</span>
 	</div>
 
-	<div class="viewport card bounce" bind:this={viewport} bind:clientHeight={viewportHeight} onscroll={onScroll}>
+	<div class="viewport card" bind:this={viewport} bind:clientHeight={viewportHeight} onscroll={onScroll}>
 		{#if !active}
 			<!-- tab inactive: do not render rows -->
 		{:else if visible.length === 0}

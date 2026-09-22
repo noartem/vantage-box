@@ -5,12 +5,12 @@
 
 	let { active = true }: { active?: boolean } = $props();
 
-	/** How many rows we keep in the panel. The card's height is derived from this
-	 *  number, so the feed does not stretch the dashboard as lines arrive. */
-	const ROWS = 12;
+	/** How many rows we keep in the panel: half the height of the neighbor
+	 *  digests — the startup log needs less room than the two busy feeds. */
+	const ROWS = 6;
 
 	// While the tab is inactive, do not recompute the tail: otherwise every chunk
-	// would churn the derived for nothing. The block's height is held by .filled — neighbors do not jump.
+	// would churn the derived for nothing. The block's height is fixed — neighbors do not jump.
 	const tail = $derived(active ? app.coreLogs.slice(-ROWS) : []);
 
 	/** Startup failures must stand out at a glance; sing-box marks its lines
@@ -49,12 +49,11 @@
 		</button>
 	</div>
 
-	<!-- Height is fixed only when there is something to show: an empty feed
-		 should not hold twelve rows of whitespace. filled depends on the presence
-		 of data, not on active — a hidden block keeps the same height as a visible one. -->
-	<div class="feed" class:filled={app.coreLogs.length > 0}>
+	<!-- Height is always the full panel height: the placeholder sits inside it,
+		 so the dashboard never changes shape when data comes and goes. -->
+	<div class="feed">
 		{#if !active}
-			<!-- tab inactive: do not render rows, height is held by .filled -->
+			<!-- tab inactive: do not render rows -->
 		{:else if tail.length === 0}
 			<p class="hint">{m.mini_process_empty()}</p>
 		{:else}
@@ -79,21 +78,23 @@
 		white-space: nowrap;
 	}
 
+	/* The feed holds its full height always — the placeholder sits inside it,
+	   so the dashboard never changes shape when data comes and goes. Half the
+	   height of the neighbor digests (ROWS = 6). */
 	.feed {
 		display: flex;
 		flex-direction: column;
 		justify-content: flex-end;
+		height: calc(6 * var(--h-row));
 		overflow: hidden;
 		font-family: var(--mono);
 		font-size: var(--fs-sm);
 		user-select: text;
 	}
 
-	/* Rows are pinned to the bottom of a fixed-height window: while there are
-	   fewer than ROWS, the newest one still lands where expected, and the panel
-	   does not grow with each new line, jostling its row neighbors. */
-	.feed.filled {
-		height: calc(12 * var(--h-row));
+	/* A placeholder centers itself in the fixed-height feed. */
+	.hint {
+		margin: auto 0;
 	}
 
 	.row {

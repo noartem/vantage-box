@@ -70,7 +70,7 @@
 	</button>
 {:else}
 	<div class="overlay">
-		<div class="dialog bounce">
+		<div class="dialog">
 			<header>
 				<h2>{m.onboarding_welcome()}</h2>
 				<span class="spacer"></span>

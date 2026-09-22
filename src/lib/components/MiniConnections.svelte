@@ -62,12 +62,11 @@
 		</button>
 	</div>
 
-	<!-- Height is fixed only when there is something to show: an empty list
-		 should not hold twelve rows of whitespace. filled depends on the presence
-		 of data, not on active — a hidden block keeps the same height as a visible one. -->
-	<div class="list" class:filled={app.connections.length > 0}>
+	<!-- Height is always the full panel height: the placeholder sits inside it,
+		 so the row of panels never changes shape when data comes and goes. -->
+	<div class="list">
 		{#if !active}
-			<!-- tab inactive: do not render rows, height is held by .filled -->
+			<!-- tab inactive: do not render rows -->
 		{:else if app.status.state !== 'connected'}
 			<p class="hint">{m.connections_no_api()}</p>
 		{:else if top.length === 0}
@@ -126,15 +125,17 @@
 		white-space: nowrap;
 	}
 
+	/* The list holds its full height always — the placeholder sits inside it,
+	   so the row of panels never changes shape when data comes and goes. */
 	.list {
+		height: calc(12 * var(--h-row));
 		overflow: hidden;
 		font-size: var(--fs-sm);
 	}
 
-	/* Height by row count: the list empties and fills, and without this the
-	   neighboring panels in the row would jump along with it. */
-	.list.filled {
-		height: calc(12 * var(--h-row));
+	/* A placeholder centers itself in the fixed-height list. */
+	.hint {
+		margin: auto 0;
 	}
 
 	.row {

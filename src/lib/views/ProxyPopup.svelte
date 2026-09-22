@@ -93,7 +93,7 @@
 		</div>
 	{/if}
 
-	<div class="body bounce">
+	<div class="body">
 		{#if error}
 			<div class="banner">{error}</div>
 		{:else if groups.length === 0}

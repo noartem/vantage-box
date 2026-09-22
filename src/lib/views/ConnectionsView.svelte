@@ -209,7 +209,7 @@
 			</div>
 
 			<div
-				class="viewport bounce"
+				class="viewport"
 				bind:this={viewport}
 				bind:clientHeight={viewportHeight}
 				onscroll={(event) => (scrollTop = event.currentTarget.scrollTop)}
